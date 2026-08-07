@@ -1,0 +1,181 @@
+---
+title: Skills and protocols
+description: What an employee can do, and what it must always do.
+---
+
+Two things shape how an AI employee behaves, and they are not the same shape.
+
+> **A skill is a capability the employee reaches for. A protocol is a rule that
+> applies whether it reaches for anything or not.**
+
+Getting this the wrong way round is the most common modelling mistake, so it is
+worth an example before the mechanics.
+
+## The difference, concretely
+
+Say you want an employee that handles refunds.
+
+**"How to issue a refund in Stripe"** is a skill. It is a procedure, used when a
+refund is the task at hand, and irrelevant the rest of the time.
+
+**"Never refund more than $500 without human approval"** is a protocol. It is
+true during a refund, during a report, and during a conversation that has nothing
+to do with money. The employee does not choose to consult it.
+
+Written as a skill, that rule only applies when the employee happens to load the
+refund skill. Written as a protocol, it applies always. The second is what you
+meant.
+
+## Skills
+
+### They are Agent Skills
+
+A skill on HumanikOS is a directory containing a `SKILL.md` file: YAML
+frontmatter naming and describing it, then a markdown body of instructions. That
+is the [Agent Skills](https://agentskills.io/) layout, an open specification also
+implemented by Microsoft's Agent Framework and others.
+
+It matters for a practical reason. A skill you write is not trapped here. The
+same shape is portable to any Agent Skills compatible product, and skills written
+elsewhere are readable to you.
+
+<Callout>
+  **Further reading.** The
+  [Agent Skills specification](https://agentskills.io/specification) defines the
+  format itself. Microsoft's
+  [Agent Skills guide](https://learn.microsoft.com/en-us/agent-framework/agents/skills)
+  is a good second perspective on the same idea, written against a different
+  runtime.
+</Callout>
+
+**What we share with the specification:** one directory per skill, a `SKILL.md`
+carrying frontmatter and a body, `name` and `description` as the identifying
+fields, and the advertise-then-load pattern below.
+
+**What is ours:** the fields around it. `contentSource` and its locking rules,
+`requiresEnv` and `requiresBins`, the `userInvocable` and `modelInvocable` split,
+and the office scoping are HumanikOS concepts rather than specification ones.
+Our `description` is capped at 100 characters, which is tighter than the
+specification allows.
+
+We do not claim full specification compliance. We share its shape, and we say so
+because knowing that shape makes the rest of this page make sense.
+
+### How a skill reaches the employee
+
+Skills are not all loaded into every conversation. That would spend the context
+window on instructions the employee does not need.
+
+Instead the employee sees the **name and description** of every skill it has, and
+reads the **body** of one only when a task matches it. This is why the
+description field earns its 100 characters: it is the only thing the employee has
+to decide with.
+
+Write a description that says what the skill does **and when to use it**.
+"Reconcile orders" is a label. "Match settled payments against open orders, for
+nightly reconciliation or a payment dispute" is a decision.
+
+### The fields
+
+A skill is a named body of instructions attached to an office. It carries what it
+needs to run: environment variables, binaries, and whether a person or the model
+may invoke it.
+
+Skills come from three places, recorded on each one as `source`:
+
+| `source` | Means |
+| --- | --- |
+| `integration` | Generated from an integration you connected |
+| `custom` | You wrote it |
+| `system` | The platform provides it |
+
+### Where the body came from matters
+
+Separately from `source`, every skill records `contentSource`, which is about the
+**body** rather than the origin:
+
+| `contentSource` | Means | Protected from sync |
+| --- | --- | --- |
+| `generated` | Derived from documentation, unconfirmed | No |
+| `manual` | Written or edited by a person | Yes |
+| `verified` | Proven against the live API | Yes |
+
+When an integration syncs, it skips skills whose body is `manual` or `verified`.
+A routine sync cannot discard a proven procedure or a human edit.
+
+<Callout type="warn">
+  **Editing a skill's body marks it `manual` automatically.** Sending `content`
+  without setting `contentSource` stamps it, on the reasoning that a human edit
+  is human authorship. That is usually what you want. It is a surprise if you did
+  not expect it.
+</Callout>
+
+<Callout type="warn">
+  **Locking protects against sync, not against you.** Calling `regenerate`
+  explicitly unlocks the skill first and then overwrites it. If you want to keep
+  a proven body, do not call regenerate on it.
+</Callout>
+
+## Protocols
+
+A protocol is a behavioural rule injected into the employee's context. It has a
+priority, so ordering is yours to control, and it can optionally be scoped to
+specific skills when a rule only makes sense around certain work.
+
+Left unscoped, which is the common case, it applies to everything the employee
+does.
+
+<Callout type="warn">
+  **Protocols load when the office boots.** Adding or changing one does not
+  affect a running employee until it restarts. The list endpoint returns
+  `gatewayRestartNeeded` so you can tell whether what you are reading is what is
+  actually in force.
+</Callout>
+
+## Choosing between them
+
+Ask one question: **would this still matter if the employee were doing something
+unrelated?**
+
+| Yes, always applies | Protocol |
+| --- | --- |
+| Only when performing a specific task | Skill |
+
+Some examples that fall each way:
+
+| Rule | Which | Why |
+| --- | --- | --- |
+| "Always sign off as the Support team" | Protocol | True in every message |
+| "How to look up an order by email" | Skill | Only during a lookup |
+| "Never contact anyone marked do not contact" | Protocol | Must hold everywhere |
+| "How to reconcile the nightly payment file" | Skill | One job |
+| "Escalate to a human if unsure" | Protocol | Applies to every decision |
+
+## What this does not cover
+
+Skills and protocols shape behaviour. They do not grant access. An employee with
+a skill describing how to read a database still cannot read it unless the
+namespace is allocated to its office and its role permits it.
+
+Instructions and permissions are separate systems on purpose. A skill that
+overstates what an employee may do produces a `403`, not a breach.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Tools and secrets"
+    href="/docs/tools-and-secrets"
+    description="Connecting software, and where credentials live."
+  />
+  <Card
+    title="Skills API"
+    href="/docs/api-reference/offices/skills/listOfficeSkills"
+    description="Create, update, regenerate, and the locking rules."
+  />
+  <Card
+    title="Protocols API"
+    href="/docs/api-reference/offices/protocols/listOfficeProtocols"
+    description="Priority, skill scoping, and the restart signal."
+  />
+</Cards>

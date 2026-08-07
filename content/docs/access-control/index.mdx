@@ -1,0 +1,178 @@
+---
+title: How access control works
+description: The permission model behind every request, for people and machines alike.
+---
+
+Access control answers one question, the same way every time:
+
+> May this identity perform this action on this resource?
+
+The word that matters is *same*. People and machines go through one engine, with
+one policy language, evaluated identically. There is no shortcut path for
+machines, and no separate system to learn for them.
+
+## Four primitives
+
+```
+WHO                 WHAT                WHERE
+─────────────────────────────────────────────────────────
+identity      →     action        →     resource
+                    office:read         workspace/W1/office/O3
+```
+
+| Primitive | What it is |
+| --- | --- |
+| **Action** | A `namespace:verb` pair, such as `office:read` or `secrets:write` |
+| **Resource** | A path, such as `console`, `workspace/{id}`, or `workspace/{id}/office/{id}` |
+| **Policy** | A list of statements, each one `{ effect, actions, resources }` |
+| **Role** | A named bundle of policies |
+| **Assignment** | Binds a role to an identity **at a resource boundary** |
+
+<Callout type="warn">
+  The boundary on the assignment is the part most people miss. A role says what
+  its policies allow *in principle*. The assignment says *where*. Granting
+  `office-operator` at `workspace/W1/office/O3` gives that role's permissions in
+  exactly one office, however broadly its policies are written.
+</Callout>
+
+That separation is what lets one role be reused everywhere without becoming a
+blunt instrument. You do not write a narrow role. You write a normal role and
+assign it narrowly.
+
+## The resource hierarchy
+
+```
+console                          ← a sibling root, not the top of the tree
+workspace/{id}
+  ├── office/{id}
+  ├── namespace/{id}
+  └── browser/{id}
+```
+
+**A parent covers its descendants.** `workspace/W1` in a statement also grants on
+`workspace/W1/office/O3`. The same rule applies to assignment boundaries, so the
+two stay consistent.
+
+<Callout type="warn">
+  **`console` is not an ancestor of anything.** No workspace grant reaches the
+  console, and no console grant descends into a workspace. Console access is its
+  own tier, deliberately. This is why organisation level administration cannot be
+  reached by widening a workspace role.
+</Callout>
+
+## How a decision is made
+
+Six steps, in order. The first match wins.
+
+<Steps>
+
+<Step>
+### Owner bypass
+
+If the identity is the tenant owner, allow.
+</Step>
+
+<Step>
+### Self-scoped actions
+
+Managing your own profile is always allowed.
+</Step>
+
+<Step>
+### Implicit reads
+
+A small set of reads every member needs to load the product at all.
+</Step>
+
+<Step>
+### Load assignments
+
+If the identity holds no assignments, deny.
+</Step>
+
+<Step>
+### Walk the policies
+
+Role, then policies, then statements. **A matching deny returns immediately** and
+no later allow can rescue it. Allows are collected.
+</Step>
+
+<Step>
+### Default
+
+Deny.
+</Step>
+
+</Steps>
+
+### Two consequences worth designing around
+
+**Deny statements do not apply to the tenant owner.** "Deny wins" is true for
+every identity except that one. The owner is the root of the tenant and is not
+restrictable by a policy written inside it. If you need an identity that *can* be
+restricted, use a member with a role, or a service account.
+
+**The owner never exercises steps 4 or 5.** A permission problem that lives in the
+assignment path is invisible when you test as the owner and affects everyone
+else. Test with a member.
+
+### Reading an ancestor
+
+One narrow exception exists. An identity scoped to a single office cannot read the
+workspace above it under the plain rule, which would leave it unable to load the
+page that lists its own office.
+
+So for a **navigation read on an ancestor of the boundary**, statements are
+evaluated at the boundary instead. Two properties keep it contained: the
+allowlist is limited to navigation reads and can never include a write or manage
+action, and the role must still grant that action somewhere it can reach. A role
+granting only `office:read` gets nothing from this rule.
+
+## Machines are governed more strictly, not less
+
+A service account authenticates with an API key rather than a signed in session.
+Everything after that point is identical: the same `roleAssignments` field, the
+same engine, the same policies.
+
+With one asymmetry. **A machine can never reach the owner bypass.** A service
+account's identity is its own, never the tenant's, so step 1 cannot fire for it.
+Machines are subject to deny statements that the tenant owner is not.
+
+See [Service accounts](/docs/access-control/service-accounts).
+
+## Some resources add a second layer
+
+Access control answers *what class of action may this identity perform*. For most
+resources that is the whole answer. Two add a per-resource membership list on
+top:
+
+| Resource | Why |
+| --- | --- |
+| **Browsers** | A live browser holds persistent logins and a viewable session |
+| **Group chats** | Conversation privacy |
+
+Where a second layer exists, **both must pass**, and the membership layer is
+deliberately stricter. The browser one refuses even the tenant owner. Some blast
+radiuses are large enough to want explicit membership rather than access by
+virtue of owning the tenant.
+
+## Invariants
+
+These hold everywhere. If you are reasoning about whether something is possible,
+start here.
+
+- A deny returns immediately and cannot be overridden by a later allow.
+- No assignments means deny.
+- A resource pattern covers its descendants, in both statements and boundaries.
+- `console` is never an ancestor of a workspace.
+- Only navigation reads may use the ancestor rule.
+- Service accounts cannot reach the owner bypass.
+- Built-in roles and policies cannot be modified or deleted.
+
+## Next
+
+<Cards>
+  <Card title="Roles" href="/docs/access-control/roles" description="The built-in roles, and when to fork one." />
+  <Card title="Granting access" href="/docs/access-control/assignments" description="Assignments, boundaries, and doing it in the console." />
+  <Card title="Service accounts" href="/docs/access-control/service-accounts" description="Machine identities and API keys." />
+</Cards>

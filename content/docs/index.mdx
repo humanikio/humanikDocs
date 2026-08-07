@@ -1,13 +1,50 @@
 ---
-title: Hello World
-description: Your first document
+title: Introduction
+description: The HumanikOS API lets you create and operate AI employees from your own code.
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+The HumanikOS API is an HTTP interface to the same control plane the console
+uses. It creates offices, dispatches work, reads and writes the data plane,
+manages contacts and calendars, and drives cloud browsers.
 
-## What is Next?
+Every route is mounted under a single version prefix:
+
+```
+/api/v1
+```
+
+## Before you start
+
+You need two things:
+
+1. A **workspace**. Create one in the console if you do not have one yet.
+2. A **service account API key**, which starts with `hsk_`. See
+   [Authentication](/docs/authentication).
+
+## What the API covers
+
+The public surface is scoped to what a service account key can reach. Console
+only routes, webhook receivers, and internal service routes sit outside it and
+are not documented here.
 
 <Cards>
-  <Card title="Learn more about Next.js" href="https://nextjs.org/docs" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card title="Quickstart" href="/docs/quickstart" description="Make your first authenticated request." />
+  <Card title="Authentication" href="/docs/authentication" description="Service account keys, scoping, and permissions." />
 </Cards>
+
+## Conventions used throughout
+
+Every response is wrapped in an envelope, every request can carry a correlation
+ID, and rate limits are applied per tenant. Those behaviours are identical on
+every endpoint, so they are documented once rather than repeated:
+
+<Cards>
+  <Card title="Responses and errors" href="/docs/responses" description="The envelope, status codes, and what error strings mean." />
+  <Card title="Rate limits" href="/docs/rate-limits" description="Limits, headers, and retry behaviour." />
+</Cards>
+
+## Versioning
+
+`v1` is the only version and has never been revised. New fields and new
+endpoints are added without a version change, so a client must ignore response
+fields it does not recognise.

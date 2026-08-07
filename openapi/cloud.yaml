@@ -1,0 +1,581 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Humanik Cloud
+  version: v1
+  summary: The compute platform offices run on.
+  description: |
+    Humanik Cloud is the platform that runs your services. An office is one of
+    them: it exists as a service of type `cloudClaw`, which is why an office can
+    be resized and given an idle timeout at all.
+
+    These endpoints manage services directly. Most people never need them,
+    because the office endpoints do the same thing in a narrower, safer way. Use
+    these when you are managing services that are not offices, or when you want a
+    tenant wide view.
+
+    Every fact in this document is resolved from source. Endpoints whose request
+    shape has not been verified are absent rather than guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Services
+    description: The unit of compute. An office is one of these.
+  - name: Projects
+    description: Services are grouped into projects.
+  - name: Deployments
+    description: Shipping code to a service, and the history of doing so.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        Your ordinary HumanikOS service account key. Cloud endpoints need
+        `cloud:read` or `cloud:manage` at `console` scope.
+
+  parameters:
+    ServiceId:
+      name: serviceId
+      in: path
+      required: true
+      description: |
+        The service. From [List services](/docs/api-reference/cloud/services/listCloudServices).
+        An office's service ID also appears on its
+        [machine configuration](/docs/api-reference/offices/machine/getOfficeComputeConfig).
+      schema:
+        type: string
+
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      description: The project. From [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
+      schema:
+        type: string
+
+  schemas:
+    Error:
+      type: object
+      description: |
+        Errors from these endpoints are forwarded from Humanik Cloud unchanged,
+        so wording may differ from the rest of this API.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+      required: [success, error]
+
+  responses:
+    BadRequest:
+      description: A required field is missing, or Humanik Cloud rejected the request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: The caller lacks `cloud:read` or `cloud:manage` at console scope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unreachable:
+      description: Humanik Cloud could not be reached.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unreachable:
+              value:
+                success: false
+                error: Failed to reach Humanik Cloud
+
+paths:
+  /cloud/services:
+    get:
+      tags: [Services]
+      summary: List services
+      operationId: listCloudServices
+      description: |
+        Every service in your tenant, including the ones backing your offices.
+        Requires `cloud:read` at `console`.
+
+        **Offices appear here as services of type `cloudClaw`.** Filtering to
+        that type gives you a tenant wide view of every office machine and the
+        service ID behind it, which is what the console's Office VMs page does.
+      responses:
+        '200':
+          description: The tenant's services.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    post:
+      tags: [Services]
+      summary: Create a service
+      operationId: createCloudService
+      description: |
+        Creates a service without deploying it. Requires `cloud:manage` at
+        `console`.
+
+        To create and ship in one call, use
+        [Create and deploy](/docs/api-reference/cloud/services/createAndDeployCloudService).
+
+        **You do not create offices this way.**
+        [Create an office](/docs/api-reference/offices/offices/createOffice)
+        provisions its service for you, along with its identity, vault, and data
+        plane entry. Creating a bare `cloudClaw` service here would give you a
+        machine with none of that.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceName:
+                  type: string
+                serviceType:
+                  type: string
+                  description: |
+                    What kind of service. Valid values come from
+                    [Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions).
+                projectId:
+                  type: string
+                  description: |
+                    The project to create it in. From
+                    [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
+                userConfig:
+                  type: object
+                  description: Initial size and idle timeout. See Update service settings.
+              required: [serviceName, serviceType]
+      responses:
+        '200':
+          description: Created.
+        '400':
+          description: '`serviceName` or `serviceType` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: serviceName is required
+                noType:
+                  value:
+                    success: false
+                    error: serviceType is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/options:
+    get:
+      tags: [Services]
+      summary: Get service options
+      operationId: getCloudServiceOptions
+      description: |
+        The service types available to you, and the sizes each supports.
+        Requires `cloud:read` at `console`.
+
+        **Read this before creating or resizing anything.** Options depend on
+        your account and change over time, so valid values come from here rather
+        than from a list in these docs.
+      responses:
+        '200':
+          description: Available service types and sizes.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/create-and-deploy:
+    post:
+      tags: [Services]
+      summary: Create and deploy a service
+      operationId: createAndDeployCloudService
+      description: |
+        Creates a service and ships it in one call. Requires `cloud:manage`.
+
+        Same body as [Create a service](/docs/api-reference/cloud/services/createCloudService),
+        plus whatever the deployment needs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceName:
+                  type: string
+                serviceType:
+                  type: string
+                  description: From [Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions).
+                projectId:
+                  type: string
+                  description: From [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
+              required: [serviceName, serviceType]
+      responses:
+        '200':
+          description: Created and deploying.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    get:
+      tags: [Services]
+      summary: Get a service
+      operationId: getCloudService
+      description: Requires `cloud:read` at `console`.
+      responses:
+        '200':
+          description: The service.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    put:
+      tags: [Services]
+      summary: Update a service
+      operationId: updateCloudService
+      description: |
+        Renames a service, moves it between projects, or changes its settings.
+        Requires `cloud:manage`.
+
+        At least one of `serviceName`, `projectId`, or `userConfig` must be
+        present.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceName:
+                  type: string
+                projectId:
+                  type: string
+                  description: |
+                    Move the service to another project. From
+                    [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
+                userConfig:
+                  type: object
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          description: Nothing to change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                nothing:
+                  value:
+                    success: false
+                    error: At least one field (serviceName, projectId, or userConfig) is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    delete:
+      tags: [Services]
+      summary: Delete a service
+      operationId: deleteCloudService
+      description: |
+        Requires `cloud:manage`.
+
+        **Do not delete an office's service this way.**
+        [Delete the office](/docs/api-reference/offices/offices/deleteOffice)
+        instead, which removes the service along with the record that points at
+        it. Deleting the service alone leaves an office whose machine no longer
+        exists.
+      responses:
+        '200':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/userConfig:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    patch:
+      tags: [Services]
+      summary: Update service settings
+      operationId: updateCloudServiceUserConfig
+      description: |
+        Changes a service's size or how long it stays awake. Requires
+        `cloud:manage` at `console`.
+
+        **This is the same operation the office endpoint performs**, at a wider
+        scope. For an office, prefer
+        [Update machine configuration](/docs/api-reference/offices/machine/updateOfficeComputeConfig):
+        it is gated on `instance:manage` at that one office rather than
+        `cloud:manage` across the whole tenant.
+
+        | | Office route | This route |
+        | --- | --- | --- |
+        | Reaches | One office | Any service in the tenant |
+        | Permission | `instance:manage` @ office | `cloud:manage` @ console |
+
+        Valid sizes come from
+        [Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userConfig:
+                  type: object
+                  description: |
+                    The settings to change. Carries `instanceType` for size and
+                    `idleTimeoutMinutes` for how long the service stays awake
+                    while idle.
+              required: [userConfig]
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          description: '`userConfig` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noConfig:
+                  value:
+                    success: false
+                    error: userConfig object is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/instances:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    get:
+      tags: [Services]
+      summary: List service instances
+      operationId: listCloudServiceInstances
+      description: |
+        What is running for this service right now. Requires `cloud:read`.
+
+        A service that has scaled to zero returns none. That is the resting
+        state, not an error.
+      responses:
+        '200':
+          description: Running instances, if any.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/logs:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    get:
+      tags: [Services]
+      summary: Get service logs
+      operationId: getCloudServiceLogs
+      description: Requires `cloud:read`.
+      responses:
+        '200':
+          description: Log output.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/deploy:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    post:
+      tags: [Deployments]
+      summary: Deploy a service
+      operationId: deployCloudService
+      description: Ships code to a service. Requires `cloud:manage`.
+      responses:
+        '200':
+          description: Deployment started.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/redeploy:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    post:
+      tags: [Deployments]
+      summary: Redeploy a service
+      operationId: redeployCloudService
+      description: |
+        Ships the current version again. Requires `cloud:manage`.
+
+        Useful when the code has not changed but the environment has, since
+        secrets are read at boot.
+      responses:
+        '200':
+          description: Redeployment started.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/deployments:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    get:
+      tags: [Deployments]
+      summary: List deployments
+      operationId: listCloudDeployments
+      description: The deployment history for a service. Requires `cloud:read`.
+      responses:
+        '200':
+          description: Deployments.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/deployments/{deploymentId}:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+      - name: deploymentId
+        in: path
+        required: true
+        description: From [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments).
+        schema:
+          type: string
+    get:
+      tags: [Deployments]
+      summary: Get a deployment
+      operationId: getCloudDeployment
+      description: Requires `cloud:read`.
+      responses:
+        '200':
+          description: The deployment.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/projects:
+    get:
+      tags: [Projects]
+      summary: List projects
+      operationId: listCloudProjects
+      description: |
+        Projects group services. Requires `cloud:read` at `console`.
+
+        An office's service lives in a project, created for the workspace if one
+        did not already exist.
+      responses:
+        '200':
+          description: The tenant's projects.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    post:
+      tags: [Projects]
+      summary: Create a project
+      operationId: createCloudProject
+      description: Requires `cloud:manage` at `console`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectName:
+                  type: string
+              required: [projectName]
+      responses:
+        '200':
+          description: Created.
+        '400':
+          description: '`projectName` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: projectName is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/projects/{projectId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Projects]
+      summary: Get a project
+      operationId: getCloudProject
+      description: Requires `cloud:read`.
+      responses:
+        '200':
+          description: The project.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    put:
+      tags: [Projects]
+      summary: Update a project
+      operationId: updateCloudProject
+      description: Requires `cloud:manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectName:
+                  type: string
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'

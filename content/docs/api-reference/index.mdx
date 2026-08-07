@@ -1,0 +1,118 @@
+---
+title: Overview
+description: How the reference is organised, and what your API key can reach.
+---
+
+Every endpoint is documented with the permission it requires, its request and
+response shape, and the errors it can actually return. Errors a handler cannot
+produce are not listed, so an error in the table is one you can plan for.
+
+<ApiSetup />
+
+## What this reference covers
+
+**The machine callable surface.** Every endpoint here can be called with an
+`hsk_` API key. If it is documented in this section, your key can reach it,
+assuming the service account holds the permission named on the endpoint.
+
+Deliberately excluded:
+
+| Not here | Why | Where instead |
+| --- | --- | --- |
+| Identity administration | Requires a signed in user. API keys are rejected. | [Access control](/docs/access-control) |
+| Webhook receivers | Called by us, not by you | |
+| Internal service routes | Between our own services | |
+
+<Callout type="warn">
+  **Identity administration is closed to API keys.** Every route under `/iam` and
+  `/service-accounts` requires a signed in user, and returns `403` to a key even
+  when the service account holds `iam:manage`. A machine identity that could mint
+  machine identities, or grant itself a role, could escalate its own privileges
+  with no person involved.
+</Callout>
+
+The practical split: **provisioning is a console step, operation is an API step.**
+Create the service account and grant its roles once as a person, then the key
+does the work. Start with
+[Service accounts](/docs/access-control/service-accounts) if you do not have a
+key yet.
+
+## How permissions are shown
+
+Every endpoint that carries a permission names it as an action at a scope:
+
+```
+office:manage @ workspace/{id}
+```
+
+That line tells you two things: which action your service account needs, and the
+boundary its assignment has to cover. Both have to be true. A role granting
+`office:manage` assigned at a different workspace will still be denied.
+
+Scopes are `console`, `workspace/{id}`, and `office/{id}`.
+
+<Callout>
+  This reference tells you **which permission an endpoint needs**. It does not
+  explain how roles, policies, and assignments fit together. That model is in
+  [Access control](/docs/access-control), and it is worth reading once before
+  granting anything.
+</Callout>
+
+## When a call is denied
+
+A `403` names the action and resource it wanted:
+
+```json
+{
+  "success": false,
+  "error": "Forbidden",
+  "message": "<decision reason>",
+  "action": "office:manage",
+  "resource": "workspace/ws_a1b2c3/office/off_dispatch"
+}
+```
+
+Grant that exact pair rather than widening a role. See
+[Granting access](/docs/access-control/assignments).
+
+## Sections
+
+Grouped by what the thing is. **Native products** are software we built that an
+AI employee operates directly, and they are the reason this is an operating
+system rather than a connector. Integrations reach the customer's existing stack
+across a boundary we do not own.
+
+<Cards>
+  <Card
+    title="Offices"
+    href="/docs/api-reference/offices"
+    description="The workplace one AI employee runs on. 75 operations."
+  />
+  <Card
+    title="CRM"
+    href="/docs/api-reference/crm"
+    description="Contacts, conversations, and deals. 36 operations."
+  />
+  <Card
+    title="Browsers"
+    href="/docs/api-reference/browsers"
+    description="Cloud browsers an employee drives directly. 40 operations."
+  />
+  <Card
+    title="Humanik Cloud"
+    href="/docs/api-reference/cloud"
+    description="The compute platform offices run on. 18 operations."
+  />
+  <Card
+    title="Access control"
+    href="/docs/access-control"
+    description="The permission model, roles, assignments, and service accounts."
+  />
+</Cards>
+
+Reference pages are generated from the OpenAPI specs, so every operation carries
+its real parameters, response schema, and error list.
+
+One topic stays hand written because it lives on other route families and its
+shapes are not verified yet:
+[phone numbers and email](/docs/api-reference/phone-and-email).

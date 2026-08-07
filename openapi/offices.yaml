@@ -1,0 +1,3106 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Offices
+  version: v1
+  summary: Create an AI employee's workplace and attach everything it needs to do work.
+  description: |
+    An office is the isolated machine one AI employee runs on. It has its own
+    filesystem, its own vault, and its own identity. Everything an employee can
+    reach is attached to its office.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not yet been verified are absent rather
+    than guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Offices
+    description: Create, read, update, and delete an office.
+  - name: Integrations
+    description: The tools an employee can use, and the secrets behind them.
+  - name: Skills
+    description: |
+      What an employee can do. Skills follow the open
+      [Agent Skills](https://agentskills.io/) layout: a directory per skill, a
+      `SKILL.md` with YAML frontmatter, and a markdown body. See
+      [Skills and protocols](/docs/skills-and-protocols) for what we share with
+      the specification and what is ours.
+  - name: Protocols
+    description: What an employee must always do.
+  - name: Allocations
+    description: The data, sites, apps, and browsers an office may reach.
+  - name: Identity
+    description: The office's service account, its keys, and what it may do.
+  - name: Tenant libraries
+    description: Shared integration templates and website assets that offices draw from.
+  - name: Machine
+    description: Size, idle timeout, running instances, and logs.
+  - name: Environment secrets
+    description: The office's own vault, injected at boot.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`. The `hsk_` half identifies the key and is
+        safe to log. The `hss_` half authenticates it.
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: query
+      required: true
+      description: |
+        Required unless the caller's key already carries a workspace scope.
+        Omitting it in that case returns 400.
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+
+    OfficeId:
+      name: officeId
+      in: path
+      required: true
+      description: The office to act on.
+      schema:
+        type: string
+        examples: [off_9c1e7d]
+
+  schemas:
+    Error:
+      type: object
+      description: |
+        The failure envelope. `error` is a human readable string, not a stable
+        machine code. Branch on the HTTP status, not on this value.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          description: Human readable. Wording can change between releases.
+        message:
+          type: string
+          description: Optional detail.
+      required: [success, error]
+
+    Forbidden:
+      type: object
+      description: A permission denial, naming the action and resource that were wanted.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          const: Forbidden
+        message:
+          type: string
+          description: The decision reason.
+        action:
+          type: string
+          examples: [office:manage]
+        resource:
+          type: string
+          examples: [workspace/ws_a1b2c3/office/off_dispatch]
+      required: [success, error]
+
+    Office:
+      type: object
+      properties:
+        id:
+          type: string
+          examples: [off_9c1e7d]
+        name:
+          type: string
+          examples: [Dispatch]
+        workspaceId:
+          type: string
+          examples: [ws_a1b2c3]
+      required: [id, name]
+
+    Integration:
+      type: object
+      properties:
+        id:
+          type: string
+          examples: [int_7d3a1f]
+        name:
+          type: string
+          examples: [Stripe]
+        baseUrl:
+          type: string
+          examples: [https://api.stripe.com]
+        authType:
+          type: string
+          enum: [none, api_key, bearer, basic]
+          description: |
+            How the integration authenticates. Anything other than `none`
+            requires `credentials` on create.
+        tools:
+          type: array
+          items:
+            type: object
+      required: [id, name, baseUrl, authType]
+
+    Skill:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Same as `name`. The name is the document ID.
+          examples: [reconcile-orders]
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+          maxLength: 100
+          description: Silently truncated to 100 characters on write.
+        emoji:
+          type: string
+        source:
+          type: string
+          enum: [integration, custom, system]
+          description: |
+            Where the skill came from. `integration` is generated from an
+            integration, `custom` is yours, `system` is platform provided.
+        sourceRef:
+          type: string
+        content:
+          type: string
+        contentSource:
+          type: string
+          enum: [generated, manual, verified]
+          default: generated
+          description: |
+            Records where the body came from. `manual` and `verified` are locked
+            against automatic overwrite by integration sync. They are NOT locked
+            against an explicit regenerate call.
+        requiresEnv:
+          type: array
+          items:
+            type: string
+        requiresBins:
+          type: array
+          items:
+            type: string
+        userInvocable:
+          type: boolean
+          default: true
+        modelInvocable:
+          type: boolean
+          default: true
+        status:
+          type: string
+          examples: [active]
+      required: [id, name, displayName, description, source, content]
+
+    Protocol:
+      type: object
+      properties:
+        id:
+          type: string
+          examples: [confirm-before-refunding]
+        name:
+          type: string
+        description:
+          type: string
+        emoji:
+          type: string
+        content:
+          type: string
+        skillNames:
+          type: array
+          items:
+            type: string
+          default: []
+          description: Scopes the protocol to specific skills. Empty means it applies to everything.
+        priority:
+          type: integer
+          default: 10
+          description: Lower runs earlier.
+        status:
+          type: string
+          examples: [active]
+      required: [id, name, content]
+
+  responses:
+    BadRequest:
+      description: The request is malformed or a required field is missing.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingWorkspace:
+              summary: No workspace in query or scope
+              value:
+                success: false
+                error: workspaceId is required
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalid:
+              value:
+                success: false
+                error: Invalid API key
+
+    Forbidden:
+      description: Authenticated, but the service account lacks the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Forbidden'
+
+    NotFound:
+      description: |
+        No such resource, or it belongs to another tenant. Both cases return 404
+        so that a denial cannot be used to confirm a resource exists.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    RateLimited:
+      description: Too many requests. Wait for `retryAfter` seconds.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                const: false
+              error:
+                type: string
+                const: Rate limit exceeded
+              message:
+                type: string
+              retryAfter:
+                type: integer
+              timestamp:
+                type: string
+                format: date-time
+
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /offices:
+    get:
+      tags: [Offices]
+      summary: List offices
+      operationId: listOffices
+      description: |
+        Lists offices in the workspace.
+
+        **This endpoint has no permission gate, deliberately.** An identity
+        scoped to a single office holds no workspace level permission, so a
+        workspace gate would deny it and the product would appear empty. The
+        endpoint lists every office and filters per row against what the caller
+        can read. That filter is the access control.
+
+        The response is already the caller's view. Two identities in the same
+        workspace can legitimately receive different lists, and a shorter list
+        is not an error.
+
+        There is no pagination. The whole permitted collection is returned.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The offices this caller may read.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  offices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Office'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Offices]
+      summary: Create an office
+      operationId: createOffice
+      description: |
+        Creates an office and provisions the infrastructure behind it. The
+        workspace comes from the caller's selected scope rather than the body.
+
+        One call sets up five things: the office record, the data plane side, a
+        container project, a container service, and an office API key.
+
+        **Steps three to five fail soft.** A failure there logs a warning rather
+        than failing the request, so the office existing does not mean the office
+        is ready. After creating one, check `cloud-config` and `api-keys` before
+        assuming it can run. The repair path for a key that failed to mint is
+        `POST /offices/{officeId}/api-keys/provision`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Display name.
+                  examples: [Dispatch]
+                officeId:
+                  type: string
+                  description: Use a specific ID rather than generating one.
+              required: [name]
+      responses:
+        '201':
+          description: The office was created. Infrastructure may still be incomplete.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  office:
+                    $ref: '#/components/schemas/Office'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Offices]
+      summary: Get an office
+      operationId: getOffice
+      description: Returns one office. Requires `office:read` at the office.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  office:
+                    $ref: '#/components/schemas/Office'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    patch:
+      tags: [Offices]
+      summary: Update an office
+      operationId: updateOffice
+      description: |
+        Renames an office. Requires `office:manage` at the office.
+
+        `name` is the only mutable field. Everything else about an office is
+        changed through its own endpoints.
+
+        Note that `workspaceId` is accepted in the **body** here, unlike most
+        endpoints which read it from the query string.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  examples: [Dispatch EU]
+                workspaceId:
+                  type: string
+                  description: Read from the body on this endpoint.
+              required: [name]
+      responses:
+        '200':
+          description: The updated office.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  office:
+                    $ref: '#/components/schemas/Office'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Offices]
+      summary: Delete an office
+      operationId: deleteOffice
+      description: |
+        Deletes an office. Requires `office:manage` at the office.
+
+        By default the machine is deleted with the office. Passing
+        `keepNexusService=true` leaves infrastructure running with nothing
+        pointing at it, which is useful when reusing or investigating the
+        machine and a cost leak otherwise.
+
+        Deleting an office also removes the API keys issued to it. A key revoked
+        this way can still authenticate for up to five minutes while the
+        validation cache expires.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: keepNexusService
+          in: query
+          required: false
+          description: Leave the machine running rather than deleting it.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/cloud-config:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Offices]
+      summary: Get office cloud config
+      operationId: getOfficeCloudConfig
+      description: |
+        Returns the machine configuration provisioned for this office. Requires
+        `office:read` at the office.
+
+        Office creation fails soft on the infrastructure steps, so an office can
+        exist without a working machine. This is how you check. An office with no
+        cloud config was created but never fully provisioned.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's machine configuration.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+
+  /offices/{officeId}/cloud/config:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Machine]
+      summary: Get machine configuration
+      operationId: getOfficeComputeConfig
+      description: |
+        Returns the office's machine settings and **what may be changed**.
+        Requires `instance:read` at the office.
+
+        Three things come back together:
+
+        | | |
+        | --- | --- |
+        | `userConfig` | What is set now: `instanceType`, `idleTimeoutMinutes` |
+        | `serviceTypeConfig` | The tiers available to this service, and which fields are configurable |
+        | Service metadata | Identity of the underlying service |
+
+        **Read this before writing.** The available tiers depend on the service
+        type and change over time, so the valid values for `instanceType` come
+        from this response rather than from a list in these docs.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Current settings and the options available.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    put:
+      tags: [Machine]
+      summary: Update machine configuration
+      operationId: updateOfficeComputeConfig
+      description: |
+        Changes the office's machine size or how long it stays awake. Requires
+        `instance:manage` at the office, which is a different action from
+        `office:manage`: resizing a machine is a spend decision.
+
+        ## Changing the size
+
+        `instanceType` selects a tier. Get the valid values from
+        [Get machine configuration](/docs/api-reference/offices/machine/getOfficeComputeConfig)
+        first, since they depend on the service type.
+
+        ```bash
+        curl -X PUT "$HOS_API/offices/off_9c1e7d/cloud/config?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "userConfig": { "instanceType": "<a tier from the read>" } }'
+        ```
+
+        ## Ephemeral or persistent
+
+        `idleTimeoutMinutes` decides how long an office stays awake with nothing
+        to do. This is the setting that makes an office ephemeral or persistent.
+
+        A short timeout means the machine sleeps quickly and costs nothing at
+        rest, at the price of a cold start on the next job. A long one keeps it
+        warm and responsive, and it is awake, and billed, the whole time.
+
+        ```bash
+        curl -X PUT "$HOS_API/offices/off_9c1e7d/cloud/config?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "userConfig": { "idleTimeoutMinutes": 30 } }'
+        ```
+
+        Send either field or both. `userConfig` itself is required.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userConfig:
+                  type: object
+                  description: The settings to change. At least one field.
+                  properties:
+                    instanceType:
+                      type: string
+                      description: |
+                        A tier from `serviceTypeConfig` on the read. Values
+                        depend on the service type, so read before writing.
+                    idleTimeoutMinutes:
+                      type: integer
+                      description: |
+                        How long the office stays awake while idle. Lower is
+                        cheaper and colder; higher is warmer and billed longer.
+              required: [userConfig]
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          description: '`workspaceId` or `userConfig` is missing, or the update was rejected.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noConfig:
+                  value:
+                    success: false
+                    error: userConfig is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/cloud/instances:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Machine]
+      summary: List running instances
+      operationId: listOfficeInstances
+      description: |
+        What is actually running for this office right now. Requires
+        `instance:read` at the office.
+
+        An office that has scaled to zero returns no instances. That is the
+        normal resting state, not an error.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Running instances, if any.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/cloud/logs:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Machine]
+      summary: Get machine logs
+      operationId: getOfficeLogs
+      description: |
+        Logs from the office's machine. Requires `instance:read` at the office.
+
+        This is the first place to look when an office was created but never
+        became ready, since the infrastructure steps at creation fail soft.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Log output.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/integrations:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Integrations]
+      summary: List integrations
+      operationId: listOfficeIntegrations
+      description: |
+        Lists every integration on the office. Requires `office:read`.
+
+        Rows are augmented with template status where an integration came from
+        the tenant library, so an instantiated template can be told apart from a
+        locally created one. No pagination.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's integrations.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  integrations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Integration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Integrations]
+      summary: Create an integration
+      operationId: createOfficeIntegration
+      description: |
+        Creates an integration manually. Requires `office:manage`.
+
+        ## Two shapes, decided by `authType`
+
+        | | `authType: "none"` | `api_key` · `bearer` · `basic` |
+        | --- | --- | --- |
+        | `credentials` | Not used | **Required** |
+        | Vault write | None | A secret group is created |
+        | Fails if the office has no vault | No | Yes, with a 500 |
+
+        When `authType` is anything other than `none`, the credential values are
+        written into the office vault as a secret group and the integration is
+        linked to that group by reference. Credentials are stored, not echoed:
+        no read endpoint returns a secret value.
+
+        ### An authenticated integration
+
+        ```bash
+        curl -X POST "$HOS_API/offices/off_9c1e7d/integrations?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "Stripe",
+            "baseUrl": "https://api.stripe.com",
+            "authType": "bearer",
+            "credentials": { "API_KEY": "sk_live_..." }
+          }'
+        ```
+
+        ### An open one
+
+        ```bash
+        curl -X POST "$HOS_API/offices/off_9c1e7d/integrations?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "Public status API",
+            "baseUrl": "https://status.example.com",
+            "authType": "none"
+          }'
+        ```
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  examples: [Stripe]
+                baseUrl:
+                  type: string
+                  description: Must start with `http://` or `https://`.
+                  examples: [https://api.stripe.com]
+                authType:
+                  type: string
+                  enum: [none, api_key, bearer, basic]
+                credentials:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: |
+                    Key value pairs. **Required unless `authType` is `none`.**
+                  examples:
+                    - API_KEY: sk_live_...
+                docsUrl:
+                  type: string
+                  description: |
+                    Link to the software's documentation. Used when generating
+                    the integration's skill.
+                specUrl:
+                  type: string
+                  description: |
+                    Link to an [OpenAPI](https://www.openapis.org/) description of
+                    the software. When present it is used alongside `docsUrl` to
+                    generate a more accurate skill, since a machine readable
+                    contract beats prose.
+              required: [name, baseUrl, authType]
+      responses:
+        '201':
+          description: The integration was created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  integration:
+                    $ref: '#/components/schemas/Integration'
+        '400':
+          description: |
+            A required field is missing, `baseUrl` is malformed, or credentials
+            were omitted while `authType` declares authentication.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingFields:
+                  value:
+                    success: false
+                    error: name, baseUrl, and authType are required
+                badUrl:
+                  value:
+                    success: false
+                    error: 'baseUrl must start with http:// or https://'
+                missingCredentials:
+                  value:
+                    success: false
+                    error: credentials are required when authType is not "none"
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: |
+            The vault write failed and **the integration was not created**. An
+            office whose vault was never provisioned fails here every time until
+            that is repaired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noStore:
+                  value:
+                    success: false
+                    error: Failed to configure office secrets store
+                noGroup:
+                  value:
+                    success: false
+                    error: Failed to create secret group in vault
+
+  /offices/{officeId}/skills:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Skills]
+      summary: List skills
+      operationId: listOfficeSkills
+      description: Lists every skill in the office. Requires `office:read`. No pagination.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's skills.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  skills:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Skill'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Skills]
+      summary: Create a skill
+      operationId: createOfficeSkill
+      description: |
+        Creates a skill in an office. Requires `office:manage`.
+
+        A skill is materialised on the office machine as
+        `skills/{name}/SKILL.md`, following the open
+        [Agent Skills](https://agentskills.io/specification) layout. `name` and
+        `description` become its frontmatter; `content` becomes the body.
+
+        `name` becomes the document ID, so it must be unique within the office.
+        A duplicate returns 400 rather than replacing.
+
+        **`description` is what the employee decides with.** Every skill's name
+        and description are advertised to it; the body is read only when a task
+        matches. Say what the skill does *and when to use it*.
+
+        `description` is silently truncated to 100 characters. A longer string is
+        accepted and shortened without an error.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Machine name, unique within the office. Becomes the document ID.
+                  examples: [reconcile-orders]
+                displayName:
+                  type: string
+                  examples: [Reconcile orders]
+                description:
+                  type: string
+                  maxLength: 100
+                  description: Silently truncated to 100 characters.
+                content:
+                  type: string
+                  description: The skill body.
+                source:
+                  type: string
+                  enum: [integration, custom, system]
+                  description: |
+                    Where the skill came from. Use `custom` for one you are
+                    authoring.
+                emoji:
+                  type: string
+                sourceRef:
+                  type: string
+                requiresEnv:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+                requiresBins:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+                userInvocable:
+                  type: boolean
+                  default: true
+                modelInvocable:
+                  type: boolean
+                  default: true
+              required: [name, displayName, description, content, source]
+      responses:
+        '201':
+          description: The skill was created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  skill:
+                    $ref: '#/components/schemas/Skill'
+        '400':
+          description: A required field is missing, the name is invalid, or the skill already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingFields:
+                  value:
+                    success: false
+                    error: name, displayName, description, source, and content are required
+                badName:
+                  value:
+                    success: false
+                    error: name is required and must contain valid characters
+                duplicate:
+                  value:
+                    success: false
+                    error: Skill with name "reconcile-orders" already exists in this office
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/skills/{skillId}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: skillId
+        in: path
+        required: true
+        description: 'The skill. From [List skills](/docs/api-reference/offices/skills/listOfficeSkills). Same value as the skill''s `name`.'
+        schema:
+          type: string
+          examples: [reconcile-orders]
+    get:
+      tags: [Skills]
+      summary: Get a skill
+      operationId: getOfficeSkill
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The skill.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  skill:
+                    $ref: '#/components/schemas/Skill'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Skills]
+      summary: Update a skill
+      operationId: updateOfficeSkill
+      description: |
+        Updates a skill. Requires `office:manage`. Only the fields you send are
+        changed.
+
+        **Sending `content` without `contentSource` stamps the skill `manual`.**
+        Editing a body is treated as human authorship, which locks it against
+        automatic overwrite by integration sync. Pass `contentSource` explicitly
+        to opt out.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                description:
+                  type: string
+                  maxLength: 100
+                emoji:
+                  type: string
+                content:
+                  type: string
+                  description: Sending this stamps `contentSource` as `manual` unless you set it explicitly.
+                contentSource:
+                  type: string
+                  enum: [generated, manual, verified]
+                  description: |
+                    Set explicitly to override the rule above. Sending `content`
+                    without this stamps the skill `manual`.
+                requiresEnv:
+                  type: array
+                  items:
+                    type: string
+                requiresBins:
+                  type: array
+                  items:
+                    type: string
+                userInvocable:
+                  type: boolean
+                modelInvocable:
+                  type: boolean
+                status:
+                  type: string
+      responses:
+        '200':
+          description: The updated skill.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  skill:
+                    $ref: '#/components/schemas/Skill'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Skills]
+      summary: Delete a skill
+      operationId: deleteOfficeSkill
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+        '400':
+          description: Missing workspace, or no such skill.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    error: Skill not found
+
+  /offices/{officeId}/skills/{skillId}/regenerate:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: skillId
+        in: path
+        required: true
+        description: 'The skill. From [List skills](/docs/api-reference/offices/skills/listOfficeSkills). Same value as the skill''s `name`.'
+        schema:
+          type: string
+    post:
+      tags: [Skills]
+      summary: Regenerate a skill body
+      operationId: regenerateOfficeSkill
+      description: |
+        Re-runs generation of the skill body for an integration sourced skill.
+        Returns the updated content length and token usage. Requires
+        `office:manage`.
+
+        **This overwrites a locked body.** An explicit regenerate is treated as
+        an intentional override: it resets `contentSource` to `generated` first,
+        which unlocks the skill, then writes. A `manual` or `verified` body is
+        replaced.
+
+        Content locking protects against automatic sync, not against this call.
+        If you want to keep a proven body, do not call regenerate on it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Regenerated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/protocols:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Protocols]
+      summary: List protocols
+      operationId: listOfficeProtocols
+      description: |
+        Lists the office's protocols. Requires `office:read`.
+
+        The response carries `gatewayRestartNeeded`, which reports whether the
+        office has protocol changes that are not live yet. Protocols are read
+        into the employee's context when the office boots, so a change does not
+        take effect until it restarts.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's protocols.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  protocols:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Protocol'
+                  gatewayRestartNeeded:
+                    type: boolean
+                    description: True when protocol changes are pending an office restart.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Protocols]
+      summary: Create a protocol
+      operationId: createOfficeProtocol
+      description: |
+        Creates a behavioural rule injected into the employee's context.
+        Requires `office:manage`.
+
+        Where a skill is a capability the employee reaches for, a protocol
+        applies to everything it does.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Becomes part of the generated ID.
+                  examples: [Confirm before refunding]
+                content:
+                  type: string
+                  description: The rule itself.
+                description:
+                  type: string
+                emoji:
+                  type: string
+                skillNames:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+                priority:
+                  type: integer
+                  default: 10
+                  description: Lower runs earlier.
+              required: [name, content]
+      responses:
+        '201':
+          description: The protocol was created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  protocol:
+                    $ref: '#/components/schemas/Protocol'
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: name is required
+                noContent:
+                  value:
+                    success: false
+                    error: content is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/namespaces:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Allocations]
+      summary: List allocated namespaces
+      operationId: listOfficeNamespaces
+      description: Lists the data namespaces this office may reach. Requires `office:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's namespace allocations.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Allocations]
+      summary: Allocate a namespace
+      operationId: allocateOfficeNamespace
+      description: |
+        Grants this office access to a data namespace. Requires `office:manage`
+        at the office.
+
+        **This endpoint is gated twice.** Beyond the route level
+        `office:manage`, the handler independently evaluates
+        `datasource:read` on the namespace being allocated and returns 403 if
+        the caller cannot read it.
+
+        The reason is that allocation grants an AI employee access to data. You
+        cannot hand an office access to a namespace you are not permitted to see
+        yourself. Like promotion, this is an action that starts in one boundary
+        and lands in another, so it is gated at both ends.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namespaceId:
+                  type: string
+                  examples: [ns_orders]
+                  description: 'The data namespace to allocate. Get the ID from the data plane.'
+                namespaceName:
+                  type: string
+                  examples: [Orders]
+                  description: 'Display name for the allocation. Yours to choose.'
+              required: [namespaceId, namespaceName]
+      responses:
+        '201':
+          description: Allocated.
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: namespaceId and namespaceName are required
+        '403':
+          description: |
+            Either the caller lacks `office:manage` on the office, or lacks
+            `datasource:read` on the namespace. The body names which.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden'
+        '409':
+          description: The namespace is already allocated to this office.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                duplicate:
+                  value:
+                    success: false
+                    error: Namespace already associated with this office
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/namespaces/{namespaceId}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: namespaceId
+        in: path
+        required: true
+        description: 'The data namespace. Allocated ones come from [List allocated namespaces](/docs/api-reference/offices/allocations/listOfficeNamespaces); to allocate a new one, get the ID from the data plane.'
+        schema:
+          type: string
+          examples: [ns_orders]
+    get:
+      tags: [Allocations]
+      summary: Get an allocated namespace
+      operationId: getOfficeNamespace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The allocation.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Allocations]
+      summary: Deallocate a namespace
+      operationId: deallocateOfficeNamespace
+      description: Removes the office's access to the namespace. Requires `office:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deallocated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/apps:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Allocations]
+      summary: List allocated apps
+      operationId: listOfficeApps
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's app allocations.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Allocations]
+      summary: Allocate an app
+      operationId: allocateOfficeApp
+      description: Grants this office access to an app. Requires `office:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                appId:
+                  type: string
+                  description: 'The app to allocate.'
+                appName:
+                  type: string
+                  description: 'Display name for the allocation. Yours to choose.'
+              required: [appId, appName]
+      responses:
+        '201':
+          description: Allocated.
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: appId and appName are required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/websites:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Allocations]
+      summary: List allocated websites
+      operationId: listOfficeWebsites
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's website allocations.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Allocations]
+      summary: Allocate a website
+      operationId: allocateOfficeWebsite
+      description: |
+        Allocates a website from the tenant library to this office. Requires
+        `office:manage`.
+
+        This allocates the site alone. To bring its integrations along in the
+        same call, use `POST /offices/{officeId}/website-allocations` instead,
+        which is usually what you want since a site is often useless without
+        them.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                websiteId:
+                  type: string
+                  description: 'The website to allocate. From [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites).'
+              required: [websiteId]
+      responses:
+        '201':
+          description: Allocated.
+        '400':
+          description: '`websiteId` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: websiteId is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/website-allocations:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    post:
+      tags: [Allocations]
+      summary: Allocate a website with its integrations
+      operationId: allocateOfficeWebsiteWithIntegrations
+      description: |
+        Allocates a website and, optionally, the integrations it needs, in one
+        call. Requires `office:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                websiteId:
+                  type: string
+                  description: 'The website to allocate. From [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites).'
+                includeIntegrations:
+                  type: array
+                  items:
+                    type: string
+                  description: Integration IDs to allocate alongside the site.
+              required: [websiteId]
+      responses:
+        '201':
+          description: Allocated.
+        '400':
+          description: '`websiteId` is missing, or `includeIntegrations` is not an array of strings.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: websiteId is required
+                badType:
+                  value:
+                    success: false
+                    error: includeIntegrations must be a string[]
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/browsers:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Allocations]
+      summary: List allocated browsers
+      operationId: listOfficeBrowsers
+      description: |
+        Lists the cloud browsers this office may reach. Requires `office:read`.
+
+        **This lists browsers. It does not grant them.** Unlike namespaces,
+        apps, and websites, a browser is not allocated to an office. Access is
+        membership based, granted on the browser itself with
+        [Grant access to a browser](/docs/api-reference/browsers/members/addBrowserMember),
+        which accepts a service account key.
+
+        That is why this tag has no matching POST or DELETE for browsers. This
+        endpoint is the office side view of grants made elsewhere.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The browsers allocated to this office.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  browsers:
+                    type: array
+                    items:
+                      type: object
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/iam:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Identity]
+      summary: Get the office's identity
+      operationId: getOfficeIam
+      description: |
+        Returns the office's service account, its role assignments, and the roles
+        and policies behind them.
+
+        **Gated `office:read`, not the console's `iam:read`.** Someone
+        responsible for one employee can inspect what that employee may do
+        without being granted tenant wide identity visibility. Read only:
+        changing a machine's permissions is still a console action.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's service account and its grants.
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Identity]
+      summary: List office API keys
+      operationId: listOfficeApiKeys
+      description: Lists the office's own service account credentials, sanitised. Requires `office:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The office's keys, without secrets.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Identity]
+      summary: Delete the office API key
+      operationId: deleteOfficeApiKey
+      description: |
+        Requires `office:manage`.
+
+        Revocation is not immediate. A deleted key can keep authenticating for
+        up to five minutes while the validation cache expires.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/api-keys/cycle:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    post:
+      tags: [Identity]
+      summary: Cycle the office API key
+      operationId: cycleOfficeApiKey
+      description: |
+        Mints a replacement credential for the office. Requires `office:manage`.
+
+        The new key is **returned once**. It is not retrievable afterwards.
+
+        The old key keeps working for up to five minutes while the validation
+        cache expires, so a cycle is not an instant cut off.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The new key. Capture it now.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/api-keys/revoke:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    post:
+      tags: [Identity]
+      summary: Revoke the office API key
+      operationId: revokeOfficeApiKey
+      description: |
+        Requires `office:manage`. Subject to the same five minute cache window
+        as every other revocation on the platform.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Revoked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/api-keys/provision:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    post:
+      tags: [Identity]
+      summary: Provision a missing office API key
+      operationId: provisionOfficeApiKey
+      description: |
+        The repair path for a key that failed to mint when the office was
+        created. Requires `office:manage`.
+
+        Office creation fails soft on this step, so an office can exist without
+        a working credential. This is how you fix that without recreating the
+        office.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '201':
+          description: Provisioned.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/environment/secrets:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Environment secrets]
+      summary: List secret groups
+      operationId: listOfficeSecrets
+      description: |
+        Lists the secret groups in the office's vault. Requires `secrets:read`
+        at the office.
+
+        Group names only. No field values are returned by this endpoint.
+      responses:
+        '200':
+          description: The office's secret groups.
+        '400':
+          description: The office has no vault provisioned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noService:
+                  value:
+                    success: false
+                    error: No service ID available for office
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Environment secrets]
+      summary: Create a secret group
+      operationId: createOfficeSecret
+      description: |
+        Creates an empty secret group. Requires `secrets:write` at the office.
+
+        A group holds named fields. Create the group first, then add fields to
+        it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  examples: [stripe-live]
+                  description: 'The secret group being referenced. Names a group in the office or tenant vault.'
+              required: [secretName]
+      responses:
+        '201':
+          description: The group was created.
+        '400':
+          description: '`secretName` is missing, or the office has no vault.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: secretName is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/environment/secrets/{secretName}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: secretName
+        in: path
+        required: true
+        schema:
+          type: string
+          examples: [stripe-live]
+    delete:
+      tags: [Environment secrets]
+      summary: Delete a secret group
+      operationId: deleteOfficeSecret
+      description: |
+        Deletes the group and every field in it. Requires `secrets:write`.
+
+        Integrations referencing this group are not updated. Check
+        `GET /offices/{officeId}/integrations/{integrationId}/secret-refs`
+        before deleting one.
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/environment/secrets/{secretName}/fields:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: secretName
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Environment secrets]
+      summary: List field names
+      operationId: listOfficeSecretFields
+      description: |
+        Returns the **field names** in a group, without their values. Requires
+        `secrets:read`.
+
+        Use this to see what a group holds without revealing anything.
+      responses:
+        '200':
+          description: Field names.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Environment secrets]
+      summary: Add a field
+      operationId: addOfficeSecretField
+      description: |
+        Adds a named value to a secret group. Requires `secrets:write`.
+
+        **Fields are injected when the office boots.** Adding one does nothing
+        until the office restarts. If you change a value and the employee's
+        behaviour does not change, this is almost always why.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldName:
+                  type: string
+                  examples: [API_KEY]
+                fieldValue:
+                  type: string
+                  examples: [sk_live_...]
+              required: [fieldName, fieldValue]
+      responses:
+        '201':
+          description: The field was added.
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: fieldName and fieldValue are required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/environment/secrets/{secretName}/fields/{fieldName}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: secretName
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: fieldName
+        in: path
+        required: true
+        schema:
+          type: string
+          examples: [API_KEY]
+    get:
+      tags: [Environment secrets]
+      summary: Read a field value
+      operationId: readOfficeSecretField
+      description: |
+        **This returns the decrypted value.** Requires `secrets:read` at the
+        office.
+
+        It is the only endpoint on the office surface that reveals a credential.
+        Everything else returns names or references. This is why `secrets:read`
+        exists as an action separate from `office:read`: someone who can operate
+        an office does not automatically get to read its credentials, and the two
+        are granted separately.
+
+        Treat a response from this endpoint the way you would treat the
+        credential itself. Do not log it.
+      responses:
+        '200':
+          description: The decrypted field value.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  field:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        description: The decrypted secret. Handle accordingly.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    put:
+      tags: [Environment secrets]
+      summary: Update a field value
+      operationId: updateOfficeSecretField
+      description: |
+        Replaces a field's value. Requires `secrets:write`.
+
+        Takes effect at the next office boot, not immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldValue:
+                  type: string
+              required: [fieldValue]
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Environment secrets]
+      summary: Delete a field
+      operationId: deleteOfficeSecretField
+      description: Removes a field from the group. Requires `secrets:write`.
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        schema:
+          type: string
+          examples: [int_7d3a1f]
+    get:
+      tags: [Integrations]
+      summary: Get an integration
+      operationId: getOfficeIntegration
+      description: Requires `office:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The integration.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  integration:
+                    $ref: '#/components/schemas/Integration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Integrations]
+      summary: Update an integration
+      operationId: updateOfficeIntegration
+      description: |
+        Requires `office:manage`.
+
+        Only `name` and `baseUrl` are updatable. Changing authentication means
+        managing the integration's secret references, not patching it here.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                baseUrl:
+                  type: string
+      responses:
+        '200':
+          description: The updated integration.
+        '404':
+          description: No integration with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    error: Integration not found
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Integrations]
+      summary: Delete an integration
+      operationId: deleteOfficeIntegration
+      description: Requires `office:manage`. Secret groups the integration referenced are not deleted.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/from-template:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    post:
+      tags: [Integrations]
+      summary: Create an integration from a template
+      operationId: createOfficeIntegrationFromTemplate
+      description: |
+        Instantiates an entry from the tenant integration library into this
+        office. Requires `office:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                globalIntegrationId:
+                  type: string
+                  examples: [gint_4b8c2e]
+                  description: 'The template to instantiate. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+              required: [globalIntegrationId]
+      responses:
+        '201':
+          description: Instantiated.
+        '400':
+          description: '`globalIntegrationId` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: globalIntegrationId is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}/sync-template:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        schema:
+          type: string
+    post:
+      tags: [Integrations]
+      summary: Sync an integration from its template
+      operationId: syncOfficeIntegrationFromTemplate
+      description: |
+        Pulls newer template content down into an instantiated integration.
+        Requires `office:manage`.
+
+        This is an automatic path, so it respects skill content locking: a
+        `manual` or `verified` skill body is skipped rather than overwritten.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  description: Sync even when the office copy has diverged.
+      responses:
+        '200':
+          description: Synced.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}/promote-to-template:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        schema:
+          type: string
+    post:
+      tags: [Integrations]
+      summary: Promote an integration to the tenant library
+      operationId: promoteOfficeIntegration
+      description: |
+        Publishes this office's integration into the tenant library.
+
+        **This endpoint is gated twice.** `office:manage` on the office, **and**
+        a console scoped `integration:publish` **or** `tenant:manage`.
+
+        `office:manage` alone is never enough. Promotion writes into the shared
+        library and mints a secret in the tenant tree that any office can then be
+        pointed at. An action that starts inside one boundary and lands in a
+        wider one is gated at both ends.
+
+        The narrow `integration:publish` action exists so publishing does not
+        require `tenant:manage`, which also gates unrelated administration. Grant
+        the narrow one.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                changelog:
+                  type: string
+                  description: Notes for the version being published.
+      responses:
+        '201':
+          description: Published as a new template version.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Either gate can produce this. The body names which action was denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}/sync-skill:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        schema:
+          type: string
+    post:
+      tags: [Integrations]
+      summary: Sync the integration's skill
+      operationId: syncOfficeIntegrationSkill
+      description: |
+        Generates or refreshes the skill that lets the employee use this
+        integration. Requires `office:manage`.
+
+        This is the automatic path that content locking protects. A skill whose
+        body was edited by a person, or verified against the live API, is skipped
+        rather than regenerated.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Synced.
+        '404':
+          description: No integration with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}/secret-refs:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        schema:
+          type: string
+    get:
+      tags: [Integrations]
+      summary: List secret references
+      operationId: listOfficeIntegrationSecretRefs
+      description: |
+        Lists the secret groups this integration points at. Requires
+        `office:read`.
+
+        **No value is returned.** These are associations only. Values live in the
+        office vault and are injected at boot.
+      responses:
+        '200':
+          description: The referenced secret groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  secrets:
+                    type: array
+                    items:
+                      type: object
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Integrations]
+      summary: Add a secret reference
+      operationId: addOfficeIntegrationSecretRef
+      description: |
+        Points the integration at a secret group. Requires `office:manage`.
+
+        ## Two shapes, decided by `origin`
+
+        | | `origin: "office"` | `origin: "tenant"` |
+        | --- | --- | --- |
+        | The group lives in | This office's vault | The tenant vault |
+        | Reaches | This office only | Any office pointed at it |
+        | Get the name from | [List secret groups](/docs/api-reference/offices/environment-secrets/listOfficeSecrets) | The tenant vault |
+
+        Prefer `tenant` for anything shared: one rotation reaches every office
+        referencing it.
+
+        ```bash
+        curl -X POST "$HOS_API/offices/off_9c1e7d/integrations/int_7d3a1f/secret-refs?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "secretName": "stripe-live", "origin": "tenant" }'
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  examples: [stripe-live]
+                  description: 'The secret group being referenced. Names a group in the office or tenant vault.'
+                origin:
+                  type: string
+                  enum: [office, tenant]
+                  description: Which vault the group lives in.
+              required: [secretName, origin]
+      responses:
+        '201':
+          description: Reference added.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  secretName:
+                    type: string
+                    description: 'The secret group being referenced. Names a group in the office or tenant vault.'
+        '400':
+          description: A field is missing or invalid, or the office has no vault.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: secretName is required
+                badOrigin:
+                  value:
+                    success: false
+                    error: origin must be "office" or "tenant"
+                noVault:
+                  value:
+                    success: false
+                    error: Office has no Nexus service configured
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}/secret-refs/{secretName}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        schema:
+          type: string
+      - name: secretName
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags: [Integrations]
+      summary: Remove a secret reference
+      operationId: removeOfficeIntegrationSecretRef
+      description: |
+        Removes the association. Requires `office:manage`.
+
+        The secret group itself is not deleted.
+      responses:
+        '200':
+          description: Removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/inherited-tenant-secrets:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    get:
+      tags: [Integrations]
+      summary: List inherited tenant secrets
+      operationId: listOfficeInheritedTenantSecrets
+      description: |
+        A read only aggregation of which tenant level secrets reach this office
+        through its integrations. Requires `office:read`.
+
+        Answers "what does this employee actually have access to" without
+        exposing anything. An audit view rather than a management one, which is
+        why it needs only `office:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The tenant secrets reaching this office.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/protocols/{protocolId}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: protocolId
+        in: path
+        required: true
+        description: 'The protocol. From [List protocols](/docs/api-reference/offices/protocols/listOfficeProtocols).'
+        schema:
+          type: string
+          examples: [confirm-before-refunding]
+    get:
+      tags: [Protocols]
+      summary: Get a protocol
+      operationId: getOfficeProtocol
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The protocol.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  protocol:
+                    $ref: '#/components/schemas/Protocol'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Protocols]
+      summary: Update a protocol
+      operationId: updateOfficeProtocol
+      description: |
+        Requires `office:manage`. Only the fields you send are changed.
+
+        Takes effect at the next office boot, not immediately.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                emoji:
+                  type: string
+                content:
+                  type: string
+                skillNames:
+                  type: array
+                  items:
+                    type: string
+                priority:
+                  type: integer
+                status:
+                  type: string
+      responses:
+        '200':
+          description: The updated protocol.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Protocols]
+      summary: Delete a protocol
+      operationId: deleteOfficeProtocol
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/apps/{appId}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: appId
+        in: path
+        required: true
+        description: 'The app. Allocated ones come from [List allocated apps](/docs/api-reference/offices/allocations/listOfficeApps).'
+        schema:
+          type: string
+    get:
+      tags: [Allocations]
+      summary: Get an allocated app
+      operationId: getOfficeApp
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The allocation.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Allocations]
+      summary: Deallocate an app
+      operationId: deallocateOfficeApp
+      description: Removes the office's access to the app. Requires `office:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deallocated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/websites/{websiteId}:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: websiteId
+        in: path
+        required: true
+        description: 'The website. From [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites) in the tenant library.'
+        schema:
+          type: string
+    delete:
+      tags: [Allocations]
+      summary: Deallocate a website
+      operationId: deallocateOfficeWebsite
+      description: |
+        Removes the office's access to the site. Requires `office:manage`.
+
+        Integrations allocated alongside the site are not removed.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deallocated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/apps-by-app/{appId}:
+    parameters:
+      - name: appId
+        in: path
+        required: true
+        description: 'The app. Allocated ones come from [List allocated apps](/docs/api-reference/offices/allocations/listOfficeApps).'
+        schema:
+          type: string
+    get:
+      tags: [Allocations]
+      summary: Find offices using an app
+      operationId: listOfficesByApp
+      description: |
+        Returns the offices in the workspace that have this app allocated.
+        Requires `office:read` at the workspace.
+
+        A reverse lookup. Use it when auditing which employees can reach a
+        resource, rather than which resources an employee can reach.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Offices holding this app.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/namespaces-by-namespace/{namespaceId}:
+    parameters:
+      - name: namespaceId
+        in: path
+        required: true
+        description: 'The data namespace. Allocated ones come from [List allocated namespaces](/docs/api-reference/offices/allocations/listOfficeNamespaces); to allocate a new one, get the ID from the data plane.'
+        schema:
+          type: string
+    get:
+      tags: [Allocations]
+      summary: Find offices using a namespace
+      operationId: listOfficesByNamespace
+      description: |
+        Returns the offices in the workspace that have this data namespace
+        allocated. Requires `office:read` at the workspace.
+
+        The question to ask before changing or deleting a namespace: which AI
+        employees are currently reading it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Offices holding this namespace.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /global-integrations:
+    get:
+      tags: [Tenant libraries]
+      summary: List integration templates
+      operationId: listGlobalIntegrations
+      description: |
+        Lists the tenant's integration template library. Requires
+        `tenant:manage` at `console`.
+      parameters:
+        - name: category
+          in: query
+          required: false
+          description: Filter by category, for example `website`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The template library.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Tenant libraries]
+      summary: Create an integration template
+      operationId: createGlobalIntegration
+      description: |
+        Creates a template that any office can instantiate. Requires
+        `tenant:manage` at `console`.
+
+        If credentials are supplied, a secret group is provisioned **at tenant
+        level**, and office copies reference that group directly rather than
+        holding their own. One rotation there reaches every office using the
+        template, which is the reason to prefer templates over per office
+        integrations for anything shared.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                baseUrl:
+                  type: string
+                  description: Must start with `http://` or `https://`.
+                authType:
+                  type: string
+                  enum: [none, api_key, bearer, basic]
+                credentials:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Required unless `authType` is `none`.
+                category:
+                  type: string
+                websiteMetadata:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                    type:
+                      type: string
+                    screenshotUrl:
+                      type: string
+                    description:
+                      type: string
+                docsUrl:
+                  type: string
+                specUrl:
+                  type: string
+                changelog:
+                  type: string
+                  description: Notes for the first version.
+              required: [name, baseUrl, authType]
+      responses:
+        '201':
+          description: The template was created.
+        '400':
+          description: A required field is missing, or `baseUrl` is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: name, baseUrl, and authType are required
+                badUrl:
+                  value:
+                    success: false
+                    error: 'baseUrl must start with http:// or https://'
+                noCredentials:
+                  value:
+                    success: false
+                    error: credentials are required when authType is not "none"
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The tenant vault write failed and the template was not created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                vault:
+                  value:
+                    success: false
+                    error: Failed to create secret group in tenant vault
+
+  /global-integrations/{globalIntegrationId}:
+    parameters:
+      - name: globalIntegrationId
+        in: path
+        required: true
+        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        schema:
+          type: string
+          examples: [gint_4b8c2e]
+    get:
+      tags: [Tenant libraries]
+      summary: Get an integration template
+      operationId: getGlobalIntegration
+      parameters:
+        - name: withHistory
+          in: query
+          required: false
+          description: Attach the append only version history.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: The template.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Tenant libraries]
+      summary: Update an integration template
+      operationId: updateGlobalIntegration
+      description: |
+        Requires `tenant:manage`. Updating publishes a new version rather than
+        editing in place, so `changelog` is worth sending.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                platform:
+                  type: string
+                category:
+                  type: string
+                baseUrl:
+                  type: string
+                status:
+                  type: string
+                tools:
+                  type: array
+                  items:
+                    type: object
+                websiteMetadata:
+                  type: object
+                changelog:
+                  type: string
+      responses:
+        '200':
+          description: The updated template.
+        '404':
+          description: No template with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    error: Global integration not found
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Tenant libraries]
+      summary: Delete an integration template
+      operationId: deleteGlobalIntegration
+      description: |
+        Requires `tenant:manage`.
+
+        Offices that already instantiated this template keep their copy. Deleting
+        the template removes the source, not the instances.
+      responses:
+        '200':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /global-integrations/{globalIntegrationId}/versions:
+    parameters:
+      - name: globalIntegrationId
+        in: path
+        required: true
+        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        schema:
+          type: string
+    get:
+      tags: [Tenant libraries]
+      summary: List template versions
+      operationId: listGlobalIntegrationVersions
+      description: |
+        The append only version history for a template. Requires
+        `tenant:manage`.
+
+        Every promotion from an office and every update adds an entry, so this
+        is the record of who changed a shared integration and when.
+      responses:
+        '200':
+          description: Version history.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /global-integrations/{globalIntegrationId}/secret-refs:
+    parameters:
+      - name: globalIntegrationId
+        in: path
+        required: true
+        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        schema:
+          type: string
+    get:
+      tags: [Tenant libraries]
+      summary: List template secret references
+      operationId: listGlobalIntegrationSecretRefs
+      description: Association only. No secret value is returned.
+      responses:
+        '200':
+          description: The referenced tenant secret groups.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Tenant libraries]
+      summary: Add a template secret reference
+      operationId: addGlobalIntegrationSecretRef
+      description: |
+        Points the template at a tenant secret group. Requires `tenant:manage`.
+
+        Every office instantiated from this template inherits the reference, so
+        this is the widest reaching secret operation on the platform.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  description: 'The secret group being referenced. Names a group in the office or tenant vault.'
+              required: [secretName]
+      responses:
+        '201':
+          description: Reference added.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /global-integrations/{globalIntegrationId}/secret-refs/{secretName}:
+    parameters:
+      - name: globalIntegrationId
+        in: path
+        required: true
+        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        schema:
+          type: string
+      - name: secretName
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags: [Tenant libraries]
+      summary: Remove a template secret reference
+      operationId: removeGlobalIntegrationSecretRef
+      description: Removes the association. The secret group itself is not deleted.
+      responses:
+        '200':
+          description: Removed.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /websites:
+    get:
+      tags: [Tenant libraries]
+      summary: List websites
+      operationId: listTenantWebsites
+      description: The tenant website asset library. Requires `tenant:manage` at `console`.
+      responses:
+        '200':
+          description: The website library.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Tenant libraries]
+      summary: Create a website
+      operationId: createTenantWebsite
+      description: Adds a site to the tenant library so offices can be allocated it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                url:
+                  type: string
+                screenshotUrl:
+                  type: string
+                description:
+                  type: string
+              required: [name, url]
+      responses:
+        '201':
+          description: Created.
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: name and url are required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /websites/{websiteId}:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: 'The website. From [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites) in the tenant library.'
+        schema:
+          type: string
+    get:
+      tags: [Tenant libraries]
+      summary: Get a website
+      operationId: getTenantWebsite
+      responses:
+        '200':
+          description: The website.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Tenant libraries]
+      summary: Update a website
+      operationId: updateTenantWebsite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                url:
+                  type: string
+                screenshotUrl:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Updated.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Tenant libraries]
+      summary: Delete a website
+      operationId: deleteTenantWebsite
+      description: |
+        Requires `tenant:manage`.
+
+        Run `GET /websites/{websiteId}/office-allocations` first. Deleting a
+        site that offices still hold leaves those allocations pointing at
+        nothing.
+      responses:
+        '200':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /websites/{websiteId}/integration-refs:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: 'The website. From [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites) in the tenant library.'
+        schema:
+          type: string
+    get:
+      tags: [Tenant libraries]
+      summary: List a website's integrations
+      operationId: listTenantWebsiteIntegrationRefs
+      description: |
+        The integrations associated with this site. These are what
+        `POST /offices/{officeId}/website-allocations` brings along when it
+        allocates the site.
+      responses:
+        '200':
+          description: The site's integrations.
+        '404':
+          description: No website with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    error: Website not found
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /websites/{websiteId}/office-allocations:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: 'The website. From [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites) in the tenant library.'
+        schema:
+          type: string
+    get:
+      tags: [Tenant libraries]
+      summary: List offices holding a website
+      operationId: listTenantWebsiteOfficeAllocations
+      description: |
+        Which offices currently have this site allocated. A reverse lookup, and
+        the check to run before deleting or changing a site.
+      responses:
+        '200':
+          description: Offices holding this website.
+        '404':
+          description: No website with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'

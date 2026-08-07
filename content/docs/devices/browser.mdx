@@ -1,0 +1,160 @@
+---
+title: Let jobs use your browser
+description: An opt-in surface that drives your real browser, why it is different from every other tool, and how to turn it on.
+---
+
+A flavor B device can drive your actual browser: open pages, click, type, read the
+console, read network requests, fill forms. It uses **your** Chrome, with your
+existing logins, so there is no OAuth to set up and no API connector to configure.
+
+It is off by default and stays off until you turn it on. This page explains what
+you are agreeing to, then how to do it.
+
+## Why this is not just another tool
+
+Every other tool on a device acts **on that machine**, inside a workspace
+directory the daemon derives and HumanikOS cannot name. That directory is the
+blast radius. It is why a read-only ceiling is a real protection, and why widening
+it to `Write` is a bounded decision.
+
+The browser is not bounded by it.
+
+It acts **as you**, in your real browser session, everywhere you happen to be
+signed in — mail, banking, cloud consoles, your own admin panels. No value in your
+config file makes that smaller. A remote job that can drive the browser inherits
+every session the browser has.
+
+That is the trade. It is a real capability with a real cost, and both halves are
+worth stating plainly:
+
+**What it buys you.** Reading a staging site's console errors and then fixing the
+code that caused them. Filling a form to check validation actually fires.
+Confirming a deploy rendered. Pulling structured data off a page. Working inside
+an authenticated app that has no API worth using.
+
+**What it costs.** The containment that makes the rest of the device model
+trustworthy does not apply here.
+
+## Turning it on
+
+Two lines, and they do different jobs. **Both are required.**
+
+```yaml
+backend:
+  claude_agent:
+    allowed_tools: [Read, Grep, Glob, mcp__claude-in-chrome]
+    chrome:
+      enabled: true
+```
+
+| | Controls | Without it |
+| --- | --- | --- |
+| `chrome.enabled` | Whether the browser tools are **loaded** | No browser at all |
+| `allowed_tools` | Whether they may be **called** | Tools visible, every call refused |
+
+Having one without the other is the quiet failure: the agent can see the browser
+tools, tries one, and is denied. `humanikd verify` tells you which half is
+missing.
+
+`humanikd setup` asks a single yes/no question and writes both lines for you.
+Default is no.
+
+### Note the hyphens
+
+```yaml
+mcp__claude-in-chrome      # correct
+mcp__claude_in_chrome      # matches nothing, refuses everything
+```
+
+Connector display names get normalised — `claude.ai Gmail` becomes
+`mcp__claude_ai_Gmail`, and every other MCP rule you write follows that pattern.
+The browser server does not get normalised. A rule written the normalised way
+reads as configured and denies every call.
+
+## What you have to do by hand
+
+The daemon detects and reports. It never installs an extension, writes a manifest,
+or launches a browser. Four steps, in this order:
+
+1. **Install the Claude extension** from the Chrome Web Store and sign in. Chrome,
+   Edge, Brave or another Chromium browser. Not supported in WSL.
+2. **Run `claude --chrome` once**, in a terminal, as yourself. This writes the
+   native-messaging handshake that lets the extension talk to Claude Code.
+3. **Quit and reopen your browser.** It reads that handshake file *only at
+   startup*. Skipping this is the most common failure by a wide margin — a correct
+   setup that reports the extension as missing.
+4. **Grant the sites you want reachable**, in the extension's own settings.
+
+Then:
+
+```bash
+humanikd verify
+```
+
+It re-checks 1 through 3 and lists whatever is outstanding. It cannot see step 4 —
+site permissions live inside the extension and nothing outside it can read them.
+
+## Requirements and traps
+
+**You must be signed in with `claude` → `/login`,** on a Pro, Max, Team or
+Enterprise plan.
+
+**If `ANTHROPIC_API_KEY` is set, the browser silently does not work.** Claude Code
+turns the integration off for API-key and long-lived-token credentials — the
+extension cannot authenticate with them — and it does so without an error.
+Everything else about the device looks correct. `humanikd verify` flags this
+specifically, because nothing else will.
+
+Not available through Bedrock, Vertex or Foundry.
+
+## Site permissions are the layer we cannot help with
+
+There are two independent permission systems here.
+
+**Yours, in the extension:** which sites Claude may browse, click and type on.
+
+**The device's, in your config:** the `allowed_tools` ceiling, enforced by the
+daemon.
+
+A device runs headless under `permission_mode: dontAsk`, which means there is
+nobody to answer a prompt mid-job. Site permission was never a Claude Code prompt
+to begin with — it belongs to the extension — so a job against a site you have not
+granted has no approval path and will not proceed.
+
+**Grant the sites you expect to use, ahead of time.** This is the one piece of
+setup that has to be done before it is needed rather than when it is asked for.
+
+Claude also stops and asks for a human whenever it reaches a login page or a
+CAPTCHA. It does not attempt to authenticate as you. On a headless device that
+means the turn ends rather than proceeding.
+
+## One browser, many jobs
+
+Concurrent jobs on a device share one browser and **are not isolated from each
+other**. Listing tabs returns every tab, so one job can see — and act on —
+another's work.
+
+There is no cap on concurrency and no per-job browser profile. This is the shape of
+the feature, not something to route around. If jobs on this device must not see
+each other's browsing, dedicate a machine.
+
+## Devices that serve other people
+
+If you set `mcp.scope: isolated` — the setting for a machine serving a workspace
+whose users are not you — **humanikd refuses to enable the browser**, at startup
+and at dispatch.
+
+The reason is worth knowing, because it is not obvious. Isolated hides the MCP
+servers you configured on the machine, so those users cannot reach your Gmail. It
+does **not** hide the browser: that server is built into Claude Code rather than
+configured in a file, so the flag that hides the others never sees it. Left alone,
+isolated would hide your connectors while handing over your live browser session —
+exactly backwards.
+
+So the two settings are mutually exclusive. Pick one deliberately.
+
+## Recording
+
+Sessions can be captured as a GIF. A recording contains everything visible on
+screen, including account details on any page you were signed into. Review one
+before sharing it outside your team.

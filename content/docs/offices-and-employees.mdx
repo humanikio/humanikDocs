@@ -1,0 +1,174 @@
+---
+title: Offices and employees
+description: What an office is, why every employee gets one, and what lives inside it.
+---
+
+An **AI employee** is the thing you hire. An **office** is the machine it works
+on. One employee, one office, always.
+
+That sounds like a detail. It is the design decision the rest of the platform
+rests on, so it is worth understanding before you build anything.
+
+## Why an employee gets a whole machine
+
+Most AI products give you a conversation. You send text, you get text back, and
+nothing persists. That works until the employee has to do something real.
+
+An office is a private computer. It has its own filesystem, its own terminal, and
+its own state that survives between turns. An employee working in one can clone a
+repository on Monday and still have it on Thursday. It can install what it needs.
+It can leave itself notes.
+
+It also has its own identity. Not yours, not a shared one. The office
+authenticates as itself, holds its own permissions, and everything it does is
+attributable to it.
+
+<Callout>
+  The isolation is the point. One employee cannot read another's files, reach
+  another's credentials, or use another's tools. That is not a policy, it is a
+  boundary: two offices are two machines.
+</Callout>
+
+## What is attached to an office
+
+An office starts empty. You attach what the employee needs.
+
+| Attached | What it gives the employee |
+| --- | --- |
+| **Integrations** | Software it can call, and the credentials to call it |
+| **Skills** | Things it knows how to do |
+| **Protocols** | Rules it must always follow |
+| **Namespaces** | Data it can read and write |
+| **Apps and websites** | Software and sites it may reach |
+| **Browsers** | A real Chromium for systems with no API |
+| **Phone numbers** | Send and receive SMS, and answer calls |
+| **Email addresses** | Send and receive mail as a real address |
+| **Secrets** | Its own vault, injected when it boots |
+
+Everything on that list is scoped to the office. Attaching a namespace to one
+office does not give any other office access to it.
+
+### They are not all attached the same way
+
+Three different mechanisms, and knowing which is which saves a lot of searching.
+
+| Mechanism | Assets | Where you do it |
+| --- | --- | --- |
+| **Allocated to the office** | Namespaces, apps, websites | The office's own endpoints |
+| **Membership on the asset** | Browsers, email addresses | On the browser or the address, adding the office as a member |
+| **Console only** | Phone numbers | The console. Buying one spends money, so a person does it. |
+
+The middle row is the one people look for in the wrong place. There is no
+"allocate a browser" endpoint on an office. You
+[grant the office access on the browser](/docs/api-reference/browsers/members/addBrowserMember),
+and the office's browser list is a view of grants made there.
+
+Once any of these is attached, the employee uses it with its own key like any
+other capability. **Acquiring is sometimes a human action. Using never is.**
+
+See [Phone numbers and email](/docs/api-reference/phone-and-email) for both
+planes of those two.
+
+## Creating one provisions real infrastructure
+
+An office is not a database row. Creating one starts a machine, a data plane
+entry, a container project and service, and a service account credential.
+
+<Callout type="warn">
+  **The office existing does not mean the office is ready.** The infrastructure
+  steps are deliberately non-blocking, so a failure logs a warning rather than
+  failing your request. After creating an office, check its cloud config and its
+  API keys before assuming it can run.
+</Callout>
+
+That design keeps a partial failure recoverable instead of leaving you with a
+half created office to clean up. Both pieces have a repair path.
+
+See [Create an office](/docs/api-reference/offices/offices/createOffice).
+
+## You choose how long an office stays awake
+
+An office can scale to zero when idle, or stay running as long as you want. That
+is a setting, not a fixed behaviour.
+
+`idleTimeoutMinutes` decides it. A short timeout means the machine sleeps
+quickly, costs nothing at rest, and pays for that with a cold start on the next
+job. A long one keeps it warm and responsive, and it is awake, and billed, the
+whole time.
+
+Neither is the right answer in general. An employee that answers customers during
+business hours wants to be warm. One that runs a nightly reconciliation does not
+need to exist for the other twenty three hours.
+
+Sleeping costs you nothing and loses you nothing: state persists on the
+filesystem, so an office that wakes on Thursday still has what it did on Monday.
+
+## You can resize the machine
+
+`instanceType` selects the machine tier. An employee doing light triage and one
+compiling code do not need the same computer, and you are not locked into the
+size you started with.
+
+**The available tiers depend on the service type**, so read the current
+configuration to see what you can choose rather than assuming a list. Both
+settings live on the same endpoint:
+
+<Cards>
+  <Card
+    title="Get machine configuration"
+    href="/docs/api-reference/offices/machine/getOfficeComputeConfig"
+    description="Current settings, plus the tiers available to you."
+  />
+  <Card
+    title="Update machine configuration"
+    href="/docs/api-reference/offices/machine/updateOfficeComputeConfig"
+    description="Change the size, or the idle timeout."
+  />
+</Cards>
+
+Both need `instance:manage`, which is deliberately separate from
+`office:manage`. Resizing a machine is a spend decision, so it can be granted
+apart from the right to operate the employee.
+
+<Callout>
+  **This is Humanik Cloud underneath.** An office exists there as a service, and
+  the office endpoints are a narrow, safer view onto it. See
+  [Humanik Cloud](/docs/api-reference/cloud) for the wider surface, and for why
+  you should usually stay on the office route.
+</Callout>
+
+## Employees are identities, not sessions
+
+Because an office authenticates as itself, an AI employee is a first class
+identity in the permission system. It holds role assignments in the same form a
+person does, evaluated by the same engine.
+
+An employee can therefore be granted exactly one action on exactly one resource,
+or a workspace wide role, or anything between. It is the same model you use for
+your team.
+
+There is one asymmetry, and it favours safety: an employee can never hold the
+owner bypass that a tenant owner does. Machines are governed more strictly than
+people, not less.
+
+See [How access control works](/docs/access-control).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Skills and protocols"
+    href="/docs/skills-and-protocols"
+    description="What an employee can do, and what it must always do."
+  />
+  <Card
+    title="Tools and secrets"
+    href="/docs/tools-and-secrets"
+    description="Connecting software, and where credentials live."
+  />
+  <Card
+    title="Offices API"
+    href="/docs/api-reference/offices"
+    description="Every operation, generated from the spec."
+  />
+</Cards>

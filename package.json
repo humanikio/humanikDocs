@@ -1,23 +1,30 @@
 {
-  "name": "humanikdocs",
-  "version": "0.0.11",
+  "name": "humanik-docs",
+  "version": "0.1.0",
   "private": true,
+  "description": "Public API reference and guides for HumanikOS \u2014 docs.humanik.io",
   "scripts": {
+    "dev": "next dev --port 3005",
     "build": "next build",
-    "dev": "next dev",
-    "start": "next start",
-    "types:check": "next typegen && tsc --noEmit",
-    "lint": "eslint"
+    "start": "next start --port 3005",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "type-check": "next typegen && tsc --noEmit",
+    "spec:check": "node scripts/validate-spec.js",
+    "links:check": "node scripts/check-links.js",
+    "ids:check": "node scripts/check-id-sources.js"
   },
   "dependencies": {
     "cnfast": "^0.1.0",
     "fumadocs-core": "16.14.0",
     "fumadocs-mdx": "15.2.2",
+    "fumadocs-openapi": "^11.2.3",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.14.0",
     "lucide-react": "^1.27.0",
     "next": "16.2.12",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -25,10 +32,10 @@
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.12",
     "postcss": "^8.5.24",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.3",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "16.2.12"
+    "typescript": "^6.0.3"
   }
 }

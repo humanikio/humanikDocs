@@ -1,0 +1,100 @@
+---
+title: Connect your own machine
+description: Run HumanikOS work on hardware you own, with a tool ceiling you control.
+---
+
+A **device** is a computer you enrol into a workspace so it can do work for you.
+The daemon that runs on it is called `humanikd`. It holds one outbound connection
+to HumanikOS, waits for jobs, and runs them locally.
+
+Nothing about that connection lets HumanikOS reach into the machine. The daemon
+dials out; there is no inbound port, and no job may widen what it is allowed to
+do.
+
+## Three kinds of device
+
+A machine serves exactly one of these. The shape of its config file is the
+declaration, so the two can never disagree.
+
+| Flavor | What it serves | Needs |
+| --- | --- | --- |
+| **A** — local model | Completions from Ollama or a compatible server | Ollama running |
+| **B** — Claude Code agent | An agent turn; its output *is* the reply | Claude Code, signed in |
+| **C** — OpenClaw harness | A full agent framework, sandboxed | Docker |
+
+Flavor B is the common one, and the rest of this section assumes it.
+
+## The rule that makes this safe
+
+**The device declares a ceiling. A job may request a subset of it, and never
+more.**
+
+That single sentence is the whole security model. The ceiling lives in a config
+file on your machine, written by you. HumanikOS never sends a tool list, a working
+directory, or a permission mode — it sends the conversation and what it wants
+done. If the control plane were compromised tomorrow, it still could not widen
+what any enrolled machine is permitted to do.
+
+The default ceiling is read-only:
+
+```yaml
+backend:
+  claude_agent:
+    enabled: true
+    permission_mode: dontAsk
+    allowed_tools: [Read, Grep, Glob]
+```
+
+Widening it is a deliberate, local decision. `Write`, `Edit` and `Bash` are all
+available; none of them is on unless you put it there.
+
+## Where an agent can reach
+
+Four surfaces, and they are not equivalent. Knowing which is which is the
+difference between a device that does what you meant and one that does more.
+
+| Surface | Runs where | Configured by | In the ceiling |
+| --- | --- | --- | --- |
+| **Built-in tools** — `Read`, `Bash`, `Write` | This machine, in a derived workspace directory | You | Yes |
+| **Inherited [MCP](https://modelcontextprotocol.io)** — your Gmail, Linear, Figma | Wherever that server points | You, on this machine | Yes |
+| **Upstream tools** — Nova's, an office's | On HumanikOS, under the caller's own permissions | The platform, per job | No, by design |
+| **[Browser](/docs/devices/browser)** — your real Chrome | In your browser, as you | You, with a separate key | Yes, **plus** its own key |
+
+The first two are bounded by a workspace directory the daemon derives and the
+server cannot name. **Upstream tools** are not gated by your ceiling because they
+never touch your machine — they run on HumanikOS under the permissions of whoever
+called them, and your device holds no credentials for them.
+
+**The browser is the one that behaves differently**, and it has
+[its own page](/docs/devices/browser) for that reason.
+
+## Getting started
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/humanikio/humanikd-dist/main/install.sh | sh
+humanikd setup
+```
+
+`humanikd setup` walks the whole thing: platform check, flavor choice, backend
+prerequisites, enrolment, config, and auto-start. It never installs anything on
+your behalf — it prints the command and waits.
+
+Then, any time:
+
+```bash
+humanikd verify     # checks everything this flavor needs, spends no model quota
+humanikd status     # what this device is advertising right now
+```
+
+## Two things worth knowing early
+
+**Config is read once at startup.** There is no hot reload. After editing the file:
+
+```bash
+humanikd service restart
+```
+
+**Flavor B runs as *you*.** It installs a per-user service, not a system one,
+because it has to read the `claude` login from your own keychain. That also means
+the agent inherits your MCP connectors — which is usually the point, and
+occasionally a surprise.

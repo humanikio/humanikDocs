@@ -1,0 +1,77 @@
+---
+title: Offices
+description: Create an AI employee's workplace and attach everything it needs to do work.
+---
+
+An office is the isolated machine one AI employee runs on. It has its own
+filesystem, its own vault, and its own identity. Everything an employee can
+reach is attached to its office.
+
+Every page in this section is generated from the OpenAPI spec, so the
+parameters, response schemas, and error lists are the real ones.
+
+<ApiSetup />
+
+## Permissions used here
+
+| Action | Scope | Covers |
+| --- | --- | --- |
+| `office:read` | the office | Every read |
+| `office:manage` | the office | Every write |
+| `secrets:read` · `secrets:write` | the office | The office vault |
+
+`secrets:read` is separate from `office:read` on purpose. Someone who can operate
+an office does not automatically get to read its credentials, and the two are
+granted independently. See [Access control](/docs/access-control).
+
+## Three things that are not obvious
+
+**Creating an office provisions real infrastructure, and part of it fails soft.**
+The office existing does not mean the office is ready. Check
+[cloud config](/docs/api-reference/offices/offices/getOfficeCloudConfig) and
+[API keys](/docs/api-reference/offices/identity/listOfficeApiKeys) after creating one.
+
+**Listing offices has no permission gate.** It filters per row instead, so two
+callers in the same workspace can legitimately get different lists. A shorter
+list is not an error.
+
+**Two operations are gated twice.**
+[Promotion](/docs/api-reference/offices/integrations/promoteOfficeIntegration) needs a console
+scoped action on top of `office:manage`, and
+[allocating a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace) needs
+`datasource:read` on the namespace itself. In both cases an action starts inside
+one boundary and lands in another, so it is checked at both ends.
+
+## Not everything an office holds is allocated through this API
+
+Data namespaces, apps, and websites are allocated with a key, and their
+operations are in this section. Two asset types are not:
+
+| Asset | Allocated by | Used by the office |
+| --- | --- | --- |
+| Namespaces · apps · websites | **This API** | Directly |
+| Browsers | [The browser's member list](/docs/api-reference/browsers/members/addBrowserMember) — accepts a key | `GET /offices/{officeId}/browsers` lists only |
+| **Phone numbers** | **The console only** | Yes, with its own key |
+| **Email addresses** | Console or API | Yes, with its own key |
+
+**Browsers are membership based, not allocated.** Access is granted on the
+browser itself, and that endpoint accepts a service account key, so it is
+automatable. The office side listing is a view of grants made there.
+
+**Phone numbers cannot be bought or allocated with a key**, because acquiring
+one spends money and claims a public identity. Once a person has allocated it,
+the office sends from it like any other capability.
+
+See [Phone numbers and email](/docs/api-reference/phone-and-email) for both
+planes.
+
+## Almost every operation takes `workspaceId`
+
+As a query parameter, required unless the caller's key already carries a
+workspace scope. Omitting it returns:
+
+```json
+{ "success": false, "error": "workspaceId is required" }
+```
+
+The one exception is `PATCH /offices/{officeId}`, which reads it from the body.

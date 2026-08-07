@@ -1,0 +1,17 @@
+{
+  "title": "HumanikOS",
+  "root": true,
+  "pages": [
+    "---First steps---",
+    "index",
+    "quickstart",
+    "authentication",
+    "---Building with HumanikOS---",
+    "offices-and-employees",
+    "skills-and-protocols",
+    "tools-and-secrets",
+    "---Platform behaviour---",
+    "responses",
+    "rate-limits"
+  ]
+}

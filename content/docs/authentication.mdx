@@ -1,0 +1,103 @@
+---
+title: Authentication
+description: Service account API keys, how to send them, and how revocation behaves.
+---
+
+The API authenticates with a **service account key**. A service account is a
+machine identity inside your tenant, governed by the same IAM policy engine that
+governs people.
+
+## Key format
+
+A key has two halves joined by a dot:
+
+```
+hsk_4f8a2b1c9d7e3a05f6b8c2d4e1a7f9b3c5d8e0a2.hss_...
+└──────────── access key ID ────────────────┘ └ secret ┘
+```
+
+| Part | Prefix | Purpose |
+| --- | --- | --- |
+| Access key ID | `hsk_` | Identifies the key. Safe to log. |
+| Secret | `hss_` | Authenticates the key. Never log it. |
+
+The split is deliberate. A log line containing an access key ID has not captured
+a credential, which makes request logs safe to keep.
+
+## Sending a key
+
+Send the **full key**, both halves, as a bearer token:
+
+<ApiSetup />
+
+```bash
+curl "$HOS_API/offices" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Every example in these docs assumes those two variables are exported.
+
+## Creating a key
+
+Keys are minted in the console, not with a key. Creating a service account
+grants a new permission holder into your tenant, so it requires `iam:manage` at
+console scope and a signed in user.
+
+<Callout type="warn">
+  **A key cannot create or modify identities.** Every route under `/iam` and
+  `/service-accounts` rejects API keys, so a service account can neither mint
+  another service account nor grant itself a role. Provisioning is a console
+  step. Operation is an API step. See
+  [Service accounts](/docs/access-control/service-accounts) for the full reference.
+</Callout>
+
+<Callout type="warn">
+  The secret is shown **once**, at creation. It is stored encrypted and there is
+  no endpoint that returns it again. If you lose it, mint a new key. You cannot
+  recover the old one.
+</Callout>
+
+After creation you can list keys, rename them, deactivate them, or delete them.
+Listing returns only the last four characters of each secret, alongside
+`lastUsedAt` and `usageCount`. Those two fields are the audit surface: a key with
+no recent use is a candidate for removal, and a key with unexpected use is worth
+investigating.
+
+## Revocation takes up to five minutes
+
+<Callout type="warn">
+  Deleting or deactivating a key does not stop it immediately. Validated keys are
+  cached for **five minutes**, so a revoked key can keep authenticating until the
+  cache expires.
+</Callout>
+
+This is a deliberate trade. Every machine to machine call in the platform
+validates against this path, and the cache protects it. For a leaked credential,
+five minutes is the number that matters, so treat rotation as the primary control
+and revocation as the follow up.
+
+## Authentication failures
+
+| Status | `error` | Cause |
+| --- | --- | --- |
+| `401` | `API key required` | No `Authorization` header was sent |
+| `401` | `Invalid API key` | The key is unknown, inactive, expired, or the secret is wrong |
+
+Those four causes collapse into one message on purpose. Telling an unknown key
+apart from a wrong secret would confirm which access key IDs exist.
+
+A `403` means the key authenticated but the service account lacks the permission
+the route requires. The response body names the action and resource that were
+denied, so you can grant exactly that and no more:
+
+```json
+{
+  "success": false,
+  "error": "Forbidden",
+  "message": "<decision reason>",
+  "action": "office:manage",
+  "resource": "workspace/ws_a1b2c3"
+}
+```
+
+Scopes are `console`, `workspace/{id}`, and `office/{id}`.

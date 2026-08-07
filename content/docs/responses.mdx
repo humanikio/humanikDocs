@@ -1,0 +1,82 @@
+---
+title: Responses and errors
+description: The response envelope, how to branch on failures, and what error strings mean.
+---
+
+## The envelope
+
+Every response is wrapped. On success:
+
+```json
+{ "success": true, "offices": [] }
+```
+
+On failure:
+
+```json
+{ "success": false, "error": "workspaceId is required", "message": "optional detail" }
+```
+
+The payload is spread at the **top level**. There is no `data` object, so read
+`offices`, not `data.offices`.
+
+## Branch on status codes, not on `error`
+
+<Callout type="warn">
+  `error` is a human readable string, not a stable machine code. Its wording can
+  change. Do not write client logic that compares it.
+</Callout>
+
+Values range from `Unauthorized` to `workspaceId is required` to a message
+raised by an internal service. Treat `error` as something to log and show to a
+person, and branch on the HTTP status code instead.
+
+Stable machine readable error codes are planned. Until they ship, the status
+code plus the endpoint is the reliable pair.
+
+## Status codes
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| `200` | Success | |
+| `201` | Created | |
+| `400` | The request is malformed or missing a required field | Fix the request. Retrying unchanged will not help. |
+| `401` | The key is missing, unknown, inactive, or expired | See [Authentication](/docs/authentication). |
+| `403` | Authenticated, but not permitted | Read `action` and `resource` in the body and grant exactly that. |
+| `404` | No such resource, or it belongs to another tenant | Both cases return `404` on purpose. |
+| `429` | Rate limited | See [Rate limits](/docs/rate-limits). |
+| `500` | Server side failure | Safe to retry with backoff. Log the `X-Request-ID`. |
+
+## Permission denials
+
+A `403` names what was denied, so you can grant the minimum needed:
+
+```json
+{
+  "success": false,
+  "error": "Forbidden",
+  "message": "<decision reason>",
+  "action": "office:manage",
+  "resource": "workspace/ws_a1b2c3"
+}
+```
+
+## Cross tenant reads return 404
+
+Requesting a resource that belongs to another tenant returns `404`, not `403`.
+A resource that does not exist and a resource you may not see are deliberately
+indistinguishable, so that a `403` can never be used to confirm that something
+exists.
+
+## Pagination varies by endpoint
+
+There is no single pagination convention. Some list endpoints return the whole
+collection, some accept `limit` and `offset`, and some are cursor based. The
+behaviour is stated on each endpoint. Where a collection is returned unbounded,
+that is called out explicitly.
+
+## Correlation
+
+Every request carries an `X-Request-ID`, echoed from your header if you send one
+and generated otherwise. Send one and log it. It is the only identifier that can
+locate a specific request after the fact.

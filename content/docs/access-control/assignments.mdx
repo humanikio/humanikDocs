@@ -1,0 +1,119 @@
+---
+title: Granting access
+description: Assignments, resource boundaries, and how to grant the minimum that works.
+---
+
+An assignment binds a role to an identity **at a resource boundary**. It is the
+object that actually grants access. A role on its own grants nothing.
+
+```
+assignment = { roleId, resource }
+```
+
+| Field | Example | Means |
+| --- | --- | --- |
+| `roleId` | `officeOperator` | What is permitted |
+| `resource` | `workspace/W1/office/O3` | Where it is permitted |
+
+## The boundary decides the blast radius
+
+The same role assigned at two different boundaries is two very different grants:
+
+| Assignment | Reach |
+| --- | --- |
+| `viewer` @ `workspace/W1/namespace/ns_orders` | One database |
+| `viewer` @ `workspace/W1` | Every office, database, and browser in the workspace |
+| `consoleAdmin` @ `console` | Organisation level administration |
+
+Because a parent covers its descendants, moving a boundary up one level can widen
+a grant by an order of magnitude without the role changing at all.
+
+**Grant the narrowest boundary that still lets the job run.** Widening later is
+one edit. Discovering that an identity had more reach than you thought is an
+incident.
+
+## Granting to a person
+
+In the console, **Organization → Members**. Open the person, add an assignment,
+choose the role and the resource it applies to.
+
+A person needs a baseline membership role before anything else will work. Without
+any assignment at all, evaluation stops at step 4 and denies.
+
+## Granting to a machine
+
+**Organization → Service Accounts**. Open the account and add assignments on the
+same screen where you mint keys.
+
+The screens mirror each other on purpose. A role means the same thing whichever
+kind of identity holds it, so there is one model to learn rather than two.
+
+See [Service accounts](/docs/access-control/service-accounts) for the full
+walkthrough.
+
+## Working out what to grant
+
+The fastest reliable method is to let a denial tell you.
+
+<Steps>
+
+<Step>
+### Grant the narrow thing you believe is needed
+
+Start too small on purpose.
+</Step>
+
+<Step>
+### Make the call and read the denial
+
+A `403` names the exact action and resource that were wanted:
+
+```json
+{
+  "success": false,
+  "error": "Forbidden",
+  "message": "<decision reason>",
+  "action": "office:manage",
+  "resource": "workspace/ws_a1b2c3/office/off_dispatch"
+}
+```
+</Step>
+
+<Step>
+### Grant that exact pair
+
+Add a role carrying that action, assigned at that resource or the nearest sensible
+ancestor. Repeat until the job runs.
+</Step>
+
+</Steps>
+
+This converges on a genuinely minimal grant, which is very hard to arrive at by
+reasoning about role tables alone.
+
+<Callout>
+  The `message` field carries the reason a decision was reached, including
+  whether a grant came from a direct match or from the ancestor navigation rule.
+  When a permission behaves unexpectedly, read it before changing anything.
+</Callout>
+
+## Debugging a denial
+
+| Symptom | Usual cause |
+| --- | --- |
+| Denied, and the message mentions no assignments found | The identity holds no assignment at all, or none that reaches this resource |
+| Works as the owner, fails for everyone else | The owner bypasses assignment evaluation entirely. Always test with a member. |
+| The role clearly grants the action, still denied | The assignment boundary does not cover the requested resource. Check the boundary, not the role. |
+| A workspace role cannot reach organisation settings | `console` is a sibling root. No workspace grant reaches it, by design. |
+| Allowed everywhere except one place | A deny statement matched. Deny returns immediately and no allow overrides it. |
+
+## Anti-patterns
+
+- **Assigning a narrow role at a wide boundary.** The most common way a grant
+  becomes wider than intended.
+- **Reaching for `workspaceAdmin` to unblock something.** Read the denial and
+  grant the named action instead.
+- **Stacking roles to cover a gap.** It works, but no single object then states
+  what the identity may do. Fork a role instead.
+- **Testing permissions as the tenant owner.** The owner never exercises the path
+  everyone else uses.

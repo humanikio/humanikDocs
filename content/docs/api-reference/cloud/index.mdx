@@ -1,0 +1,76 @@
+---
+title: Humanik Cloud
+description: The compute platform offices run on.
+---
+
+Humanik Cloud runs your services. **An office is one of them.**
+
+<ApiSetup />
+
+## An office is a service
+
+An office exists on Humanik Cloud as a service of type `cloudClaw`. That is not
+trivia. It is why an office can be resized, given an idle timeout, inspected for
+running instances, and read for logs at all.
+
+It also means the same setting is reachable two ways:
+
+| | Office route | Cloud route |
+| --- | --- | --- |
+| Path | `/offices/{officeId}/cloud/config` | `/cloud/services/{serviceId}/userConfig` |
+| Reaches | One office | Any service in the tenant |
+| Permission | `instance:manage` @ that office | `cloud:manage` @ console |
+
+**Prefer the office route.** It is narrower, and it can be granted to someone
+responsible for one employee without giving them the whole cloud.
+
+Use these endpoints when you are managing services that are not offices, or when
+you want a tenant wide view. Filtering
+[List services](/docs/api-reference/cloud/services/listCloudServices) to
+`cloudClaw` gives you every office machine and the service ID behind it.
+
+## Authentication is the same as everywhere else
+
+Your ordinary service account key, plus `cloud:read` or `cloud:manage` at
+`console` scope. There is no separate cloud credential to obtain.
+
+<Callout>
+  HumanikOS holds a Humanik Cloud key on your tenant's behalf and uses it to make
+  these calls for you. You never see it and never send it. That key scopes every
+  response to your own tenant structurally, before any permission check runs, so
+  a caller cannot reach another tenant's cloud even in principle.
+</Callout>
+
+If your tenant has never used Humanik Cloud, the account is provisioned on the
+first call and the request retries. A first call may be slower than later ones.
+That is not an error.
+
+## Responses come from Humanik Cloud unchanged
+
+These endpoints forward to Humanik Cloud and return its response verbatim. Two
+consequences:
+
+- **Error wording differs** from the rest of this API. Branch on the status code.
+- **`502` means we could not reach Humanik Cloud**, not that your request was
+  wrong.
+
+## What is not here yet
+
+**Crons, protected secrets, and API keys** are part of this surface and are not
+documented. Crons and secrets are a later pass.
+
+API keys are held deliberately. Every Humanik Cloud key is an **admin key** with
+full account access, and the `scopes` field on the create surface is not
+enforced. Documenting a scoped key that is not scoped would be worse than
+documenting nothing, so that surface waits until the work in progress lands.
+
+## Two things not to do here
+
+**Do not create an office as a service.**
+[Create an office](/docs/api-reference/offices/offices/createOffice) provisions
+its service along with its identity, vault, and data plane entry. A bare
+`cloudClaw` service has none of that.
+
+**Do not delete an office's service.**
+[Delete the office](/docs/api-reference/offices/offices/deleteOffice) instead.
+Deleting the service alone leaves an office whose machine no longer exists.

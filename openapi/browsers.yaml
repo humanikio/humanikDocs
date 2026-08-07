@@ -1,0 +1,1077 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Browsers
+  version: v1
+  summary: Cloud browsers an AI employee drives the way a person would.
+  description: |
+    A humaBrowser is a real Chromium running in the cloud, with a persistent
+    profile and its own identity. It exists because some systems have no API to
+    integrate with: a supplier portal, a bank, a regulator's site. There is
+    nothing to connect to, so the employee drives the browser instead.
+
+    **Browsers carry a second access layer.** Permissions decide what class of
+    action you may perform; membership decides which browsers you may touch at
+    all. Both must pass. A browser holds live logged in sessions, so access by
+    virtue of holding a broad role is deliberately not enough.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Browsers
+    description: Create, read, update, and delete a cloud browser.
+  - name: Members
+    description: Who may reach a browser. The second access layer.
+  - name: Machine
+    description: Waking, restarting, and shutting down the VM.
+  - name: Driving
+    description: Navigating pages and talking to the agent.
+  - name: Sessions
+    description: Chats, messages, and the cycles behind them.
+  - name: Identity
+    description: The browser's own service account credential.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: A service account API key, sent whole as a bearer token.
+
+  parameters:
+    BrowserId:
+      name: browserId
+      in: path
+      required: true
+      description: 'The browser. From [List browsers](/docs/api-reference/browsers/browsers/listBrowsers).'
+      schema:
+        type: string
+        examples: [bwr_a1b2c3d4]
+
+  schemas:
+    Error:
+      type: object
+      description: '`error` is a human readable string, not a stable machine code.'
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+        message:
+          type: string
+      required: [success, error]
+
+    Forbidden:
+      type: object
+      description: |
+        A denial. Can come from the permission gate or from the membership
+        layer, and the message says which.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          const: Forbidden
+        message:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+      required: [success, error]
+
+    Browser:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mode:
+          type: string
+        status:
+          type: string
+        workspaceId:
+          type: string
+        proxyRegion:
+          type: string
+        browserEngine:
+          type: string
+        isMember:
+          type: boolean
+          description: |
+            Present on list rows only. Whether the caller is a member, so a UI
+            can show a browser it may not open.
+      required: [id, name]
+
+  responses:
+    BadRequest:
+      description: The request is malformed or a required field is missing.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: |
+        Either the permission gate or the membership layer refused. Both apply to
+        most routes.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Forbidden'
+
+    ServerError:
+      description: Server side failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /browsers:
+    get:
+      tags: [Browsers]
+      summary: List browsers
+      operationId: listBrowsers
+      description: |
+        Lists browsers. Requires `browser:read`.
+
+        **No membership filter.** Every row the caller's role can see is
+        returned, each carrying an `isMember` flag, so a console can show a
+        browser and still refuse to open it. Listing is not access.
+
+        Pass `workspaceId` to scope to one workspace, which is what a
+        workspace-bounded role needs. Omit it and the permission is checked at
+        console scope instead.
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: ownerId
+          in: query
+          required: false
+          description: 'Filter to browsers owned by one user. A user ID, from `GET /users`.'
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Browsers visible to the caller.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  browsers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Browser'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Browsers]
+      summary: Create a browser
+      operationId: createBrowser
+      description: |
+        Creates a cloud browser and provisions its machine. Requires
+        `browser:manage` at `console`, because there is no browser to scope to
+        yet.
+
+        The service account credential is minted eagerly and **non-blocking**: if
+        that mint fails the browser is still created, and
+        `POST /browsers/{browserId}/api-keys/provision` is the repair path.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                mode:
+                  type: string
+                flyRegion:
+                  type: string
+                proxyRegion:
+                  type: string
+                aupVersion:
+                  type: string
+                  description: The acceptable use policy version accepted at creation.
+                browserEngine:
+                  type: string
+                fingerprint:
+                  type: object
+                typingProfile:
+                  type: object
+      responses:
+        '201':
+          description: Created. The credential may still be missing.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /browsers/{browserId}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Browsers]
+      summary: Get a browser
+      operationId: getBrowser
+      description: |
+        Requires `browser:read` **and** membership, with a manager bypass: a
+        holder of `browser:manage` can read it in order to administer it.
+      responses:
+        '200':
+          description: The browser.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    patch:
+      tags: [Browsers]
+      summary: Update a browser
+      operationId: updateBrowser
+      description: |
+        Requires `browser:manage`. No membership needed: governance is separate
+        from use.
+
+        **Moving a browser to another workspace is gated twice.** Changing
+        `workspaceId` triggers a second check inside the handler for
+        `browser:manage` on the **destination** workspace, and returns 403 with
+        *"You need browser:manage on the destination workspace to move a browser
+        there"* if the caller lacks it. Holding it on the source is not enough.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                mode:
+                  type: string
+                status:
+                  type: string
+                ipTier:
+                  type: string
+                proxyRegion:
+                  type: string
+                browserEngine:
+                  type: string
+                fingerprint:
+                  type: object
+                typingProfile:
+                  type: object
+                workspaceId:
+                  type: string
+                  description: Changing this moves the browser and needs permission on the destination.
+      responses:
+        '200':
+          description: Updated.
+        '403':
+          description: The permission gate refused, on the source or the destination workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Browsers]
+      summary: Delete a browser
+      operationId: deleteBrowser
+      description: Requires `browser:manage`. Destroys the machine and its profile.
+      responses:
+        '200':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/members:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Members]
+      summary: List members
+      operationId: listBrowserMembers
+      description: |
+        Who currently has access to this browser. Requires `browser:read` and
+        membership, manager bypass allowed.
+
+        Each row carries `memberId`, `memberType` (`human` or `office`),
+        `displayName`, and `role`. **This is where you get the `memberId` needed
+        to [revoke access](/docs/api-reference/browsers/members/removeBrowserMember).**
+      responses:
+        '200':
+          description: The members.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Members]
+      summary: Grant access to a browser
+      operationId: addBrowserMember
+      description: |
+        Adds a member, which is how access to a browser is granted. Requires
+        `browser:manage`. Accepts a service account key, so this is automatable.
+
+        **This is how an office gets a browser.** Browser access is membership
+        based, not an office attachment, so there is no allocation endpoint on
+        the office side.
+        [List allocated browsers](/docs/api-reference/offices/allocations/listOfficeBrowsers)
+        is the office side view of grants made here.
+
+        ## Two kinds of member
+
+        One endpoint, two shapes. `memberType` decides which, and it defaults to
+        `human`.
+
+        | | `memberType: "human"` | `memberType: "office"` |
+        | --- | --- | --- |
+        | `memberId` is | A user ID | An office ID |
+        | `workspaceId` | Not used | **Required** |
+        | `role` | `owner` or `user` | Forced to `user` |
+        | Verified against | `users` in the tenant | `offices` in that workspace |
+
+        **An office can never be an owner.** Passing `role: "owner"` with
+        `memberType: "office"` is accepted and silently downgraded to `user`.
+        Ownership of a browser stays with a person.
+
+        ## Where the IDs come from
+
+        Neither ID is one you invent. Fetch it first.
+
+        **Office ID** — [List offices](/docs/api-reference/offices/offices/listOffices):
+
+        ```bash
+        curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        Take `offices[].id`, and use the same `workspaceId` in the body below.
+
+        **User ID** — `GET /users`, which needs `users:read` at console scope and
+        a signed in user. Take the user's `id`.
+
+        ## Granting to an office
+
+        ```bash
+        curl -X POST "$HOS_API/browsers/bwr_a1b2c3d4/members" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "memberId": "off_9c1e7d",
+            "memberType": "office",
+            "workspaceId": "ws_a1b2c3"
+          }'
+        ```
+
+        ## Granting to a person
+
+        ```bash
+        curl -X POST "$HOS_API/browsers/bwr_a1b2c3d4/members" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "memberId": "usr_4b8c2e",
+            "memberType": "human",
+            "role": "user"
+          }'
+        ```
+
+        `displayName` is optional in both cases. Omitted, it is resolved from the
+        office or user record, so the member list stays readable without you
+        maintaining a second copy of the name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memberId:
+                  type: string
+                  description: |
+                    The office ID or user ID being granted access. Get it from
+                    `GET /offices` or `GET /users` — see above.
+                  examples: [off_9c1e7d]
+                memberType:
+                  type: string
+                  enum: [human, office]
+                  default: human
+                  description: Which kind of identity `memberId` refers to.
+                workspaceId:
+                  type: string
+                  description: |
+                    **Required when `memberType` is `office`.** The workspace the
+                    office belongs to. Unused for a human.
+                  examples: [ws_a1b2c3]
+                role:
+                  type: string
+                  enum: [owner, user]
+                  default: user
+                  description: |
+                    Forced to `user` for an office. Only a human can be an owner.
+                displayName:
+                  type: string
+                  description: |
+                    Optional. Resolved from the office or user record when
+                    omitted.
+              required: [memberId]
+      responses:
+        '201':
+          description: Access granted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  member:
+                    type: object
+                    properties:
+                      memberId:
+                        type: string
+                      memberType:
+                        type: string
+                      displayName:
+                        type: string
+                      role:
+                        type: string
+                      workspaceId:
+                        type: string
+                        description: Present for an office member only.
+        '400':
+          description: |
+            A required field is missing, the identity does not exist, or it is
+            already a member.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingId:
+                  value:
+                    success: false
+                    error: memberId is required
+                missingWorkspace:
+                  summary: memberType is office with no workspaceId
+                  value:
+                    success: false
+                    error: workspaceId is required when memberType is office
+                noUser:
+                  value:
+                    success: false
+                    error: User not found in tenant
+                noOffice:
+                  summary: The office is not in the workspace you named
+                  value:
+                    success: false
+                    error: Office not found in workspace
+                duplicateOffice:
+                  value:
+                    success: false
+                    error: Office is already allocated to this browser
+                duplicateUser:
+                  value:
+                    success: false
+                    error: User is already a member of this browser
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/members/{memberId}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: memberId
+        in: path
+        required: true
+        description: |
+          The office ID or user ID that was granted access. Get it from
+          `GET /browsers/{browserId}/members`.
+        schema:
+          type: string
+          examples: [off_9c1e7d]
+    delete:
+      tags: [Members]
+      summary: Revoke access to a browser
+      operationId: removeBrowserMember
+      description: |
+        Removes a member, revoking access. Requires `browser:manage`.
+
+        This is the only way to take a browser away from an office. The office
+        side listing cannot be edited, because it is a view rather than a grant.
+
+        ## Get the member ID first
+
+        `memberId` in the path is the office ID or user ID that was granted
+        access. If you do not have it,
+        [list the members](/docs/api-reference/browsers/members/listBrowserMembers):
+
+        ```bash
+        curl "$HOS_API/browsers/bwr_a1b2c3d4/members" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        Each row carries `memberId`, `memberType`, and `displayName`, so you can
+        tell an office from a person before revoking.
+
+        ## Revoke
+
+        ```bash
+        curl -X DELETE "$HOS_API/browsers/bwr_a1b2c3d4/members/off_9c1e7d" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        No `workspaceId` is needed here even for an office. The member ID alone
+        identifies the grant.
+      responses:
+        '200':
+          description: Access revoked.
+        '404':
+          description: No such member on this browser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    error: Member not found
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/machine/wake:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Machine]
+      summary: Wake the machine
+      operationId: wakeBrowserMachine
+      description: |
+        Requires `browser:use` **and** membership. No manager bypass: running a
+        browser is a member action.
+      responses:
+        '200':
+          description: Waking.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/machine/shutdown:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Machine]
+      summary: Shut down the machine
+      operationId: shutdownBrowserMachine
+      description: Requires `browser:use` and membership. No manager bypass.
+      responses:
+        '200':
+          description: Shutting down.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/machine/restart:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Machine]
+      summary: Restart the machine
+      operationId: restartBrowserMachine
+      description: |
+        Requires `browser:use`, with **manager bypass** unlike wake and shutdown.
+
+        Restart is the apply-credential-changes lever. A manager who provisioned
+        secrets needs to cold boot the VM for them to take effect, even when they
+        are not a member of the browser themselves.
+      responses:
+        '200':
+          description: Restarting.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/page/navigate:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Driving]
+      summary: Navigate to a URL
+      operationId: navigateBrowserPage
+      description: |
+        Drives Chromium directly. Requires `browser:use` and membership.
+
+        This is the raw control surface. The agent has its own path through
+        `POST /browsers/{browserId}/agent/message`.
+      responses:
+        '200':
+          description: Navigating.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/page/back:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Driving]
+      summary: Go back
+      operationId: browserPageBack
+      responses:
+        '200':
+          description: Navigated.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/page/forward:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Driving]
+      summary: Go forward
+      operationId: browserPageForward
+      responses:
+        '200':
+          description: Navigated.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/page/reload:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Driving]
+      summary: Reload the page
+      operationId: browserPageReload
+      responses:
+        '200':
+          description: Reloading.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/agent/message:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Driving]
+      summary: Send a message to the agent
+      operationId: sendBrowserAgentMessage
+      description: |
+        Gives the browser agent an instruction. Requires `browser:use` and
+        membership, strictly, with no manager bypass.
+      responses:
+        '200':
+          description: Accepted.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/agent/cancel:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Driving]
+      summary: Cancel the current cycle
+      operationId: cancelBrowserAgentCycle
+      description: Stops the agent's current run. Requires `browser:use` and membership.
+      responses:
+        '200':
+          description: Cancelled.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/chats:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Sessions]
+      summary: List chats
+      operationId: listBrowserChats
+      description: |
+        Requires `browser:read` and membership, **with no manager bypass**.
+
+        Chats, messages, sessions, and cycles are member only by design:
+        governors administer a browser, they do not read what its members did in
+        it.
+      responses:
+        '200':
+          description: The chats.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Sessions]
+      summary: Create a chat
+      operationId: createBrowserChat
+      description: Requires `browser:use` and membership.
+      responses:
+        '201':
+          description: Created.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/chats/current:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    put:
+      tags: [Sessions]
+      summary: Switch the current chat
+      operationId: switchBrowserChat
+      description: Requires `browser:use` and membership.
+      responses:
+        '200':
+          description: Switched.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/chats/{chatId}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: chatId
+        in: path
+        required: true
+        description: 'The chat. From [List chats](/docs/api-reference/browsers/sessions/listBrowserChats).'
+        schema:
+          type: string
+    get:
+      tags: [Sessions]
+      summary: Get a chat
+      operationId: getBrowserChat
+      description: Member only. No manager bypass.
+      responses:
+        '200':
+          description: The chat.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Sessions]
+      summary: Delete a chat
+      operationId: deleteBrowserChat
+      description: Requires `browser:use` and membership.
+      responses:
+        '200':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/chats/{chatId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: chatId
+        in: path
+        required: true
+        description: 'The chat. From [List chats](/docs/api-reference/browsers/sessions/listBrowserChats).'
+        schema:
+          type: string
+    get:
+      tags: [Sessions]
+      summary: List chat messages
+      operationId: listBrowserChatMessages
+      description: Member only. No manager bypass.
+      responses:
+        '200':
+          description: The messages.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Sessions]
+      summary: List sessions
+      operationId: listBrowserSessions
+      description: Member only. No manager bypass.
+      responses:
+        '200':
+          description: The sessions.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/sessions/current:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Sessions]
+      summary: Get the current session
+      operationId: getCurrentBrowserSession
+      responses:
+        '200':
+          description: The session.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: sessionId
+        in: path
+        required: true
+        description: 'The session. From [List sessions](/docs/api-reference/browsers/sessions/listBrowserSessions).'
+        schema:
+          type: string
+    get:
+      tags: [Sessions]
+      summary: Get a session
+      operationId: getBrowserSession
+      responses:
+        '200':
+          description: The session.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/cycles:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Sessions]
+      summary: List agent cycles
+      operationId: listBrowserCycles
+      description: |
+        A cycle is one run of the agent. Member only.
+
+        This is the audit trail for what the employee actually did in the
+        browser.
+      responses:
+        '200':
+          description: The cycles.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/cycles/{cycleId}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: cycleId
+        in: path
+        required: true
+        description: 'The agent cycle. From [List agent cycles](/docs/api-reference/browsers/sessions/listBrowserCycles).'
+        schema:
+          type: string
+    get:
+      tags: [Sessions]
+      summary: Get an agent cycle
+      operationId: getBrowserCycle
+      responses:
+        '200':
+          description: The cycle.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/chatConfig:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Sessions]
+      summary: Get chat configuration
+      operationId: getBrowserChatConfig
+      description: Member only.
+      responses:
+        '200':
+          description: The configuration.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Identity]
+      summary: Get the browser API key
+      operationId: getBrowserApiKey
+      description: |
+        The browser's own service account credential, sanitised. Requires
+        `browser:read`, membership, manager bypass allowed.
+
+        Membership is enforced on every route in this family deliberately. These
+        routes hand out credentials, so they are the last place the guard should
+        be dropped rather than the first.
+      responses:
+        '200':
+          description: The key record, without the secret.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/api-keys/cycle:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Identity]
+      summary: Cycle the browser API key
+      operationId: cycleBrowserApiKey
+      description: |
+        Mints a replacement credential. Requires `browser:manage` and
+        membership, manager bypass allowed.
+
+        The new key is returned **once**. The old one keeps working for up to
+        five minutes while the validation cache expires.
+      responses:
+        '200':
+          description: The new key. Capture it now.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/api-keys/revoke:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Identity]
+      summary: Revoke the browser API key
+      operationId: revokeBrowserApiKey
+      description: Requires `browser:manage` and membership. Subject to the five minute cache window.
+      responses:
+        '200':
+          description: Revoked.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/api-keys/provision:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    post:
+      tags: [Identity]
+      summary: Provision a missing browser API key
+      operationId: provisionBrowserApiKey
+      description: |
+        The repair path for a credential that failed to mint at creation.
+        Creation is deliberately non-blocking, so a browser can exist without a
+        working key.
+      responses:
+        '201':
+          description: Provisioned.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/proxy/countries:
+    get:
+      tags: [Browsers]
+      summary: List proxy countries
+      operationId: listProxyCountries
+      description: |
+        Reference data for choosing a `proxyRegion`. Requires `browser:read` at
+        `console`. No membership, since it names no browser.
+      responses:
+        '200':
+          description: Available countries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  countries:
+                    type: array
+                    items:
+                      type: object
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /browsers/{browserId}/proxy/config:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Browsers]
+      summary: Get proxy configuration
+      operationId: getBrowserProxyConfig
+      description: Requires `browser:read` and membership, manager bypass allowed.
+      responses:
+        '200':
+          description: The proxy configuration.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Browsers]
+      summary: Update proxy configuration
+      operationId: updateBrowserProxyConfig
+      description: Requires `browser:manage`. Governance, so no membership needed.
+      responses:
+        '200':
+          description: Updated.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/cloud-config:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Machine]
+      summary: Get cloud configuration
+      operationId: getBrowserCloudConfig
+      description: |
+        The machine configuration behind the browser. Requires `browser:read`
+        and membership, manager bypass allowed.
+
+        Note there is a second, near identical path at
+        `/browsers/{browserId}/cloud/config` — one hyphen apart — returning the
+        compute configuration. Both exist; check which one you want.
+      responses:
+        '200':
+          description: The configuration.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/cloud/config:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Machine]
+      summary: Get compute configuration
+      operationId: getBrowserComputeConfig
+      description: Requires `browser:read` and membership, manager bypass allowed.
+      responses:
+        '200':
+          description: The compute configuration.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [Machine]
+      summary: Update compute configuration
+      operationId: updateBrowserComputeConfig
+      description: Requires `browser:manage`. Governance, so no membership needed.
+      responses:
+        '200':
+          description: Updated.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/usage:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+    get:
+      tags: [Machine]
+      summary: Get usage
+      operationId: getBrowserUsage
+      description: Requires `browser:read` and membership.
+      responses:
+        '200':
+          description: Usage figures.
+        '403':
+          $ref: '#/components/responses/Forbidden'

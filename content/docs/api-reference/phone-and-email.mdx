@@ -1,0 +1,128 @@
+---
+title: Phone numbers and email
+description: How an office gets a phone number or an email address, and what it can do with one.
+---
+
+Phone numbers and email addresses are **tenant assets**. They are bought or
+verified once at tenant level, allocated down to an office, and then used by
+that office.
+
+The important thing to understand is that those are **two different planes with
+two different credentials.**
+
+| Plane | What it does | Who can call it |
+| --- | --- | --- |
+| **Management** | Buy, list, allocate, deallocate, configure | A signed in person only |
+| **Usage** | Send a message, place or answer a call | **A service account key** |
+
+An office cannot buy itself a phone number, and it cannot allocate one to
+itself. Once a person has allocated one, the office uses it with its own key
+like any other capability.
+
+<Callout>
+  This split is deliberate and it is the same shape as
+  [service accounts](/docs/access-control/service-accounts): acquiring a
+  capability is a human action, exercising it is a machine action.
+</Callout>
+
+<Callout type="warn">
+  These endpoints are documented here at path and permission level only. Their
+  request and response shapes are not yet verified against source, so they are
+  not in the OpenAPI spec and not in the generated reference.
+</Callout>
+
+---
+
+## Phone numbers
+
+### Management — signed in user only
+
+The entire `/twilio` surface requires a signed in user. An API key is rejected
+whatever permissions the service account holds.
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `GET` | `/twilio/phone-numbers/search` | `phone:read` @ workspace |
+| `POST` | `/twilio/phone-numbers/purchase` | `phone:manage` @ workspace |
+| `GET` | `/twilio/workspace-phone-numbers` | `phone:read` @ workspace |
+| `GET` | `/twilio/workspaces/{workspaceId}/phone-numbers/allocated` | `phone:read` @ workspace |
+| `GET` | `/twilio/offices/{officeId}/phone-numbers` | `office:read` @ office |
+| `POST` | `/twilio/offices/{officeId}/phone-numbers` | `office:manage` @ office |
+| `DELETE` | `/twilio/offices/{officeId}/phone-numbers/{phoneNumberSid}` | `office:manage` @ office |
+| `POST` | `/twilio/offices/{officeId}/phone-numbers/{phoneNumberSid}/primary` | `office:manage` @ office |
+| `GET` · `PATCH` | `/twilio/offices/{officeId}/voice-config` | `office:read` · `office:manage` |
+
+Numbers are bought at workspace level, then allocated down. An office can hold
+several, with one marked primary.
+
+### Usage — an office's own key
+
+Once a number is allocated, the office sends from it through the CRM:
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `POST` | `/contacts/{contactId}/messages` | `phone:send` @ workspace |
+
+The office sends as itself, with its own `hsk_` key. `fromNumber` is optional
+and resolves automatically from the numbers allocated to that office.
+
+The same capability is exposed to the AI employee as a tool, gated on the same
+action in process rather than at the route. Route and tool cannot diverge,
+because both evaluate `phone:send`.
+
+### The four phone actions are not interchangeable
+
+| Action | Permits |
+| --- | --- |
+| `phone:read` | See numbers |
+| `phone:send` | Send a message from an allocated number |
+| `phone:call` | Mint a browser calling credential. **Staff only.** |
+| `phone:manage` | Buy, allocate, deallocate |
+
+<Callout>
+  The built-in `officeAgent` role holds **`phone:send` and not `phone:call`**. An
+  AI employee can text from its number but cannot mint a dialing credential. That
+  is the split doing real work, not decoration.
+</Callout>
+
+---
+
+## Email addresses
+
+### Management — assigning an address to an office
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `POST` | `/domains/{domain}/addresses/{localPart}/assignees` | `email:manage` @ `console` |
+| `DELETE` | `/domains/{domain}/addresses/{localPart}/assignees` | `email:manage` @ `console` |
+
+Unlike phone numbers, these **do** accept an API key. The body identifies the
+assignee as `{ type, id }`.
+
+Assignment is membership style and many to one: several offices and people can
+share one address. Offices must belong to the workspace that owns the address.
+
+<Callout>
+  **An office and a person are entries in the same array.** Adding either goes
+  through the same endpoint, the same permission, and the same workspace
+  membership guard. This is the clearest demonstration in the product that
+  machine identities are governed exactly as human ones are.
+</Callout>
+
+### Usage — an office's own key
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `POST` | `/contacts/{contactId}/emails` | `email:send` **or** `email:me:use` @ workspace |
+
+`email:me:use` is the narrow one: send only as an address assigned to you. An
+office resolves its own addresses **from its credential, never from the
+request**, so it cannot ask about or send as another office's address.
+
+---
+
+## Why both are gated above the office
+
+An address or a number is a tenant asset being pointed at an office, not an
+office attachment. Acquiring one spends money and claims a public identity, so
+it sits with a person. Using one is ordinary work, so it sits with the machine.

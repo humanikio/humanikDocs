@@ -1,0 +1,15 @@
+{
+  "title": "API reference",
+  "root": true,
+  "pages": [
+    "index",
+    "---Native products---",
+    "offices",
+    "crm",
+    "browsers",
+    "---Platform---",
+    "cloud",
+    "---Console only---",
+    "phone-and-email"
+  ]
+}

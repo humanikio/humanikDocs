@@ -1,0 +1,5 @@
+{
+  "title": "Devices",
+  "root": true,
+  "pages": ["index", "browser"]
+}

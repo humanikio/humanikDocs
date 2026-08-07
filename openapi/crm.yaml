@@ -1,0 +1,1113 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — CRM
+  version: v1
+  summary: Contacts, conversations, and deals that AI employees operate directly.
+  description: |
+    The CRM is a native product, not a connector. An AI employee reads and
+    writes it through the same public endpoints a person's browser calls,
+    carrying its own service account key and passing the same permission gates.
+    There is no separate agent API and no privileged path.
+
+    That is why every endpoint here is documented once. The contract you read is
+    the contract the employee is held to.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Contacts
+    description: People and companies, and the thread of everything said to them.
+  - name: Messaging
+    description: Sending SMS and email from an allocated number or address.
+  - name: Notes
+    description: Free text attached to a contact.
+  - name: Tags
+    description: The workspace tag registry, and applying tags to a contact.
+  - name: Opportunities
+    description: Deals, pipelines, and stages.
+  - name: Custom fields
+    description: Tenant defined fields on a contact.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`. An AI employee uses exactly this.
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: query
+      required: true
+      description: |
+        Required on every endpoint unless the caller's key already carries a
+        workspace scope. Omitting it returns 400.
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+
+    ContactId:
+      name: contactId
+      in: path
+      required: true
+      description: 'The contact. From [List contacts](/docs/api-reference/crm/contacts/listContacts), or resolve a phone number with [Find a contact by phone](/docs/api-reference/crm/contacts/findContactByPhone).'
+      schema:
+        type: string
+        examples: [con_7f3b2a]
+
+  schemas:
+    Error:
+      type: object
+      description: |
+        `error` is a human readable string, not a stable machine code. Branch on
+        the HTTP status.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+        message:
+          type: string
+      required: [success, error]
+
+    Contact:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: |
+            Assigned on create. Present on responses, ignored in a request body —
+            the contact to update is named in the path.
+        displayName:
+          type: string
+          description: The full name. Falls back to a formatted phone number when no name is given.
+        firstName:
+          type: string
+        lastName:
+          type: string
+        primaryPhone:
+          type: string
+          description: E.164. Must start with `+`.
+          examples: ['+14165550137']
+        email:
+          type: string
+        company:
+          type: string
+        title:
+          type: string
+        stage:
+          type: string
+        status:
+          type: string
+          default: active
+        source:
+          type: string
+          default: manual
+          description: Where the contact came from. Inbound messages self-create contacts with their channel here.
+        optedOut:
+          type: boolean
+          default: false
+          description: |
+            Do not contact. Writable with `contact:manage`, the same grant needed
+            for ordinary edits.
+        tags:
+          type: array
+          items:
+            type: string
+        customFields:
+          type: object
+          additionalProperties: true
+        lastActivityAt:
+          type: string
+        firstSeenAt:
+          type: string
+      required: [id, displayName]
+
+    Opportunity:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        pipelineId:
+          type: string
+          description: 'The pipeline this belongs to. From [List pipelines](/docs/api-reference/crm/opportunities/listPipelines).'
+        stageId:
+          type: string
+          description: 'The stage within the pipeline. From [List stages](/docs/api-reference/crm/opportunities/listStages).'
+        value:
+          type: number
+          default: 0
+          description: |
+            Coerced to `0` on create when not a number. **Not coerced on
+            update.** See the warning on the update operation.
+        status:
+          type: string
+        contactId:
+          type: string
+          description: 'The contact this belongs to. From [List contacts](/docs/api-reference/crm/contacts/listContacts).'
+        contactName:
+          type: string
+          description: Denormalised for card display.
+        ownerUserId:
+          type: string
+          description: 'The user who owns this record.'
+        priority:
+          type: string
+        expectedCloseDate:
+          type: string
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+      required: [id, name, pipelineId, stageId, value, status]
+
+  responses:
+    BadRequest:
+      description: A required field is missing or malformed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingWorkspace:
+              value:
+                success: false
+                error: workspaceId is required
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Authenticated, but the caller lacks the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /contacts:
+    get:
+      tags: [Contacts]
+      summary: List contacts
+      operationId: listContacts
+      description: |
+        Lists contacts in the workspace. Requires `contact:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The workspace's contacts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Contacts]
+      summary: Create a contact
+      operationId: createContact
+      description: |
+        Creates a contact. Requires `contact:manage`.
+
+        A name is not strictly required: `displayName` falls back to the
+        formatted phone number, so a contact can be created from a number alone.
+        One of `displayName`, a name part, or `primaryPhone` must be present.
+
+        **This endpoint does not deduplicate.** Creating a second contact with a
+        phone number that already belongs to another contact repoints the phone
+        index at the new record, and inbound messages that would have matched the
+        original are routed to the new one instead. Search before you create.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                primaryPhone:
+                  type: string
+                  description: Must be E.164, starting with `+`.
+                email:
+                  type: string
+                company:
+                  type: string
+                title:
+                  type: string
+                stage:
+                  type: string
+                status:
+                  type: string
+                  default: active
+                ownerUserId:
+                  type: string
+                  description: 'The user who owns this record.'
+                customFields:
+                  type: object
+                  additionalProperties: true
+                  description: Validated against the workspace's contact field definitions.
+      responses:
+        '201':
+          description: The contact was created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  contact:
+                    $ref: '#/components/schemas/Contact'
+        '400':
+          description: Missing workspace, no identifying field, or a malformed phone number.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noIdentity:
+                  value:
+                    success: false
+                    error: displayName, a name, or primaryPhone is required
+                badPhone:
+                  value:
+                    success: false
+                    error: primaryPhone must be E.164 (starts with +)
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /contacts/find:
+    post:
+      tags: [Contacts]
+      summary: Find a contact by phone
+      operationId: findContactByPhone
+      description: |
+        Resolves a phone number to a contact. Requires `contact:read`.
+
+        Use this before creating, since create does not deduplicate.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phoneNumber:
+                  type: string
+                  examples: ['+14165550137']
+              required: [phoneNumber]
+      responses:
+        '200':
+          description: The match, if any.
+        '400':
+          description: '`phoneNumber` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: phoneNumber is required
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /contacts/{contactId}:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    get:
+      tags: [Contacts]
+      summary: Get a contact
+      operationId: getContact
+      description: |
+        Returns one contact. Requires `contact:read`.
+
+        The response includes `recentNotes` alongside the contact, so a single
+        call gives an employee enough context to act.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The contact, with its recent notes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  contact:
+                    $ref: '#/components/schemas/Contact'
+                  recentNotes:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    patch:
+      tags: [Contacts]
+      summary: Update a contact
+      operationId: updateContact
+      description: |
+        Updates a contact. Requires `contact:manage`.
+
+        `optedOut` is writable here. It is the do not contact flag, and it takes
+        the same grant as changing a job title.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+      responses:
+        '200':
+          description: The updated contact.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Contacts]
+      summary: Delete a contact
+      operationId: deleteContact
+      description: |
+        Deletes a contact. Requires `contact:manage`.
+
+        **Opportunities linked to the contact are not deleted.** They remain in
+        their pipeline referencing an id that no longer resolves. Check
+        `GET /opportunities` and clean up first if that matters.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /contacts/{contactId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    post:
+      tags: [Contacts]
+      summary: Archive a contact
+      operationId: archiveContact
+      description: Requires `contact:manage`. Prefer this to deleting.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Archived.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /contacts/{contactId}/read:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    post:
+      tags: [Contacts]
+      summary: Mark a conversation read
+      operationId: markContactRead
+      description: Requires `contact:read`, not `contact:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Marked read.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /contacts/{contactId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    post:
+      tags: [Messaging]
+      summary: Send an SMS to a contact
+      operationId: sendContactMessage
+      description: |
+        Sends a text message from a phone number allocated to the workspace.
+        Requires `phone:send`.
+
+        `fromNumber` is optional and resolves automatically from the numbers
+        allocated to the caller. An AI employee calls this exact endpoint with
+        its own key, through the same gate.
+
+        **The message is not previewed.** Merge tokens render server side at send
+        time, so nobody sees the final text before the recipient does.
+
+        Phone numbers are allocated in the console, not through this API.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  description: The message text.
+                fromNumber:
+                  type: string
+                  description: E.164. Optional. Resolved automatically when omitted.
+                senderName:
+                  type: string
+              required: [content]
+      responses:
+        '201':
+          description: Sent.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /contacts/{contactId}/emails:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    post:
+      tags: [Messaging]
+      summary: Send an email to a contact
+      operationId: sendContactEmail
+      description: |
+        Sends email from an address assigned to the caller. Requires
+        `email:send` **or** `email:me:use`.
+
+        The difference matters. `email:send` permits sending as any address in
+        the tenant. `email:me:use` permits only addresses assigned to you, and is
+        the one to grant an AI employee. The route gate is address blind; the
+        handler enforces the per address constraint.
+
+        An office resolves its own addresses from its credential, never from the
+        request, so it cannot send as another office's address.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject:
+                  type: string
+                text:
+                  type: string
+                fromAddress:
+                  type: string
+                  description: Optional. Resolved from the caller's assigned addresses when omitted.
+                senderName:
+                  type: string
+                inReplyTo:
+                  type: string
+                  description: Threads the reply.
+      responses:
+        '201':
+          description: Sent.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /contacts/{contactId}/email-context:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    get:
+      tags: [Messaging]
+      summary: Get composer defaults
+      operationId: getContactEmailContext
+      description: |
+        The from address and threading context a composer should default to.
+        Accepts `email:read`, `email:me:read`, `email:send`, or `email:me:use`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Composer defaults.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /contacts/{contactId}/notes:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    get:
+      tags: [Notes]
+      summary: List notes
+      operationId: listContactNotes
+      description: Requires `contact:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The contact's notes.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Notes]
+      summary: Add a note
+      operationId: createContactNote
+      description: |
+        Requires `contact:manage`.
+
+        Notes carry no authorship control: anyone with `contact:manage` can edit
+        or delete any note, including one written by someone else.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+              required: [content]
+      responses:
+        '201':
+          description: Created.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /contacts/{contactId}/notes/{noteId}:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+      - name: noteId
+        in: path
+        required: true
+        description: 'The note. From [List notes](/docs/api-reference/crm/notes/listContactNotes).'
+        schema:
+          type: string
+    put:
+      tags: [Notes]
+      summary: Update a note
+      operationId: updateContactNote
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags: [Notes]
+      summary: Delete a note
+      operationId: deleteContactNote
+      description: |
+        Requires `contact:manage`.
+
+        **This reports success for an id that does not exist.** A 200 is not
+        evidence that a note was deleted. Read the notes back if you need to be
+        certain.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Reported as deleted. See the warning above.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /contacts/tags:
+    get:
+      tags: [Tags]
+      summary: List the tag registry
+      operationId: listTags
+      description: |
+        The workspace's tag registry. Requires `contact:read`.
+
+        The registry self-populates: tagging a contact with a new label adds it
+        here. Nothing has to be configured before tagging works.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The registry.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Tags]
+      summary: Add a tag to the registry
+      operationId: createTag
+      description: Requires `contact:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '201':
+          description: Added.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags: [Tags]
+      summary: Remove a tag from the registry
+      operationId: deleteTag
+      description: Requires `contact:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /contacts/{contactId}/tags:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    post:
+      tags: [Tags]
+      summary: Tag a contact
+      operationId: addContactTag
+      description: |
+        Accepts `contact:tag` **or** `contact:manage`.
+
+        `contact:tag` is the narrow grant: it permits labelling a contact without
+        permitting any other edit. It is the right one for an employee whose job
+        is triage.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Tagged.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Tags]
+      summary: Untag a contact
+      operationId: removeContactTag
+      description: Accepts `contact:tag` or `contact:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Untagged.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /contacts/import:
+    post:
+      tags: [Contacts]
+      summary: Import contacts
+      operationId: importContacts
+      description: |
+        Bulk import. Requires `contact:manage`.
+
+        Import does not deduplicate either. See the note on create.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Import result.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /opportunities:
+    get:
+      tags: [Opportunities]
+      summary: List opportunities
+      operationId: listOpportunities
+      description: |
+        Requires `opportunity:read`.
+
+        **Unpaginated.** The whole collection is returned on every call.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The workspace's opportunities.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  opportunities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Opportunity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Opportunities]
+      summary: Create an opportunity
+      operationId: createOpportunity
+      description: |
+        Requires `opportunity:manage`.
+
+        `value` is coerced: anything that is not a number is stored as `0`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                pipelineId:
+                  type: string
+                  description: 'The pipeline this belongs to. From [List pipelines](/docs/api-reference/crm/opportunities/listPipelines).'
+                stageId:
+                  type: string
+                  description: 'The stage within the pipeline. From [List stages](/docs/api-reference/crm/opportunities/listStages).'
+                value:
+                  type: number
+                contactId:
+                  type: string
+                  description: 'The contact this belongs to. From [List contacts](/docs/api-reference/crm/contacts/listContacts).'
+                ownerUserId:
+                  type: string
+                  description: 'The user who owns this record.'
+                priority:
+                  type: string
+                expectedCloseDate:
+                  type: string
+                description:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+              required: [name, pipelineId, stageId]
+      responses:
+        '201':
+          description: Created.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /opportunities/{opportunityId}:
+    parameters:
+      - name: opportunityId
+        in: path
+        required: true
+        description: 'The opportunity. From [List opportunities](/docs/api-reference/crm/opportunities/listOpportunities).'
+        schema:
+          type: string
+    get:
+      tags: [Opportunities]
+      summary: Get an opportunity
+      operationId: getOpportunity
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The opportunity.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags: [Opportunities]
+      summary: Update an opportunity
+      operationId: updateOpportunity
+      description: |
+        Requires `opportunity:manage`.
+
+        **`value` is not validated on update.** Create coerces a non numeric
+        `value` to `0`, and reads default it to `0`, but update writes whatever
+        it is given. Send a string here and the stored document holds a string
+        while every API response reports `0`, permanently and silently. Always
+        send a number.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                stageId:
+                  type: string
+                  description: 'The stage within the pipeline. From [List stages](/docs/api-reference/crm/opportunities/listStages).'
+                value:
+                  type: number
+                  description: Must be a number. Not validated. See the warning above.
+                status:
+                  type: string
+                priority:
+                  type: string
+                expectedCloseDate:
+                  type: string
+                description:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Opportunities]
+      summary: Delete an opportunity
+      operationId: deleteOpportunity
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /opportunities/pipelines:
+    get:
+      tags: [Opportunities]
+      summary: List pipelines
+      operationId: listPipelines
+      description: Requires `opportunity:read`. Unpaginated.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The workspace's pipelines.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Opportunities]
+      summary: Create a pipeline
+      operationId: createPipeline
+      description: Requires `opportunity:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '201':
+          description: Created.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /opportunities/pipelines/{pipelineId}:
+    parameters:
+      - name: pipelineId
+        in: path
+        required: true
+        description: 'The pipeline. From [List pipelines](/docs/api-reference/crm/opportunities/listPipelines).'
+        schema:
+          type: string
+    patch:
+      tags: [Opportunities]
+      summary: Update a pipeline
+      operationId: updatePipeline
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags: [Opportunities]
+      summary: Delete a pipeline
+      operationId: deletePipeline
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /opportunities/stages:
+    get:
+      tags: [Opportunities]
+      summary: List stages
+      operationId: listStages
+      description: |
+        A flat stage list, optionally for one pipeline. Requires
+        `opportunity:read`.
+
+        Returns `{ "success": true, "stages": [] }` rather than an error when
+        the pipeline has no stages or does not exist.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: pipelineId
+          in: query
+          required: false
+          description: 'The pipeline. From [List pipelines](/docs/api-reference/crm/opportunities/listPipelines).'
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The stages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  stages:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /custom-fields:
+    get:
+      tags: [Custom fields]
+      summary: List custom field definitions
+      operationId: listCustomFields
+      description: Requires `contact:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The definitions.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Custom fields]
+      summary: Create a custom field definition
+      operationId: createCustomField
+      description: |
+        Requires `custom-field:manage`, which is a different action from
+        `contact:manage`. Defining a field is schema work; filling one in is not.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '201':
+          description: Created.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /custom-fields/{fieldId}:
+    parameters:
+      - name: fieldId
+        in: path
+        required: true
+        description: 'The field definition. From [List custom field definitions](/docs/api-reference/crm/custom-fields/listCustomFields).'
+        schema:
+          type: string
+    get:
+      tags: [Custom fields]
+      summary: Get a custom field definition
+      operationId: getCustomField
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The definition.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags: [Custom fields]
+      summary: Update a custom field definition
+      operationId: updateCustomField
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags: [Custom fields]
+      summary: Delete a custom field definition
+      operationId: deleteCustomField
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'

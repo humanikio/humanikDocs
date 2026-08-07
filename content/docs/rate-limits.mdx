@@ -1,0 +1,53 @@
+---
+title: Rate limits
+description: Request limits, the headers that report them, and how to back off.
+---
+
+Requests are limited with a token bucket. An authenticated caller gets:
+
+| | |
+| --- | --- |
+| **Burst** | 200 requests |
+| **Sustained** | 20 requests per second |
+| **Counted against** | Your tenant, not the individual key |
+
+The bucket is shared across every key in your tenant. Two service accounts
+running in parallel draw from the same allowance, so plan concurrency at the
+tenant level rather than per key.
+
+Some endpoints carry tighter limits of their own. Those are stated on the
+endpoint.
+
+## Headers
+
+Every authenticated response reports the current state:
+
+| Header | Meaning |
+| --- | --- |
+| `X-RateLimit-Limit` | The ceiling being applied |
+| `X-RateLimit-Remaining` | Requests left in the current window |
+| `Retry-After` | Seconds to wait. Sent only on a `429`. |
+
+## When you are limited
+
+```json
+{
+  "success": false,
+  "error": "Rate limit exceeded",
+  "message": "Too many requests. Please retry after 12 seconds.",
+  "retryAfter": 12,
+  "timestamp": "2026-08-02T14:03:11.204Z"
+}
+```
+
+Wait for `retryAfter` seconds before retrying. It is authoritative, so prefer it
+over a fixed backoff schedule.
+
+## Staying under the limit
+
+- Read `X-RateLimit-Remaining` and slow down before you hit zero, rather than
+  waiting for a `429`.
+- Retry `429` and `500` with exponential backoff and jitter. Do not retry `400`,
+  `401`, `403`, or `404`, since none of them will succeed unchanged.
+- Cache reads that do not change often. Office and workspace listings are
+  usually stable between calls.

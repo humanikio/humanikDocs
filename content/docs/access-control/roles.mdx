@@ -1,0 +1,112 @@
+---
+title: Roles
+description: The built-in roles, what each is for, and how to vary one safely.
+---
+
+A role is a named bundle of policies. It says what is permitted **in principle**.
+Where those permissions apply is decided by the
+[assignment](/docs/access-control/assignments), not by the role.
+
+Built-in roles ship with the platform and resolve before custom ones.
+
+<Callout type="warn">
+  **Built-in roles and policies cannot be modified or deleted.** This is what
+  makes them safe to reason about: a role name means the same thing in every
+  tenant. To vary one, fork it into a custom role.
+</Callout>
+
+## Built-in roles
+
+Grouped by what they are for.
+
+### Organisation administration
+
+Assigned at `console`. These do not descend into workspaces.
+
+| Role | For |
+| --- | --- |
+| `consoleAdmin` | Full organisation level administration |
+| `membersManager` | Inviting and managing people, without wider console rights |
+| `iamManager` | Defining roles and policies, and making assignments |
+
+### Workspace and membership
+
+| Role | For |
+| --- | --- |
+| `workspaceAdmin` | Full control of one workspace and everything inside it |
+| `tenantMember` | Baseline membership. The floor a person needs to use the product. |
+| `viewer` | Read only |
+
+### Operational
+
+Narrower roles for a specific job, meant to be assigned at a narrow boundary.
+
+| Role | For |
+| --- | --- |
+| `officeOperator` | Running and managing offices |
+| `workflowOperator` | Running workflows |
+| `dataSourceManager` | Managing data sources and ingestion |
+| `integrationPublisher` | Publishing integrations for others to use |
+
+### Machine identities
+
+Assigned to service accounts rather than to people. Usually attached
+automatically when the office or browser is created.
+
+| Role | For |
+| --- | --- |
+| `officeAgent` | The identity an AI employee's office runs as |
+| `browserAgent` | The identity a cloud browser runs as |
+
+`browserAgent` is a good illustration of the model working. It is scoped to
+inference and the databases allocated to that browser, and it explicitly excludes
+chat, contacts, calendars, and office access. A browser that is compromised
+cannot reach the rest of the workspace, because its role never permitted it.
+
+## Choosing one
+
+Two questions, in this order:
+
+1. **What is the narrowest role that covers the job?** Start from the operational
+   roles. Reach for `workspaceAdmin` only when the job really is "everything in
+   this workspace".
+2. **What is the narrowest boundary it can be assigned at?** This matters more
+   than the choice of role. `viewer` at `workspace/W1` is far wider than
+   `officeOperator` at one office.
+
+A common mistake is picking a narrow role and then assigning it at the workspace
+root, which quietly grants it everywhere inside.
+
+## Forking a built-in
+
+When a built-in is close but not right, copy it into a custom role rather than
+trying to work around it.
+
+In the console, go to **Organization → IAM → Roles**, open the built-in you want
+to start from, and create a new role carrying the policies you want. Custom roles
+live in your tenant and resolve after built-ins.
+
+<Callout>
+  Prefer forking over stacking. Assigning two roles to cover a gap works, but the
+  result is harder to audit later, because no single object states what the
+  identity may do.
+</Callout>
+
+## Policies inside a role
+
+A policy is a list of statements. Each statement has an effect, a set of actions,
+and a set of resources:
+
+```json
+{
+  "effect": "allow",
+  "actions": ["office:read", "office:manage"],
+  "resources": ["workspace/W1/office/*"]
+}
+```
+
+Deny statements are evaluated first and win outright. Use them to carve an
+exception out of a broad allow, and remember that they do not constrain the
+tenant owner.
+
+Policies are managed under **Organization → IAM → Policies**.

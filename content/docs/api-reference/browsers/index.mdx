@@ -1,0 +1,142 @@
+---
+title: Browsers
+description: Cloud browsers an AI employee drives the way a person would.
+---
+
+A humaBrowser is a real Chromium running in the cloud, with a persistent profile
+and its own identity.
+
+<ApiSetup />
+
+## Why this exists as a product rather than a connector
+
+Some systems have no API. A supplier portal, a bank, a regulator's site, an
+internal tool nobody will ever expose. There is nothing to integrate with, so an
+integration cannot exist.
+
+The employee drives a browser instead, the same way a person would. The
+alternative a customer reaches for is a human logging in and copying data out,
+which is the work they are paying to stop doing.
+
+## Browsers carry a second access layer
+
+This is the thing to understand before reading any endpoint.
+
+| Layer | Decides |
+| --- | --- |
+| **Permission** | What class of action you may perform: `browser:read`, `browser:use`, `browser:manage` |
+| **Membership** | Which browsers you may touch at all |
+
+**Both must pass.** A browser holds live logged in sessions and a persistent
+profile, so reaching one by virtue of holding a broad role is deliberately not
+enough. See
+[the second layer](/docs/access-control#some-resources-add-a-second-layer).
+
+### Five tiers, and the reasoning behind each
+
+| Tier | Needs | Examples |
+| --- | --- | --- |
+| **Catalog** | Permission only | List browsers, create one, proxy countries |
+| **Govern** | `browser:manage`, no membership | Update, delete, members, proxy and compute config |
+| **Deep read, manager bypass** | `browser:read` + member **or** manager | The browser, its config, its members, its API key |
+| **Deep read, member only** | `browser:read` + member | Chats, messages, sessions, cycles |
+| **Interact** | `browser:use` + member, strict | Driving pages, talking to the agent, wake and shutdown |
+
+The fourth tier is the one worth noticing. Chats, messages, sessions, and cycles
+are **member only with no manager bypass**, stated in the source as *governors
+don't spy on member activity*. An administrator can manage a browser without
+reading what its members did in it.
+
+<Callout>
+  **Listing is not access.** `GET /browsers` applies no membership filter and
+  returns an `isMember` flag per row, so a console can show a browser it will
+  then refuse to open. That is deliberate: you can see that a browser exists
+  without being able to enter it.
+</Callout>
+
+## How an office gets a browser
+
+**By membership, not allocation.** Unlike a namespace or an app, a browser is
+not attached to an office. The office is added as a **member of the browser**.
+
+One endpoint,
+[Grant access to a browser](/docs/api-reference/browsers/members/addBrowserMember),
+handles both kinds of member. `memberType` decides which:
+
+| | `memberType: "human"` | `memberType: "office"` |
+| --- | --- | --- |
+| `memberId` is | A user ID | An office ID |
+| Get it from | `GET /users` | [List offices](/docs/api-reference/offices/offices/listOffices) |
+| `workspaceId` | Not used | **Required** |
+| `role` | `owner` or `user` | Always `user` |
+
+An office can never own a browser. Ownership stays with a person.
+
+### Granting an office
+
+<Steps>
+
+<Step>
+#### Get the office ID
+
+```bash
+curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Take `offices[].id`. Keep the same `workspaceId` for the next call.
+</Step>
+
+<Step>
+#### Grant access
+
+```bash
+curl -X POST "$HOS_API/browsers/bwr_a1b2c3d4/members" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "memberId": "off_9c1e7d",
+    "memberType": "office",
+    "workspaceId": "ws_a1b2c3"
+  }'
+```
+</Step>
+
+</Steps>
+
+### Revoking
+
+[Revoke access](/docs/api-reference/browsers/members/removeBrowserMember) takes
+the member ID in the path. If you do not have it,
+[list the members](/docs/api-reference/browsers/members/listBrowserMembers)
+first — each row carries `memberId`, `memberType`, and `displayName`, so you can
+tell an office from a person before removing it.
+
+```bash
+curl -X DELETE "$HOS_API/browsers/bwr_a1b2c3d4/members/off_9c1e7d" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+This endpoint accepts a service account key, so granting and revoking are both
+automatable.
+
+The office side
+[list](/docs/api-reference/offices/allocations/listOfficeBrowsers) is a view of
+grants made here, which is why it has no matching create or delete.
+
+## Two exceptions worth knowing
+
+**Restart allows a manager bypass; wake and shutdown do not.** Restart is the
+apply-credential-changes lever, so someone who provisioned secrets can cold boot
+the VM without being a member.
+
+**Two config paths sit one hyphen apart.** `/cloud-config` returns the machine
+configuration and `/cloud/config` the compute configuration. Both exist. Check
+which one you want.
+
+## Creation is non-blocking
+
+The browser's service account credential is minted eagerly, and if that mint
+fails the browser is still created.
+[Provision](/docs/api-reference/browsers/identity/provisionBrowserApiKey) is the
+repair path. Same shape as offices: existing does not mean ready.

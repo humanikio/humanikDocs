@@ -1,0 +1,70 @@
+---
+title: Quickstart
+description: Make your first authenticated request in about two minutes.
+---
+
+This walks through one real request end to end. It assumes you have a workspace
+and a service account key. If you do not, start with
+[Authentication](/docs/authentication).
+
+## 1. Set two variables
+
+Every example in these docs uses these two names, so exporting them once makes
+the rest copy runnable.
+
+<ApiSetup />
+
+## 2. List your offices
+
+An office is the isolated machine one AI employee runs on. Listing them is a
+read only call, which makes it a safe first request.
+
+```bash
+curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+`workspaceId` is required. If you omit it and the key does not already carry a
+workspace scope, the call returns `400`:
+
+```json
+{ "success": false, "error": "workspaceId is required" }
+```
+
+## 3. Read the response
+
+```json
+{
+  "success": true,
+  "offices": [
+    { "id": "off_9c1e7d", "name": "Support", "status": "running" }
+  ]
+}
+```
+
+Two things to notice, because they hold across the whole API:
+
+- **The payload sits at the top level.** There is no `data` wrapper. Offices come
+  back on `offices`, not on `data.offices`.
+- **The list is already filtered to what your key may read.** Two callers in the
+  same workspace can legitimately get different lists. A shorter list is not an
+  error.
+
+## 4. Send a request ID
+
+Every request carries an `X-Request-ID`. Send your own and log it, or one is
+generated for you. It is the only handle support can use to find a specific
+call.
+
+```bash
+curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "X-Request-ID: $(uuidgen)"
+```
+
+## Next
+
+<Cards>
+  <Card title="Responses and errors" href="/docs/responses" description="The envelope, and what error strings can and cannot be used for." />
+  <Card title="Rate limits" href="/docs/rate-limits" description="What the limits are and how to back off." />
+</Cards>

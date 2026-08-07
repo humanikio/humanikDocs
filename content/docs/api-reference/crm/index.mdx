@@ -1,0 +1,77 @@
+---
+title: CRM
+description: Contacts, conversations, and deals that AI employees operate directly.
+---
+
+The CRM is a **native product**, not a connector. It exists so an AI employee
+can work a real customer record without the customer buying and wiring up an
+outside CRM first.
+
+<ApiSetup />
+
+## Why this matters more than the endpoint list
+
+An AI employee's CRM tools do not talk to a database. Every one of them becomes
+an authenticated HTTP request to **the same public endpoint a person's browser
+calls**, carrying the office's own service account key, passing the same
+permission gate.
+
+There is no agent API and no privileged path. A denial arrives at the employee
+as a `403` it has to report, exactly as it would to a person.
+
+<Callout>
+  This is the reason the reference documents each endpoint once. The contract
+  you read is the contract the employee is held to. If you want to know what an
+  AI employee can do to your customer records, read this section — there is
+  nothing else to read.
+</Callout>
+
+## Permissions
+
+| Action | Covers |
+| --- | --- |
+| `contact:read` | Read contacts, notes, tags, the conversation |
+| `contact:tag` | Apply and remove tags, and nothing else |
+| `contact:manage` | Create, edit, archive, delete |
+| `opportunity:read` · `opportunity:manage` | Deals, pipelines, stages |
+| `custom-field:manage` | Define fields, which is schema work |
+| `phone:send` | Send SMS from an allocated number |
+| `email:send` · `email:me:use` | Send email. The narrow one is `email:me:use`. |
+
+`contact:tag` is worth knowing about. It permits labelling a contact and nothing
+else, which is the right grant for an employee whose job is triage. See
+[Access control](/docs/access-control).
+
+## The conversation is one thread
+
+SMS, email, voice, and Telegram interleave in a single thread per contact, each
+message carrying a `source`. The identity survives a channel change, and the
+conversation does not fork when someone replies by a different route.
+
+## Four things that will bite you
+
+**Creating a contact does not deduplicate.** A second contact with an existing
+phone number repoints the phone index, and inbound messages that would have
+matched the original go to the new record. Call
+[Find a contact by phone](/docs/api-reference/crm/contacts/findContactByPhone)
+first.
+
+**Deleting a contact leaves its deals behind.** They stay in their pipeline
+pointing at an id that no longer resolves.
+
+**`DELETE` on a note reports success for an id that does not exist.** A `200` is
+not evidence anything was deleted.
+
+**`PATCH /opportunities/{id}` does not validate `value`.** Create coerces a non
+numeric value to `0` and reads default it to `0`, but update writes what it is
+given, so the stored document and every response diverge permanently. Always
+send a number.
+
+## Sending
+
+Sending uses assets allocated to the workspace. Phone numbers are allocated in
+the console; email addresses can be assigned through the API. See
+[Phone numbers and email](/docs/api-reference/phone-and-email) for both planes.
+
+Neither send path previews the message: merge tokens render server side at send
+time, and there is no confirmation step on either channel.
