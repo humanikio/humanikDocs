@@ -10,6 +10,12 @@ existing logins, so there is no OAuth to set up and no API connector to configur
 It is off by default and stays off until you turn it on. This page explains what
 you are agreeing to, then how to do it.
 
+The browser integration itself is part of Claude Code. Its extension, supported
+browsers, and current limits are documented at
+[Claude in Chrome](https://code.claude.com/docs/en/chrome). This page covers what
+is specific to running it on a HumanikOS device: the two gates, what the daemon
+can and cannot check, and what changes when a job is headless.
+
 ## Why this is not just another tool
 
 Every other tool on a device acts **on that machine**, inside a workspace
@@ -23,6 +29,11 @@ It acts **as you**, in your real browser session, everywhere you happen to be
 signed in — mail, banking, cloud consoles, your own admin panels. No value in your
 config file makes that smaller. A remote job that can drive the browser inherits
 every session the browser has.
+
+It is not bounded by the **machine** either. Browsers pair to your Claude Code
+account rather than to a host, so a browser signed in on a different computer, or a
+different operating system, is reachable from a job running on this device.
+Enabling this scopes the capability to every browser paired to that account.
 
 That is the trade. It is a real capability with a real cost, and both halves are
 worth stating plainly:
@@ -76,8 +87,9 @@ reads as configured and denies every call.
 The daemon detects and reports. It never installs an extension, writes a manifest,
 or launches a browser. Four steps, in this order:
 
-1. **Install the Claude extension** from the Chrome Web Store and sign in. Chrome,
-   Edge, Brave or another Chromium browser. Not supported in WSL.
+1. **Install the [Claude extension](https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn)**
+   and sign in. Chrome, Edge, Brave or another Chromium browser. Not supported in
+   WSL. `humanikd verify` prints this same link when the extension is missing.
 2. **Run `claude --chrome` once**, in a terminal, as yourself. This writes the
    native-messaging handshake that lets the extension talk to Claude Code.
 3. **Quit and reopen your browser.** It reads that handshake file *only at
@@ -93,6 +105,21 @@ humanikd verify
 
 It re-checks 1 through 3 and lists whatever is outstanding. It cannot see step 4 —
 site permissions live inside the extension and nothing outside it can read them.
+
+Its browser-running check is **local only**. `verify` looks at this machine and
+cannot see a browser paired on another one, so "no Chromium browser running on this
+machine" means *not observed here*, not *nothing is reachable*.
+
+## Pair one browser per account on an unattended device
+
+When two or more browsers are paired to the same account, Claude Code asks which
+one to use before it acts. A headless device has nobody to answer that.
+
+This is the second thing on this page that cannot be automated, and it has the same
+shape as site permissions: a decision that belongs to a person, on a device where
+no person is present. What a headless job does on reaching it is not yet
+established — it may wait until the job times out. Keep one browser paired to the
+account a device serves from.
 
 ## Requirements and traps
 
