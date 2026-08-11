@@ -1,0 +1,176 @@
+---
+title: Tenants and workspaces
+description: How an account is divided, and how to give someone only one part of it.
+---
+
+Two boundaries, doing two different jobs. Getting them the right way round is
+what makes the rest of access control make sense.
+
+| | Answers | Crosses? |
+| --- | --- | --- |
+| **Account** | Whose data is this? | Never. Nothing crosses between accounts |
+| **Workspace** | Which part of the organisation is this? | Only if you grant it |
+
+You get one account. Inside it you create as many workspaces as you need.
+
+## What a workspace is
+
+A workspace groups offices, automations, conversations and data so a dispatch
+team and a finance team can work in the same account without seeing each other's
+work.
+
+It is also **the resource almost every permission names**. That is the part
+worth internalising: when you grant someone a role, you are nearly always
+granting it on a workspace. So the workspace is not just an organisational
+convenience. It is the unit of access.
+
+<Callout>
+  **The record itself is tiny.** A workspace is a name and a timezone.
+  Everything you think of as living "in" it is a relationship held on the thing
+  itself. This is why deleting a workspace does not delete its contents.
+</Callout>
+
+## Giving each customer their own
+
+If you serve clients rather than internal teams, the same structure does
+something more interesting: **one workspace per customer**, all inside your
+single account.
+
+```
+  your account
+    ├── workspace: Northside Dental     ← their staff, only this
+    ├── workspace: Riverside Legal      ← their staff, only this
+    └── workspace: Harbour Fitness      ← their staff, only this
+         ▲
+         └── your team, across all of them
+```
+
+Each customer gets an isolated place to work. Your team works across all of
+them. Nobody on one side sees the other's.
+
+This is a common shape for anyone reselling a service, and it works here because
+of how permissions resolve rather than because of a separate feature you have to
+switch on.
+
+### How the isolation actually happens
+
+There is no "restrict to one workspace" setting. The containment is a
+consequence of two ordinary rules.
+
+<Steps>
+
+<Step>
+**Grant the customer's people a role on their workspace, and nowhere else.**
+An assignment names a boundary. A role assigned at `workspace/W1` grants
+nothing at `workspace/W2`, because W2 is not inside W1.
+</Step>
+
+<Step>
+**Do not give them anything at `console`.**
+The console scope is a sibling root, not a parent, so a workspace grant never
+reaches it. But the reverse matters more here: console grants are the ones that
+reach across an account, and creating a workspace is a console action. Someone
+without console access cannot make themselves a second workspace.
+</Step>
+
+</Steps>
+
+The result shows up immediately in the API.
+[List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces) has
+no gate of its own. It checks `workspace:read` against each workspace
+separately and returns only the ones that pass, so a person scoped to one
+workspace gets exactly one entry and no indication the others exist.
+
+<Callout type="warn">
+  **Console access is the thing to withhold.** Almost everything that reaches
+  across an account is scoped there: creating workspaces, managing members,
+  editing roles and policies, billing. A customer's staff should hold no console
+  grant at all, and your own team should hold it deliberately rather than by
+  default.
+</Callout>
+
+### Some things are account-wide on purpose
+
+Not everything belongs to a workspace. A few resources exist once for the whole
+account, such as integrations you publish for reuse and account-level settings.
+They are managed at console scope, which is the other reason to be careful about
+who holds it.
+
+When you need to be certain what a particular person can reach, check it rather
+than reasoning it out. The console can evaluate a specific action against a
+specific resource for a specific user, which is faster than deriving it from
+their assignments.
+
+## Capping what each one can spend
+
+A workspace can carry its own spend limit. When the cap is reached, work in
+**that** workspace is refused until the window resets, and every other workspace
+carries on unaffected.
+
+That makes per-customer ceilings straightforward: give each workspace a monthly
+budget and one customer's heavy month cannot consume another's headroom.
+
+```bash
+curl -X POST "$HOS_API/workspaces/ws_a1b2c3/budgets" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Monthly model spend",
+    "metric": ["platform", "byok"],
+    "limitUsd": 250,
+    "window": "monthly"
+  }'
+```
+
+<Callout type="warn">
+  **A budget caps model spend, not everything.** The cost of running machines is
+  not counted and cannot be limited this way, so a budget is a ceiling on one
+  kind of spend rather than a total. [Spending](/docs/spend) covers what each
+  meter measures.
+</Callout>
+
+A budget can also cap what employees spend on **your own model account**, which
+is money we never bill you for. That is something a credit balance cannot do,
+and it is usually the real answer to keeping model costs contained. See
+[Spending](/docs/spend).
+
+Budgets reset on the workspace's **own** calendar, using its timezone. Two
+workspaces in different regions roll over at different moments, which is usually
+what you want when the customers are in different places. Set it with
+[Set the timezone](/docs/api-reference/workspaces/workspaces/updateWorkspaceTimeConfig).
+
+## Deleting one
+
+<Callout type="warn">
+  **Deleting a workspace does not delete what is inside it.** Offices,
+  automations and data are not removed, they stop being reachable, and anything
+  that was running keeps running. Empty a workspace before you delete it.
+</Callout>
+
+Role assignments pointing at the deleted workspace also remain. They resolve to
+nothing, and clearing them keeps the account's access model honest.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Roles and policies"
+    href="/docs/access-control/roles"
+    description="What a role grants, and how permissions are written."
+  />
+  <Card
+    title="Granting access"
+    href="/docs/access-control/assignments"
+    description="Assignments and boundaries, which is where scoping happens."
+  />
+  <Card
+    title="Service accounts"
+    href="/docs/access-control/service-accounts"
+    description="Machine identities, scoped the same way."
+  />
+  <Card
+    title="Workspaces API"
+    href="/docs/api-reference/workspaces"
+    description="Creating workspaces and budgets over the API."
+  />
+</Cards>

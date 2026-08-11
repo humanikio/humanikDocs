@@ -1,0 +1,158 @@
+---
+title: Workflows
+description: Building, saving, and firing a graph over the API.
+---
+
+A workflow is a graph. One trigger step starts it, action steps run in order,
+and one of those steps can hand work to an AI employee.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [Workflows](/docs/workflows) covers what a workflow is, when
+  to draw one instead of asking an employee, and how triggering works.
+  [Authoring a workflow](/docs/workflows/authoring) covers ordering,
+  connections, step fields, and the `{{trigger.*}}` placeholders. This page
+  assumes both and describes the API surface.
+</Callout>
+
+## The one thing to understand first
+
+**Saving a graph is not saving a file.** A single
+[Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow) call
+that includes `canvas` will snapshot a version, compile the graph, and change
+which events the workflow subscribes to. It is the operation that makes an
+automation live, and everything else here is arranged around it.
+
+Two consequences catch people out:
+
+<Callout type="warn">
+  **Activating takes `status` and `canvas` in the same request.** Bindings are
+  only reconciled when a canvas is present, so sending `status: "active"` on its
+  own updates the field and the workflow still will not fire.
+</Callout>
+
+<Callout type="warn">
+  **An invalid graph saves without error.** The compile result is recorded
+  rather than returned. Call
+  [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
+  after any canvas save and check `valid`.
+</Callout>
+
+## Building one
+
+<Steps>
+
+<Step>
+**Read the catalogue.**
+[List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions)
+gives you every step's `id`, the fields it accepts, and what it emits. You need
+this before you can write a canvas by hand.
+</Step>
+
+<Step>
+**Create the draft.**
+[Create a workflow](/docs/api-reference/workflows/workflows/createWorkflow)
+takes a name and returns an empty workflow.
+</Step>
+
+<Step>
+**Save the graph.**
+[Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow) with
+a `canvas`. Then check
+[the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr) to
+confirm it compiled.
+</Step>
+
+<Step>
+**Test it.**
+[Test fire a workflow](/docs/api-reference/workflows/runs/testWorkflow) runs it
+once against a payload you supply, and works on a draft. Every action executes
+for real, and only data source triggers can be tested this way.
+</Step>
+
+<Step>
+**Activate.** Send `status: "active"` together with the canvas, then confirm
+`subscribedNodeIds` is populated on the response.
+</Step>
+
+</Steps>
+
+## Organising them
+
+Workflows can be grouped into flat, unnested folders called collections. The
+part that catches people out is that it takes two different endpoints, and
+neither is called what you would guess.
+
+| To | Call |
+| --- | --- |
+| Put a workflow in a collection | [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow) with `collection` |
+| Take it out | The same, with `collection: null` |
+| Create an empty folder | [Register a collection name](/docs/api-reference/workflows/collections/addWorkflowCollection) |
+| See which folders exist | [List collections](/docs/api-reference/workflows/collections/listWorkflowCollections) |
+| See what is in one | [List workflows](/docs/api-reference/workflows/workflows/listWorkflows) and group by `collection` |
+
+A workflow points at one folder by name, so there is no add-to-collection
+endpoint and nothing to remove a workflow from. Setting the field is the whole
+mechanism.
+
+```bash
+curl -X PATCH "$HOS_API/workspaces/ws_a1b2c3/workflows/wf_7Kd2mQ" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "collection": "Lead handling" }'
+```
+
+You do not need to register the name first. Registering matters when you want a
+folder to survive its last workflow leaving, or to exist before anything is in
+it.
+
+<Callout>
+  **Deleting a collection keeps the workflows.**
+  [Delete a collection](/docs/api-reference/workflows/collections/removeWorkflowCollection)
+  removes the name and clears it off everything that pointed at it, so those
+  workflows become ungrouped rather than deleted.
+</Callout>
+
+## Permissions
+
+Two actions cover this surface, both scoped to the workspace in the path.
+
+| Action | Reaches |
+| --- | --- |
+| `workflow:read` | Workflows, versions, the compiled graph, runs, collections, node definitions |
+| `workflow:manage` | Creating, saving, deleting, test firing, and collection changes |
+
+`workflow:manage` includes test firing, which starts real runs with real side
+effects. It is not a read-adjacent grant.
+
+## What is not here
+
+**Triggers as standalone objects.** A workflow's bindings are derived from its
+graph and reconciled on save. There is no endpoint to create one directly, by
+design: the graph is the source of truth, and a binding that disagreed with it
+would be unreachable.
+
+**Starting a production run.** Runs begin from a real event or from
+[Test fire a workflow](/docs/api-reference/workflows/runs/testWorkflow). There
+is no general run endpoint.
+
+**Restoring a version.** Snapshots are readable, and bringing one back means
+reading its canvas and saving it again through
+[Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow),
+which stores it as a new version on top of the history.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="The concepts: when to draw a graph, and how triggering works."
+  />
+  <Card
+    title="CRM"
+    href="/docs/api-reference/crm"
+    description="Contacts, the usual trigger source and test payload."
+  />
+</Cards>

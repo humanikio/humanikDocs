@@ -1,0 +1,155 @@
+---
+title: Spending
+description: The two meters, and how to put a ceiling on them.
+---
+
+An AI employee costs money on two axes, and the platform treats them as separate
+systems. Knowing which is which is the difference between a spending limit that
+does what you expect and one that quietly does not.
+
+Platform access is billed on its own, separately from both. This page is about
+the two usage meters that sit on top of it.
+
+## The two meters
+
+| | **Model use** | **Compute** |
+| --- | --- | --- |
+| What it measures | Words in and out of a model | An office being awake |
+| Charged against | Your prepaid credit | Machine time, billed separately |
+| Can be capped | **Yes**, by a spending limit | **No** |
+
+<Callout type="warn">
+  **Only one of the two can be capped.** A spending limit covers model use. It
+  does not cover the cost of an office being awake, and there is no equivalent
+  ceiling for that today. An office left running accrues cost that no limit on
+  this page will stop.
+</Callout>
+
+The practical consequence: a spending limit protects you from a runaway
+conversation, not from a machine nobody turned off. For that, give offices an
+idle timeout so they sleep on their own.
+
+## Credit, and what draws it down
+
+Model use is paid from a prepaid balance. Work deducts from it, and when it runs
+low the platform can charge your saved card and top it back up automatically.
+
+Two behaviours worth knowing.
+
+**A failed top-up does not interrupt work already running.** It surfaces on the
+*next* piece of work, as an out-of-credit error. So a declined card shows up
+later than you would expect, and not where it failed.
+
+**The default model choice spends credit.** Leaving the model set to automatic
+is not a free option. It picks a model for you and charges it like any other.
+
+## Spending limits
+
+A limit is a ceiling on model spend in **one workspace**, over a day or a month.
+Past the ceiling, work in that workspace stops until the window resets.
+
+Set one with
+[Create a budget](/docs/api-reference/workspaces/budgets/createWorkspaceBudget).
+
+### It can cap your own model account too
+
+This is the part most people miss, and it is the reason limits are the right
+tool rather than credit.
+
+If you bring your own model account, that usage never touches your credit here
+and we never bill you for it. **A limit can still cap it.** You choose whether it
+counts model use we bill, model use we do not, or both.
+
+So the answer to *"how do I stop my AI employees running up my model bill?"* is a
+spending limit, and it works whether or not we are the ones being paid. A credit
+balance cannot do that, because there is no balance to draw down.
+
+### Three checks before anything spends
+
+Every piece of work that would use a model passes the same three checks, in
+order:
+
+```
+        which account pays?
+                │
+      ┌─────────┴─────────┐
+      │                   │
+   your own            ours
+      │                   │
+      │            enough credit? ──── no ──▶ stops
+      │                   │
+      │                  yes
+      └─────────┬─────────┘
+                │
+        under the limit? ──── no ──▶ stops
+                │
+               yes
+                │
+              runs
+```
+
+Read the shape rather than the boxes. **Your own model account skips the credit
+check**, because there is nothing of ours to draw down. It does not skip the
+spending limit. That is why a limit is the only control that covers both.
+
+### What a limit will not do
+
+<Callout type="warn">
+  **It stops work rather than warning you.** There is no notify-only limit and no
+  alert before the ceiling. When you reach it, work stops.
+</Callout>
+
+Two more, worth setting expectations on:
+
+- **It is not a total spend cap.** Machine time is not counted, as above.
+- **There is no combined figure.** The two meters are reported separately and
+  nothing adds them into one number, so "what did this cost me" is a question you
+  answer by looking in two places.
+
+### Windows follow the workspace
+
+A daily limit resets on the workspace's own calendar day, using
+[its timezone](/docs/api-reference/workspaces/workspaces/updateWorkspaceTimeConfig).
+Two workspaces in different regions roll over at different moments, which is
+what you want when they serve customers in different places.
+
+## When work stops for a spending reason
+
+You get a `402`, with a code saying which check failed.
+
+| `code` | Meaning |
+| --- | --- |
+| `insufficient_balance` | Out of credit. Top up, or use your own model account |
+| `budget_exceeded` | A limit was reached. Comes with the window, the amount used and the ceiling |
+
+Branch on `code` rather than the message text. Nova returns exactly these from
+[Send a prompt](/docs/api-reference/nova/running-nova/runNovaCycle), and the
+same pair appears anywhere else model work is refused.
+
+An out-of-credit error can arrive at the start of a piece of work or partway
+through one, since the check runs again as work continues.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Billing API"
+    href="/docs/api-reference/billing"
+    description="Reading the balance, usage history, and compute cost."
+  />
+  <Card
+    title="Tenants and workspaces"
+    href="/docs/access-control/workspaces"
+    description="Giving each team or customer its own ceiling."
+  />
+  <Card
+    title="Budgets API"
+    href="/docs/api-reference/workspaces/budgets/listWorkspaceBudgets"
+    description="Creating and changing spending limits."
+  />
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="Idle timeouts, which are the lever on machine cost."
+  />
+</Cards>

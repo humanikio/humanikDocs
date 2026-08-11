@@ -1,0 +1,757 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Billing
+  version: v1
+  summary: Credit, usage history, and what your machines cost.
+  description: |
+    Two meters, reported separately.
+
+    **Model use** is paid from a prepaid credit balance held for your account.
+    **Compute** is the cost of an office being awake, billed by runtime.
+
+    They are measured by different systems and reported through different
+    endpoints, and **nothing here adds them into one figure**. A total spend
+    number is something you assemble yourself from both.
+
+    Everything on this page is account-wide and checked at `console` scope. Spend
+    *limits* are workspace-scoped and live in
+    [Workspaces](/docs/api-reference/workspaces). [Spending](/docs/spend)
+    explains how the pieces fit together.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Credit
+    description: The prepaid balance model use is paid from.
+  - name: Usage
+    description: What has been spent on models, and the invoices behind it.
+  - name: Compute
+    description: What your offices cost while awake.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`.
+
+  responses:
+    BadRequest:
+      description: A required field is missing or malformed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: |
+        Authenticated, but the caller lacks `billing:read` or `billing:manage`
+        at `console`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, const: false }
+        error: { type: string }
+      required: [success, error]
+
+    AutoReload:
+      type: object
+      description: |
+        Tops the balance up automatically by charging the card on file when it
+        falls below a threshold. Null when never configured.
+      properties:
+        enabled: { type: boolean }
+        thresholdUsd:
+          type: number
+          description: Top up once the balance falls below this.
+        reloadAmountUsd:
+          type: number
+          description: How much to add. Minimum 5.
+
+    Balance:
+      type: object
+      properties:
+        balanceUsd:
+          type: number
+          description: What is available to spend on models right now.
+        autoReload:
+          oneOf:
+            - $ref: '#/components/schemas/AutoReload'
+            - type: 'null'
+        lastDeduction:
+          type: object
+          additionalProperties: true
+          description: The most recent draw down, for reference.
+        lastDeposit:
+          type: object
+          additionalProperties: true
+          description: The most recent top up, for reference.
+
+    UsageEntry:
+      type: object
+      description: One piece of model work, and what it cost.
+      properties:
+        id: { type: string }
+        costUsd: { type: number }
+        createdAt: { type: string, format: date-time }
+      additionalProperties: true
+
+paths:
+  /billing/balance:
+    get:
+      operationId: getBalance
+      summary: Get the balance
+      tags: [Credit]
+      description: |
+        What is available to spend on model use, and how automatic top ups are
+        configured.
+
+        **Calling this creates the balance if it does not exist**, so a brand
+        new account gets a zero balance rather than an error. `exists` tells you
+        which happened on the call before this one.
+
+        This balance covers **model use only**. It is not drawn down by the cost
+        of running machines, which is reported under
+        [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary).
+
+        **Permission:** `billing:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  exists:
+                    type: boolean
+                    description: False when this call is what created it.
+                  balance:
+                    oneOf:
+                      - $ref: '#/components/schemas/Balance'
+                      - type: 'null'
+              examples:
+                funded:
+                  value:
+                    success: true
+                    exists: true
+                    balance:
+                      balanceUsd: 42.18
+                      autoReload:
+                        enabled: true
+                        thresholdUsd: 10
+                        reloadAmountUsd: 50
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/balance/check:
+    post:
+      operationId: checkBalance
+      summary: Check before spending
+      tags: [Credit]
+      description: |
+        Asks whether model work would be allowed right now, without doing any.
+
+        Useful before starting something long, so you can surface a top up
+        prompt rather than failing partway through.
+
+        **Always returns 200.** The answer is in the body.
+
+        **Permission:** `billing:read` @ `console`
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isByok:
+                  type: boolean
+                  description: |
+                    Set true to ask about work billed to your own model account.
+                    That work does not draw on this balance, so the answer is
+                    yes regardless of what is in it.
+      responses:
+        '200':
+          description: Answered.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  allowed: { type: boolean }
+                  balanceUsd: { type: number }
+                  reason:
+                    type: string
+                    description: Present when not allowed.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/balance/initialize:
+    post:
+      operationId: initializeBalance
+      summary: Create the balance
+      tags: [Credit]
+      description: |
+        Creates the balance record explicitly. Idempotent, and rarely needed,
+        since [Get the balance](/docs/api-reference/billing/credit/getBalance)
+        creates it on first read.
+
+        **Permission:** `billing:manage` @ `console`
+      responses:
+        '200':
+          description: Created, or already present.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  created: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/balance/auto-reload:
+    post:
+      operationId: updateAutoReload
+      summary: Configure automatic top ups
+      tags: [Credit]
+      description: |
+        Charges the card on file and adds credit whenever the balance falls
+        below a threshold. Send `null` to switch it off.
+
+        > **A failed charge does not interrupt work already running.** It is
+        > attempted without blocking, and a decline surfaces as an out of credit
+        > error on the *next* piece of work rather than the one in progress. So
+        > a card problem appears later than you would expect, and somewhere else.
+
+        **Permission:** `billing:manage` @ `console`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                autoReload:
+                  oneOf:
+                    - type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                          description: Required.
+                        thresholdUsd:
+                          type: number
+                          description: Required. Must be greater than zero.
+                        reloadAmountUsd:
+                          type: number
+                          description: Required. Must be at least 5.
+                      required: [enabled, thresholdUsd, reloadAmountUsd]
+                    - type: 'null'
+                  description: An object to configure it, or null to disable.
+              required: [autoReload]
+            examples:
+              on:
+                summary: Top up 50 when it drops below 10
+                value:
+                  autoReload:
+                    enabled: true
+                    thresholdUsd: 10
+                    reloadAmountUsd: 50
+              off:
+                summary: Disable
+                value:
+                  autoReload: null
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400':
+          description: The shape or a value is wrong. Each rule reports separately.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                tooSmall:
+                  value:
+                    success: false
+                    error: autoReload.reloadAmountUsd must be at least $5
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/usage:
+    get:
+      operationId: listUsage
+      summary: List model usage
+      tags: [Usage]
+      description: |
+        Individual pieces of model work and what each cost, newest first.
+
+        Paginated with a cursor. Take the last entry's `id` from one page and
+        send it as `startAfter` to get the next.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: How many to return. Defaults to 50.
+          schema: { type: integer, default: 50 }
+        - name: startAfter
+          in: query
+          required: false
+          description: |
+            The `id` of the last entry on the previous page. Omit for the first
+            page.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/UsageEntry' }
+                  hasMore:
+                    type: boolean
+                    description: Whether another page exists.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/usage/summary:
+    get:
+      operationId: getUsageSummary
+      summary: Get a usage summary
+      tags: [Usage]
+      description: |
+        Totals by month, plus a daily series, for showing spend at a glance.
+
+        Days and months are resolved in the timezone you pass, so a summary
+        rendered for a customer in another region lines up with their calendar
+        rather than yours.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: months
+          in: query
+          required: false
+          description: How many months back. Defaults to 6.
+          schema: { type: integer, default: 6 }
+        - name: timezone
+          in: query
+          required: false
+          description: An IANA timezone name. Defaults to the account's own.
+          schema: { type: string, examples: ['America/Toronto'] }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  current:
+                    type: object
+                    additionalProperties: true
+                    description: The month in progress.
+                  months:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  dailySeries:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/usage/series:
+    get:
+      operationId: getUsageSeries
+      summary: Get a usage series
+      tags: [Usage]
+      description: |
+        Usage bucketed over a window you choose, for charts.
+
+        Both bounds are **required**, as epoch milliseconds. The window includes
+        `from` and excludes `to`.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start of the window, epoch milliseconds.
+          schema: { type: integer }
+        - name: to
+          in: query
+          required: true
+          description: End of the window, epoch milliseconds. Not included.
+          schema: { type: integer }
+        - name: granularity
+          in: query
+          required: false
+          description: |
+            Bucket size. Defaults to `auto`, which picks one from the width of
+            the window. Anything unrecognised is treated as `auto` rather than
+            rejected, and the bucket size actually used comes back on the
+            response.
+          schema:
+            type: string
+            enum: [hour, day, month, auto]
+            default: auto
+        - name: timezone
+          in: query
+          required: false
+          description: An IANA timezone name. Decides where day and month boundaries fall.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  granularity:
+                    type: string
+                    description: The bucket size used, which may differ from what you asked for.
+                  fromMs: { type: integer }
+                  toMs: { type: integer }
+                  buckets:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  totals:
+                    type: object
+                    additionalProperties: true
+        '400':
+          description: '`from` or `to` is missing or not a number.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: from and to (epoch ms) are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/invoices:
+    get:
+      operationId: listInvoices
+      summary: List credit invoices
+      tags: [Usage]
+      description: |
+        Invoices for credit added to the account, newest first.
+
+        These cover top ups. They are **not** invoices for machine time, which
+        are separate and listed by
+        [List compute invoices](/docs/api-reference/billing/compute/listComputeInvoices).
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: How many to return. Defaults to 10.
+          schema: { type: integer, default: 10 }
+        - name: startAfter
+          in: query
+          required: false
+          description: The `id` of the last invoice on the previous page.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  invoices:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  hasMore: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nexus/billing/summary:
+    get:
+      operationId: getComputeSpendSummary
+      summary: Get compute spend
+      tags: [Compute]
+      description: |
+        What your machines have cost while awake, split by the thing running.
+
+        The response separates services it can match to an office from those it
+        cannot, which is what makes this readable: `offices` carries the office
+        name and workspace alongside the cost, and `misc` holds anything running
+        that is not an office.
+
+        > **This is a different meter from credit, and nothing joins them.**
+        > Model use is drawn from your balance and can be capped by a spending
+        > limit. Machine time is neither. Adding the two together is something
+        > you do yourself.
+
+        **Permission:** `billing:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  summary:
+                    type: object
+                    additionalProperties: true
+                    description: Account level totals as reported by the compute platform.
+                  offices:
+                    type: array
+                    description: Services matched to an office, with its name and workspace.
+                    items:
+                      type: object
+                      properties:
+                        serviceId: { type: string }
+                        officeId: { type: string }
+                        officeName: { type: string }
+                        workspaceId: { type: string }
+                      additionalProperties: true
+                  misc:
+                    type: array
+                    description: Services with no matching office.
+                    items:
+                      type: object
+                      additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nexus/billing/invoices:
+    get:
+      operationId: listComputeInvoices
+      summary: List compute invoices
+      tags: [Compute]
+      description: |
+        Invoices for machine time.
+
+        Separate from
+        [credit invoices](/docs/api-reference/billing/usage/listInvoices). The
+        two are issued by different systems and do not combine.
+
+        **Permission:** `billing:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  invoices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                      additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nexus/billing/invoices/{invoiceId}:
+    parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List compute invoices](/docs/api-reference/billing/compute/listComputeInvoices).
+        schema: { type: string }
+    get:
+      operationId: getComputeInvoice
+      summary: Get a compute invoice
+      tags: [Compute]
+      description: |
+        One invoice for machine time, itemised.
+
+        **Permission:** `billing:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  invoice:
+                    type: object
+                    additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such invoice on this account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nexus/billing/service-config/{serviceId}:
+    parameters:
+      - name: serviceId
+        in: path
+        required: true
+        description: |
+          The service to act on. IDs appear as `serviceId` on
+          [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary),
+          and for an office they are also returned by
+          [List services](/docs/api-reference/cloud/services/listCloudServices).
+        schema: { type: string }
+
+    get:
+      operationId: getComputeServiceConfig
+      summary: Get a service's settings
+      tags: [Compute]
+      description: |
+        The size and sleep settings that decide what a service costs while
+        awake.
+
+        For an office, prefer the office route, which is narrower and can be
+        granted to someone responsible for one employee. See
+        [Humanik Cloud](/docs/api-reference/cloud).
+
+        **Permission:** `billing:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  userConfig:
+                    type: object
+                    additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such service on this account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateComputeServiceConfig
+      summary: Change a service's settings
+      tags: [Compute]
+      description: |
+        Changes size and sleep behaviour, which is the lever you actually have
+        on machine cost. A smaller machine costs less per second awake, and a
+        shorter idle timeout means fewer seconds awake.
+
+        **This is the only control over compute spend.** There is no cap and no
+        alert for it, so the way to hold it down is to make offices smaller and
+        let them sleep sooner rather than to set a limit somewhere.
+
+        **Permission:** `billing:manage` @ `console`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userConfig:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Required. The settings to apply. Read the current ones first
+                    and send them back changed, since this replaces rather than
+                    merges.
+              required: [userConfig]
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400':
+          description: '`userConfig` is missing.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: userConfig is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }

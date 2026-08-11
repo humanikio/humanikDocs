@@ -1,0 +1,210 @@
+---
+title: Workflows
+description: When to draw the steps, and when to ask an employee.
+---
+
+An AI employee decides what to do. A workflow decides what always happens.
+
+Both get work done, and they are not interchangeable. Choosing between them is
+the first real design decision on this platform, so it is worth being precise
+about what each one is.
+
+## Three things live under Automations
+
+They are layers of one pipeline rather than three products, and they are easy to
+mistake for each other.
+
+| | What it is |
+| --- | --- |
+| **Webhooks** | The inbound door. A URL an outside system posts to |
+| **AI Subscriptions** | When something lands, send this prompt to these employees |
+| **Workflows** | When something lands, walk these steps |
+
+One inbound payload can start both automations at once. They run independently
+and neither knows about the other.
+
+```
+    incoming payload
+          │
+          ├──▶  AI Subscription  ──▶  an employee is asked to handle it
+          │
+          └──▶  Workflow         ──▶  fixed steps run in order
+```
+
+That picture is the whole distinction:
+
+> **An AI subscription asks an employee to handle it. A workflow performs fixed
+> steps.**
+
+## Choosing between them
+
+The question is not which is more capable. It is **where you want the judgement
+to happen.**
+
+| | Ask an employee | Draw a workflow |
+| --- | --- | --- |
+| The steps are | Decided each time | Fixed in advance |
+| You can predict what happens | Broadly | Exactly |
+| Handles a case you did not foresee | Yes | No |
+| Same input twice | May differ | Identical |
+| Reading what it did | The conversation | Each step, in order |
+| Changing it | Edit instructions | Edit the graph |
+
+Give an employee the whole job and you have traded a sequence you can inspect
+for a decision you have to trust. Sometimes that trade is right, because the
+work genuinely varies. Often it is not.
+
+**A good rule:** if you would write the procedure down for a new hire and expect
+them to follow it exactly, draw it. If you would explain the goal and let them
+work it out, ask an employee.
+
+### Most real automations want both
+
+The two are not rivals, and the interesting designs use them together. One step
+in a workflow can hand work to an AI employee, which means the mechanical part
+stays deterministic and judgement enters at exactly the point you choose.
+
+Take a lead that arrives from a form:
+
+```
+  new lead
+    │
+    ├─ 1. look up the contact          fixed
+    ├─ 2. ask an employee to qualify   judgement
+    ├─ 3. tag the contact              fixed
+    └─ 4. wait 3 days, then follow up  fixed
+```
+
+Step 2 is the only place anything is decided. Steps 1, 3 and 4 happen the same
+way every time, and you can read them off the graph without running anything.
+
+Handing the whole thing to an employee would work. It would also mean the
+tagging and the follow-up are decisions rather than guarantees.
+
+<Callout>
+  **The handoff is one direction.** A workflow hands work to an employee and
+  carries on. The employee's reply lands in its own conversation rather than
+  coming back as a value the next step can use. Design the steps after the
+  handoff so they do not depend on what the employee said.
+</Callout>
+
+## How a workflow starts
+
+A workflow does not listen for anything by itself. It declares one trigger step,
+and saving the graph is what binds that trigger to a real source of events.
+
+<Steps>
+
+<Step>
+**You save a graph** with exactly one trigger step. One is the rule: a graph with
+none, or with two, will not run.
+</Step>
+
+<Step>
+**The platform binds the trigger** to whatever it names, such as a specific
+webhook source or a specific calendar.
+</Step>
+
+<Step>
+**Something happens** at that source. A record arrives, or a booking is made.
+</Step>
+
+<Step>
+**Matching workflows run.** Each starts its own run and walks its own steps.
+</Step>
+
+</Steps>
+
+Three rules govern the binding, and each one fails safe:
+
+- **A graph with a problem in it is bound to nothing.** A broken workflow cannot
+  fire, so a bad save cannot cause a surprise run.
+- **A draft is bound but switched off.** Status has to be `active` before
+  anything fires.
+- **A trigger that names no source binds to nothing** rather than to everything.
+
+<Callout type="warn">
+  **Activating takes two things in one request.** The binding is only revisited
+  when you send a graph, so setting the status to `active` on its own updates
+  the field and the workflow still will not fire. Send the status and the graph
+  together. The API reference covers this on
+  [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow).
+</Callout>
+
+## Waiting is free
+
+A workflow can wait three days between steps, or three weeks.
+
+While it waits, nothing is running. No machine is held open and nothing is
+consumed. The paused run is a record, and it resumes on schedule.
+
+This matters more than it sounds. Follow-up work is usually the work that gets
+dropped, and "wait a week, then check" is the most common shape a real business
+process takes. There is no cost pressure to compress it.
+
+## Editing a workflow that is already running
+
+Runs execute against the **current** version of a graph, including runs that are
+paused mid-way. A run that resumes after you edit will continue through the new
+steps, not the ones that existed when it started.
+
+That is deliberate, and it is what you want when fixing a mistake: paused runs
+pick up the correction instead of finishing the broken way. It is worth knowing
+before you edit something with long waits in it, since a run you started
+yesterday may finish differently than you expect.
+
+Every save keeps a snapshot of what the graph looked like, so you can always
+read a previous version and see what changed.
+
+## Reading what happened
+
+Every run keeps a record: which steps ran, in what order, what each produced,
+and where it stopped if it failed.
+
+<Callout type="warn">
+  **Run history is history, not monitoring.** Nothing watches your automations
+  on your behalf and nothing will alert you. Reading the record is something you
+  do, not something that happens to you.
+</Callout>
+
+## What a workflow cannot do
+
+Worth knowing before you design around it.
+
+| | |
+| --- | --- |
+| **Loop or repeat** | A workflow runs forward once. There is no going back to an earlier step |
+| **Branch on failure** | There is no "if this step fails, do that instead" step |
+| **Use an employee's answer** | The handoff is one direction, as above |
+| **Restore an old version** | Snapshots are readable. Bringing one back means saving it again as a new version |
+| **Test every kind** | Test firing works for workflows triggered by a data source. Calendar triggered workflows cannot be tested this way |
+
+<Callout type="warn">
+  **Test firing is not a rehearsal.** A test run performs every real action. A
+  step that sends a message sends it, to a real person.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Authoring a workflow"
+    href="/docs/workflows/authoring"
+    description="Ordering, connections, fields, and letting Nova build it for you."
+  />
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="What a workflow hands a step to."
+  />
+  <Card
+    title="Skills and protocols"
+    href="/docs/skills-and-protocols"
+    description="Shaping how an employee handles what it is given."
+  />
+  <Card
+    title="Workflows API"
+    href="/docs/api-reference/workflows"
+    description="Building, saving, and firing a graph over the API."
+  />
+</Cards>

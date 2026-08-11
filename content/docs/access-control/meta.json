@@ -1,5 +1,5 @@
 {
   "title": "Access control",
   "root": true,
-  "pages": ["index", "roles", "assignments", "service-accounts"]
+  "pages": ["index", "workspaces", "roles", "assignments", "service-accounts"]
 }

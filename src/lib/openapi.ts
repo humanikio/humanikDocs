@@ -46,8 +46,12 @@ function system(id: string, file: string) {
 
 /** Order here is the order systems appear in the API reference sidebar. */
 export const apis = [
+  system('workspaces', 'workspaces.yaml'),
   system('offices', 'offices.yaml'),
   system('crm', 'crm.yaml'),
   system('browsers', 'browsers.yaml'),
   system('cloud', 'cloud.yaml'),
+  system('billing', 'billing.yaml'),
+  system('workflows', 'workflows.yaml'),
+  system('nova', 'nova.yaml'),
 ];

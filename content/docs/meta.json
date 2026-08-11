@@ -8,10 +8,12 @@
     "authentication",
     "---Building with HumanikOS---",
     "offices-and-employees",
+    "workflows",
     "skills-and-protocols",
     "tools-and-secrets",
     "---Platform behaviour---",
     "responses",
+    "spend",
     "rate-limits"
   ]
 }

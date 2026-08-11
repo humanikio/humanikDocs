@@ -1,0 +1,182 @@
+---
+title: Authoring a workflow
+description: Ordering, connections, fields, and how a graph becomes runnable.
+---
+
+Workflows are drawn in the editor. You can also write one directly, which is
+what the API expects, and what this page describes.
+
+<Callout>
+  **Writing one by hand is genuinely fiddly.** Every step's fields have to match
+  the catalogue, every reference between steps has to point at a step that
+  actually runs, and every picker value has to match something real. If that
+  sounds like work, [ask Nova to build it](#ask-nova-to-build-it) instead. The
+  rest of this page is worth reading either way, because it is what you will be
+  reading back.
+</Callout>
+
+## Two forms of the same workflow
+
+| | What it is | Who reads it |
+| --- | --- | --- |
+| **The graph you write** | Steps, their positions, their settings, and the lines between them | You, and the editor |
+| **The runnable form** | The same graph with the drawing stripped out and the order worked out in advance | The platform, when it runs |
+
+You only ever write the first. Saving produces the second automatically, and
+that is the moment a workflow can be checked for problems. A graph that will not
+run is still saved, so reading back the runnable form is how you find out.
+
+## Ordering
+
+**Lines decide order, not position.** Where a step sits on the canvas is
+presentation and nothing else. Moving a step to the far left changes no
+behaviour at all.
+
+Order comes from the connections, resolved when you save. At run time the
+platform already knows which step follows which, so there is no searching and no
+ambiguity.
+
+Three rules:
+
+- **Exactly one trigger step.** None, or more than one, and the graph will
+  not build.
+- **Every step runs at most once.** The graph runs forward, so there is no
+  revisiting an earlier step and no loop.
+- **A step runs only if the step before it succeeded.** A failure stops the run
+  there.
+
+## Connections
+
+A line runs from one step to the next. Most steps have a single way out, and a
+line from them just means "then do this".
+
+Some steps have **named exits**. An if-else step has one for the true case and
+one for the false case, and the step that checks for a contact has one for found
+and one for not found. A line leaving a step like that has to say which exit it
+leaves from.
+
+The name you use must match one the step declares. You can read the available
+exits on a step's entry in the catalogue, through
+[List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions).
+A line naming an exit the step does not have will stop the graph building.
+
+```
+                    ┌─── true ──▶  send a message
+   check something ─┤
+                    └─── false ─▶  add a tag
+```
+
+## Fields
+
+Every step carries settings. Which settings depend on the step, and the
+catalogue is the authority: each entry lists the fields it accepts, which are
+required, and what type each one is.
+
+Two things to know before writing them by hand.
+
+**Required fields are not enforced when you save.** A step missing a required
+setting is stored. You find out when the workflow runs and that step fails.
+
+**Some fields must match something real.** A field that offers a list of choices
+is usually reading them live from elsewhere in the platform: your pipelines,
+your calendars, your phone numbers, your offices. Those entries carry a pointer
+to where the choices come from, so you can fetch the valid values rather than
+guess. A plausible-looking value that does not exist will save and then fail.
+
+## Referring to earlier steps
+
+This is the part that makes a workflow more than a checklist. A step can use
+data produced by the trigger or by any step before it, written into its own
+settings as a placeholder.
+
+The format is `{{ source.path }}`:
+
+| Placeholder | Resolves to |
+| --- | --- |
+| `{{trigger.email}}` | A field on whatever started the run |
+| `{{trigger.record.user.email}}` | A nested field, walked with dots |
+| `{{nodes.<stepId>.contactId}}` | Something produced by an earlier step, by that step's id |
+| `{{contact.first_name}}` | A field on the run's current contact |
+
+So a message step might carry:
+
+```
+Hi {{contact.first_name}}, thanks for asking about {{trigger.product}}.
+```
+
+**A step never reaches into another step directly.** It states what it wants,
+and the platform fills it in just before that step runs. This is why the order
+matters and why a reference can only point backwards.
+
+### Two behaviours worth knowing
+
+**A placeholder on its own keeps its type.** A field containing exactly
+`{{trigger.amount}}` receives the number `4200`, not the text `"4200"`. Mix it
+into a sentence and you get text, which is what you want in a message and not
+what you want in an amount field.
+
+**A placeholder that matches nothing is left alone.** It is not silently
+emptied. A typo stays visible in the output rather than disappearing, which is
+the difference between a bug you can see and one you cannot.
+
+<Callout>
+  **The current contact.** Once any step identifies a contact, later steps can
+  use `{{contact.*}}` without naming that step. The most recent one wins. This
+  is why a "find the contact" step near the top of a graph makes everything
+  after it simpler.
+</Callout>
+
+## Ask Nova to build it
+
+Nova is the assistant inside your console and workspaces. Among other things it
+can author workflows: describe what you want in plain language, and it builds
+the graph, saves it, and can run it.
+
+This is usually the better path, and not only because it is faster.
+
+**Nova cannot save a workflow that would not work.** Everything that has to
+match real state is resolved from a live source while it builds, then checked
+again at the point of saving. Trigger fields are read from the actual source.
+Contacts are looked up. Every picker value is validated against the real list.
+A workflow that references a pipeline you do not have cannot be saved, because
+the check runs on the way in rather than as advice afterwards.
+
+That closes the gap this page has been describing. Writing a graph by hand, a
+plausible but wrong value saves cleanly and fails at run time. Nova is held to a
+stricter standard than the API is.
+
+<Callout type="warn">
+  **Nova acts with your permissions, never its own.** It has no identity of its
+  own and holds no credentials. Whatever it does, it does as you, which means
+  opening a workspace to Nova is a real grant. Reaching Nova at all requires
+  `nova:manage` on the workspace, and for administrative work such as billing,
+  members, IAM or secrets, every action is checked against your own roles a
+  second time. See
+  [How Nova is permissioned](/docs/api-reference/nova#how-nova-is-permissioned).
+</Callout>
+
+## Checking your work
+
+After any save, read back the runnable form with
+[Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr).
+It reports whether the graph is sound and, when it is not, what is wrong with
+it. Nothing else tells you.
+
+Then test it with
+[Test fire a workflow](/docs/api-reference/workflows/runs/testWorkflow), keeping
+in mind that every step performs its real effect.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="When to draw a graph, and when to ask an employee."
+  />
+  <Card
+    title="Workflows API"
+    href="/docs/api-reference/workflows"
+    description="The endpoints, and the exact shape of a canvas."
+  />
+</Cards>

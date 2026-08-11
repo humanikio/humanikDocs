@@ -1,0 +1,1559 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Workflows
+  version: v1
+  summary: Deterministic automations, and the AI employees they call.
+  description: |
+    A workflow is a graph. One trigger node starts it, action nodes run in
+    sequence, and one of those actions can hand work to an AI employee. That is
+    the join: a deterministic sequence you can read, with a judgement call
+    delegated at exactly the point you choose.
+
+    You author a workflow by saving a **canvas**, the design time graph. Saving a
+    canvas is the load bearing operation in this API. It snapshots a version,
+    compiles the graph to an executable form, and reconciles which events the
+    workflow subscribes to. [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow)
+    documents that sequence in full, and it is worth reading before your first
+    save.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Workflows
+    description: Creating, listing, saving, and deleting the graph itself.
+  - name: Versions
+    description: Immutable snapshots, and the compiled form the runner executes.
+  - name: Runs
+    description: Test firing a workflow, and reading what happened.
+  - name: Collections
+    description: |
+      Flat folder names the workflow list groups by. Note the split: these
+      endpoints manage the **names**, and a workflow joins one through its own
+      `collection` field on
+      [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow).
+  - name: Node definitions
+    description: The catalogue of trigger and action nodes a canvas can place.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`. An AI employee uses exactly this.
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      description: |
+        The workspace that owns the workflow. Every endpoint in this reference
+        is nested under one.
+
+        IDs come from [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces),
+        which returns the workspaces your credential can reach.
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+
+    WorkflowId:
+      name: workflowId
+      in: path
+      required: true
+      description: |
+        The workflow to act on. IDs come from
+        [List workflows](/docs/api-reference/workflows/workflows/listWorkflows)
+        or from the `workflow.id` returned by
+        [Create a workflow](/docs/api-reference/workflows/workflows/createWorkflow).
+      schema:
+        type: string
+        examples: [wf_7Kd2mQ]
+
+  responses:
+    BadRequest:
+      description: A required field is missing or malformed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            noFields:
+              value:
+                success: false
+                error: No fields to update
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Authenticated, but the caller lacks the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: No such workflow in this workspace.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing:
+              value:
+                success: false
+                error: Workflow not found
+
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          description: A human readable reason. Branch on the status code, not this string.
+      required: [success, error]
+
+    WorkflowStatus:
+      type: string
+      enum: [draft, active, disabled]
+      description: |
+        A workflow only fires when its status is `active` **and** its compiled
+        graph is valid. Both conditions are evaluated at save time. See
+        [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow).
+
+    CanvasNode:
+      type: object
+      description: One placed node on the graph.
+      properties:
+        id:
+          type: string
+          description: Your identifier for this node, unique within the canvas. Edges reference it.
+          examples: [n_trigger]
+        type:
+          type: string
+          description: The editor component that renders the node. Use `registryNode` unless you know otherwise.
+          examples: [registryNode]
+        position:
+          type: object
+          description: Canvas coordinates. Presentation only, and stripped before execution.
+          properties:
+            x: { type: number }
+            y: { type: number }
+          required: [x, y]
+        data:
+          type: object
+          properties:
+            nodeDefId:
+              type: string
+              description: |
+                Which catalogue node this places. Values come from
+                [List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions).
+                An unknown value is stored and then fails to compile.
+              examples: [dataSourceTrigger]
+            label:
+              type: string
+              description: Display name shown on the node.
+            category:
+              type: string
+              enum: [trigger, action]
+            config:
+              type: object
+              additionalProperties: true
+              description: |
+                Field values for this node, keyed by the `configFields[].key`
+                on its definition. Required fields are not enforced on save.
+          required: [nodeDefId, label, category, config]
+      required: [id, type, position, data]
+
+    CanvasEdge:
+      type: object
+      description: A directed connection between two nodes.
+      properties:
+        id:
+          type: string
+          examples: [e_1]
+        source:
+          type: string
+          description: The `id` of the upstream node.
+        target:
+          type: string
+          description: The `id` of the downstream node.
+        sourceHandle:
+          type: string
+          description: |
+            The named outlet this edge leaves from, for branch nodes such as
+            `ifElse`. Omit it for single output nodes. The value must match an
+            `outputHandles[].key` on the source node's definition.
+          examples: ['true']
+      required: [id, source, target]
+
+    Canvas:
+      type: object
+      description: The design time graph.
+      properties:
+        viewport:
+          type: object
+          description: Editor pan and zoom. Presentation only.
+          properties:
+            x: { type: number }
+            y: { type: number }
+            zoom: { type: number }
+        nodes:
+          type: array
+          description: |
+            **Exactly one node must have `category: "trigger"`.** A graph with
+            none, or with more than one, is stored and then fails to compile.
+          items:
+            $ref: '#/components/schemas/CanvasNode'
+        edges:
+          type: array
+          description: |
+            The graph must be acyclic. An edge path that returns to an earlier
+            node fails to compile, so there is no way to express a loop.
+          items:
+            $ref: '#/components/schemas/CanvasEdge'
+      required: [nodes, edges]
+
+    Workflow:
+      type: object
+      properties:
+        id:
+          type: string
+          examples: [wf_7Kd2mQ]
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          description: Empty string when never set, not null.
+        status:
+          $ref: '#/components/schemas/WorkflowStatus'
+        canvas:
+          oneOf:
+            - $ref: '#/components/schemas/Canvas'
+            - type: 'null'
+          description: Null until the first save that includes a canvas.
+        collection:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: The folder name this workflow sits in. Null means ungrouped.
+        activeVersionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: |
+            The newest snapshot, repointed on every canvas save. Null until the
+            first one. Read it with
+            [Get a version](/docs/api-reference/workflows/versions/getWorkflowVersion).
+        versionCount:
+          type: integer
+          description: Total snapshots ever taken. Supplies the frozen `v1`, `v2` labels and never decreases.
+        version:
+          type: integer
+          description: A legacy counter kept for older clients. Prefer `versionCount`.
+        subscribedNodeIds:
+          type: array
+          items: { type: string }
+          description: Trigger nodes this workflow currently holds subscriptions for.
+        createdBy:
+          type: string
+          description: |
+            The identity that created it. For a key authenticated call this is
+            the **service account ID**, not a user ID.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, status, versionCount]
+
+    WorkflowIR:
+      type: object
+      description: The compiled, runner facing form of a canvas.
+      properties:
+        workflowId:
+          type: string
+        entry:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: The trigger node a run starts from. Null when the graph did not compile.
+        nodes:
+          type: array
+          description: Execution nodes with presentation stripped and adjacency inlined.
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              type:
+                type: string
+                description: The `nodeDefId` to execute.
+              category:
+                type: string
+                enum: [trigger, action]
+              config:
+                type: object
+                additionalProperties: true
+              next:
+                type: array
+                items: { type: string }
+                description: Downstream nodes on the default outlet.
+              branches:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+                description: Present only on branch nodes. Maps each named outlet to its targets.
+        valid:
+          type: boolean
+          description: |
+            Whether the graph is structurally sound: one trigger, no orphans.
+            **A save succeeds even when this is false.** Read it after saving.
+        errors:
+          type: array
+          items: { type: string }
+          description: Why it did not compile. Empty when `valid` is true.
+        fromVersionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: The snapshot this was compiled from.
+        compiledAt:
+          type: string
+          format: date-time
+
+    WorkflowVersion:
+      type: object
+      properties:
+        id:
+          type: string
+        workflowId:
+          type: string
+        label:
+          type: string
+          description: Frozen at creation, `v1` upward.
+          examples: [v3]
+        canvas:
+          oneOf:
+            - $ref: '#/components/schemas/Canvas'
+            - type: 'null'
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    RunNodeResult:
+      type: object
+      properties:
+        nodeId: { type: string }
+        type: { type: string }
+        status:
+          type: string
+          enum: [ok, failed, skipped]
+        outputs:
+          type: object
+          additionalProperties: true
+        error: { type: string }
+        startedAt:
+          type: integer
+          description: Epoch milliseconds.
+        finishedAt:
+          type: integer
+          description: Epoch milliseconds.
+
+    WorkflowRun:
+      type: object
+      properties:
+        runId:
+          type: string
+        workflowId:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, waiting, succeeded, failed]
+        trigger:
+          oneOf:
+            - type: object
+              properties:
+                type: { type: string }
+                eventKey: { type: string }
+                record:
+                  type: object
+                  additionalProperties: true
+              description: |
+                What started the run. A run started by
+                [Test fire a workflow](/docs/api-reference/workflows/runs/testWorkflow)
+                carries `record._test: true`.
+            - type: 'null'
+        fromIrVersionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        nodeResults:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunNodeResult'
+          description: Appended as the run progresses, so a running run returns a partial list.
+        waitingNodeId:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: Set only while `status` is `waiting`.
+        error:
+          oneOf:
+            - type: string
+            - type: 'null'
+        startedAt:
+          oneOf:
+            - type: integer
+            - type: 'null'
+          description: Epoch milliseconds.
+        finishedAt:
+          oneOf:
+            - type: integer
+            - type: 'null'
+          description: Epoch milliseconds. Null while the run is still going.
+
+    NodeDefinition:
+      type: object
+      description: A node the catalogue offers.
+      properties:
+        id:
+          type: string
+          description: Use this as `nodeDefId` when placing the node on a canvas.
+          examples: [promptOffice]
+        name: { type: string }
+        description: { type: string }
+        category:
+          type: string
+          enum: [trigger, action]
+        group:
+          type: string
+          description: Sub grouping for the catalogue, such as `Messaging`. Falls back to the category.
+        icon:
+          type: string
+          description: Lucide icon name.
+        accentColor: { type: string }
+        enabled:
+          type: boolean
+          description: False means announced but not yet available.
+        isSpecialCase:
+          type: boolean
+          description: True when the node needs bespoke configuration UI, in which case `configFields` is ignored.
+        configFields:
+          type: array
+          description: The fields this node accepts, and what belongs in `data.config` on a canvas node.
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+              type: { type: string }
+              required: { type: boolean }
+              defaultValue: {}
+              description: { type: string }
+              options:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value: { type: string }
+                    label: { type: string }
+              loadOptions:
+                type: object
+                description: |
+                  Present when the choices are fetched live rather than fixed.
+                  `endpoint` is the path to call, and `labelField` and
+                  `valueField` name the properties to read from each item.
+                properties:
+                  endpoint: { type: string }
+                  labelField: { type: string }
+                  valueField: { type: string }
+                  listField: { type: string }
+        outputs:
+          type: array
+          description: What this node emits to nodes downstream of it.
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+              type:
+                type: string
+                enum: [string, number, boolean, object, array]
+              description: { type: string }
+        outputHandles:
+          type: array
+          description: |
+            Named branch outlets, present only on branch nodes. Each `key` is a
+            valid `sourceHandle` on an edge leaving this node.
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+
+paths:
+  /workspaces/{workspaceId}/workflows:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+
+    post:
+      operationId: createWorkflow
+      summary: Create a workflow
+      tags: [Workflows]
+      description: |
+        Creates an empty draft. Only `name` is required.
+
+        The workflow arrives with `status: "draft"`, no canvas, and no
+        subscriptions, so it cannot fire yet. Give it a graph with
+        [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow).
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Required. Not length limited and not deduplicated, so two workflows may share a name.
+                  examples: [Nightly lead triage]
+                description:
+                  type: string
+                  description: Optional. Stored as an empty string when omitted.
+              required: [name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workflow:
+                    $ref: '#/components/schemas/Workflow'
+              examples:
+                created:
+                  value:
+                    success: true
+                    workflow:
+                      id: wf_7Kd2mQ
+                      workspaceId: ws_a1b2c3
+                      name: Nightly lead triage
+                      description: ''
+                      status: draft
+                      canvas: null
+                      collection: null
+                      activeVersionId: null
+                      versionCount: 0
+                      subscribedNodeIds: []
+                      createdBy: sa_ops
+        '400':
+          description: '`name` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: name is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    get:
+      operationId: listWorkflows
+      summary: List workflows
+      tags: [Workflows]
+      description: |
+        Every workflow in the workspace, newest first by creation time.
+
+        **This response is not paginated.** There is no limit and no cursor, so
+        the whole collection is returned on every call. Filter and page on your
+        side if the workspace holds many.
+
+        Each entry carries its full `canvas`, which makes the payload large once
+        graphs are non trivial. To poll for status changes, prefer
+        [Get a workflow](/docs/api-reference/workflows/workflows/getWorkflow) on
+        the specific IDs you care about.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workflows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workflow'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+
+    get:
+      operationId: getWorkflow
+      summary: Get a workflow
+      tags: [Workflows]
+      description: |
+        One workflow, including its full canvas.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workflow:
+                    $ref: '#/components/schemas/Workflow'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: updateWorkflow
+      summary: Update a workflow
+      tags: [Workflows]
+      description: |
+        Partial update, and the load bearing endpoint in this API. Send at least
+        one of `name`, `description`, `status`, `collection`, or `canvas`.
+        Sending none returns 400.
+
+        ## Sending `canvas` does five things, not one
+
+        A canvas save is a full save. In a single transaction the platform:
+
+        1. Materialises each node's presentation from the catalogue, so a graph
+           you built through the API renders the same as one built in the editor
+        2. Writes an immutable snapshot to the version history, labelled
+           `v{versionCount + 1}`
+        3. Increments `versionCount` and repoints `activeVersionId` at the new
+           snapshot
+        4. Compiles the graph and replaces the compiled form the runner reads
+        5. Reconciles this workflow's event subscriptions against the compiled
+           graph, adding, updating, and removing them to match
+
+        Steps 2 and 3 mean there is no way to save a canvas without creating a
+        version. Step 5 is what makes a workflow live.
+
+        ## What makes a workflow fire
+
+        A subscription is enabled only when **`status` is `active` and the
+        compiled graph is valid**. Both are evaluated during step 5.
+
+        > **Step 5 runs only when `canvas` is present.** A request that sends
+        > `status` on its own updates the stored status and does not revisit
+        > the subscriptions, so a workflow flipped to `active` that way will
+        > not start firing. To activate a workflow, send `status` and `canvas`
+        > together in one request.
+
+        ## Editing affects runs already in flight
+
+        Runs execute against the current compiled graph, read at the moment each
+        step runs. A run paused at a wait node re-reads it on resume, so a save
+        made while that run is waiting changes how it finishes.
+
+        This is deliberate, and it is what you want when correcting a mistake.
+        It is worth knowing before editing a workflow with long waits in it.
+
+        ## An invalid graph still saves
+
+        The compile records whether it succeeded, and the save is committed
+        either way. A malformed graph is stored, the compiled form is marked
+        invalid, and nothing fires. There is no error on the response, so
+        confirm with
+        [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
+        after any canvas save.
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                status:
+                  $ref: '#/components/schemas/WorkflowStatus'
+                collection:
+                  oneOf:
+                    - type: string
+                    - type: 'null'
+                  description: |
+                    **This is how a workflow joins a collection.** There is no
+                    separate add-to-collection endpoint: a workflow points at one
+                    folder through this field, so sending a name puts it there,
+                    sending a different name moves it, and sending `null` takes
+                    it out.
+
+                    The name does not have to be registered first. Registering it
+                    with
+                    [Create a collection](/docs/api-reference/workflows/collections/addWorkflowCollection)
+                    is what keeps the folder alive once the last workflow leaves
+                    it. Names are matched exactly, so `Billing` and `billing` are
+                    two different folders.
+
+                    Sending this on its own is a cheap update: it does not create
+                    a version and does not touch subscriptions, because only
+                    `canvas` does that.
+                canvas:
+                  $ref: '#/components/schemas/Canvas'
+            examples:
+              rename:
+                summary: Rename only
+                value:
+                  name: Nightly lead triage v2
+              activate:
+                summary: Activate, sending the canvas so subscriptions reconcile
+                value:
+                  status: active
+                  canvas:
+                    viewport: { x: 0, y: 0, zoom: 1 }
+                    nodes:
+                      - id: n_trigger
+                        type: registryNode
+                        position: { x: 0, y: 0 }
+                        data:
+                          nodeDefId: dataSourceTrigger
+                          label: New record
+                          category: trigger
+                          config:
+                            dataSourceId: ds_leads
+                            event: record.created
+                      - id: n_prompt
+                        type: registryNode
+                        position: { x: 280, y: 0 }
+                        data:
+                          nodeDefId: promptOffice
+                          label: Ask the office to qualify
+                          category: action
+                          config:
+                            officeId: off_dispatch
+                            prompt: 'Qualify this lead: {{trigger.email}}'
+                    edges:
+                      - id: e_1
+                        source: n_trigger
+                        target: n_prompt
+              collect:
+                summary: Put this workflow in a collection
+                value:
+                  collection: Lead handling
+              ungroup:
+                summary: Remove it from its collection
+                value:
+                  collection: null
+      responses:
+        '200':
+          description: Updated. The full workflow is returned as stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workflow:
+                    $ref: '#/components/schemas/Workflow'
+        '400':
+          description: No updatable field was sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noFields:
+                  value:
+                    success: false
+                    error: No fields to update
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteWorkflow
+      summary: Delete a workflow
+      tags: [Workflows]
+      description: |
+        Removes the workflow and every event subscription derived from it, in
+        one batch. Once this returns, no new run can start from its triggers.
+
+        **What is not removed.** Version snapshots, run history, and the
+        compiled graph are left in place rather than cascaded. They become
+        unreachable through this API, since every route to them is nested under
+        a workflow that no longer exists.
+
+        **Runs already in flight are not cancelled.** A run suspended at a wait
+        node resumes on schedule and continues from where it stopped. Check
+        [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns) for
+        anything in `running` or `waiting` before deleting, if that matters to
+        you.
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: Deleted. No body beyond the success flag.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+              examples:
+                deleted:
+                  value:
+                    success: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+    get:
+      operationId: listWorkflowVersions
+      summary: List versions
+      tags: [Versions]
+      description: |
+        Every snapshot taken for this workflow, newest first. One exists per
+        canvas save, and they are immutable.
+
+        Labels are frozen at creation and derived from a counter that never
+        decreases, so `v4` refers to the same graph forever.
+
+        **This response is not paginated**, and each entry carries a full
+        canvas. A workflow saved often accumulates a large history.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK. An empty array when the workflow has never been saved with a canvas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowVersion'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/versions/{versionId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+      - name: versionId
+        in: path
+        required: true
+        description: |
+          The snapshot to read. IDs come from
+          [List versions](/docs/api-reference/workflows/versions/listWorkflowVersions),
+          or from `workflow.activeVersionId` for the current one.
+        schema:
+          type: string
+    get:
+      operationId: getWorkflowVersion
+      summary: Get a version
+      tags: [Versions]
+      description: |
+        One snapshot, including the canvas exactly as it was saved.
+
+        **Reading a version does not restore it.** To roll back, read the
+        canvas here and send it to
+        [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow),
+        which stores it as a new snapshot on top of the history rather than
+        rewinding.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  version:
+                    $ref: '#/components/schemas/WorkflowVersion'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such snapshot on this workflow.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: Version not found
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/ir:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+    get:
+      operationId: getWorkflowIr
+      summary: Get the compiled graph
+      tags: [Versions]
+      description: |
+        The executable form of the current canvas, and the only place the
+        platform reports whether a graph compiled.
+
+        **Call this after every canvas save.** A save succeeds whether or not
+        the graph is sound, so this is where you find out. Check `valid`, and
+        read `errors` when it is false.
+
+        There is exactly one compiled form per workflow, replaced on each save.
+        `fromVersionId` tells you which snapshot produced it.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  ir:
+                    $ref: '#/components/schemas/WorkflowIR'
+              examples:
+                invalid:
+                  summary: Saved, but it will not run
+                  value:
+                    success: true
+                    ir:
+                      workflowId: wf_7Kd2mQ
+                      entry: null
+                      nodes: []
+                      valid: false
+                      errors: ['no trigger node']
+                      fromVersionId: ver_9Xb
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The workflow has never been saved with a canvas, so nothing has been compiled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                neverSaved:
+                  value:
+                    success: false
+                    error: No compiled IR — save the workflow first
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/runs:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+    get:
+      operationId: listWorkflowRuns
+      summary: List runs
+      tags: [Runs]
+      description: |
+        Run history for this workflow, newest first.
+
+        Runs are written by the runner as execution proceeds. This API only
+        reads them, so a run in `running` or `waiting` returns a partial
+        `nodeResults` array that grows on subsequent calls.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: |
+            How many runs to return. Defaults to 25. Values are clamped to
+            between 1 and 100 rather than rejected, so `limit=500` returns 100
+            and `limit=0` returns 1.
+          schema:
+            type: integer
+            default: 25
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowRun'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/runs/{runId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+      - name: runId
+        in: path
+        required: true
+        description: |
+          The run to read. IDs come from
+          [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns).
+        schema:
+          type: string
+    get:
+      operationId: getWorkflowRun
+      summary: Get a run
+      tags: [Runs]
+      description: |
+        One run with the full result of every node that has finished, including
+        each node's outputs and its failure reason if it failed.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  run:
+                    $ref: '#/components/schemas/WorkflowRun'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such run on this workflow.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: Run not found
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/test:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+    post:
+      operationId: testWorkflow
+      summary: Test fire a workflow
+      tags: [Runs]
+      description: |
+        Runs the workflow once against a payload you supply, starting a real
+        run with real side effects.
+
+        **This bypasses event matching entirely.** The runner is called
+        directly rather than through a subscription, which has two useful
+        consequences: a `draft` workflow is testable without activating it, and
+        no other subscription on the same data source side fires.
+
+        The record is tagged `_test: true`, so test runs are identifiable in
+        [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns).
+
+        > **A test run is not a dry run.** Every action executes for real. A
+        > graph that sends a message sends it, and a graph that hands work to an
+        > AI employee starts that employee working.
+
+        ## Prerequisites
+
+        The workflow must have been saved with a canvas, that canvas must have
+        compiled successfully, and its trigger node must name a data source.
+        Each failure returns 400 with a distinct message, so the response says
+        which one you hit. Confirm with
+        [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
+        first.
+
+        > **Only data source triggers can be test fired.** The payload is routed
+        > using the data source named on the trigger node, so a workflow whose
+        > trigger is a calendar has nothing to route against and returns `The
+        > trigger has no data source configured`. That response means this
+        > workflow cannot be tested through this endpoint, not that it is
+        > misconfigured.
+
+        ## Choosing a mode
+
+        | `mode` | What becomes the trigger record | Also send |
+        | --- | --- | --- |
+        | `contact` | A CRM contact, flattened to fields | `contactId` |
+        | `json` | Exactly the object you pass | `record` |
+        | `fields` | Exactly the object you pass, same as `json` | `record` |
+        | `passthrough` | An empty object | Nothing |
+
+        In `contact` mode the contact is expanded generously, so common token
+        spellings all resolve: `displayName` is also available as `name` and
+        `fullName`, and `primaryPhone` as `phone`. Empty properties are dropped
+        rather than sent as null.
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum: [contact, json, fields, passthrough]
+                  description: Required. Any other value returns 400.
+                contactId:
+                  type: string
+                  description: |
+                    Required when `mode` is `contact`. IDs come from
+                    [List contacts](/docs/api-reference/crm/contacts/listContacts).
+                  examples: [con_4Fh8s2]
+                record:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Required when `mode` is `json` or `fields`. Must be an
+                    object, not an array. Its properties become the trigger
+                    record your nodes template against.
+              required: [mode]
+            examples:
+              fromContact:
+                summary: Fire with a real contact
+                value:
+                  mode: contact
+                  contactId: con_4Fh8s2
+              fromJson:
+                summary: Fire with a payload you control
+                value:
+                  mode: json
+                  record:
+                    email: dana@example.com
+                    source: webform
+              empty:
+                summary: Fire with nothing
+                value:
+                  mode: passthrough
+      responses:
+        '200':
+          description: |
+            The run was handed to the runner. The record that was fired is
+            echoed back, with `_test` added.
+
+            **No run ID is returned.** To follow what happened, call
+            [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns)
+            and take the newest entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  record:
+                    type: object
+                    additionalProperties: true
+              examples:
+                fired:
+                  value:
+                    success: true
+                    record:
+                      email: dana@example.com
+                      source: webform
+                      _test: true
+        '400':
+          description: |
+            The mode was invalid, the payload for that mode was missing, or the
+            workflow is not in a runnable state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badMode:
+                  summary: Unknown mode
+                  value:
+                    success: false
+                    error: mode must be contact | json | fields | passthrough
+                notCompiled:
+                  summary: Never saved with a canvas
+                  value:
+                    success: false
+                    error: Workflow has no compiled IR — save it first
+                notRunnable:
+                  summary: Saved, but the graph did not compile
+                  value:
+                    success: false
+                    error: 'Workflow is not runnable: no trigger'
+                noSource:
+                  summary: The trigger names no data source
+                  value:
+                    success: false
+                    error: The trigger has no data source configured
+                needsContact:
+                  summary: Contact mode without a contact
+                  value:
+                    success: false
+                    error: contactId is required for contact mode
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/collections:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+
+    get:
+      operationId: listWorkflowCollections
+      summary: List collections
+      tags: [Collections]
+      description: |
+        The registered folder names, sorted alphabetically and case
+        insensitively.
+
+        Collections are names and nothing more. There is no nesting and no
+        folder object.
+
+        **A workflow is not listed here.** To find which workflows are in a
+        collection, read `collection` on each entry from
+        [List workflows](/docs/api-reference/workflows/workflows/listWorkflows)
+        and group them yourself. To move one, send `collection` to
+        [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow).
+
+        Registering a name here is what lets an empty folder persist. A folder
+        that exists only because a workflow points at it disappears when that
+        workflow moves away.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK. An empty array when none are registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  collections:
+                    type: array
+                    items: { type: string }
+              examples:
+                names:
+                  value:
+                    success: true
+                    collections: [Billing, Lead handling, Onboarding]
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: addWorkflowCollection
+      summary: Register a collection name
+      tags: [Collections]
+      description: |
+        Registers a folder name. Idempotent, so re-registering an existing name
+        succeeds and changes nothing.
+
+        > **This does not put any workflow in the collection.** It only makes the
+        > name exist. To place a workflow, send `collection` to
+        > [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow):
+        >
+        > ```bash
+        > curl -X PATCH "$HOS_API/workspaces/ws_a1b2c3/workflows/wf_7Kd2mQ" \
+        >   -H "Authorization: Bearer $HOS_API_KEY" \
+        >   -H "Content-Type: application/json" \
+        >   -d '{ "collection": "Lead handling" }'
+        > ```
+
+        You do not have to register a name before using it. Registering is what
+        keeps an empty folder from disappearing when its last workflow moves
+        away, and it is how you create a folder before there is anything to put
+        in it.
+
+        Names are trimmed of surrounding whitespace before storage, and matched
+        exactly thereafter. `Billing` and `billing` are two different folders,
+        even though the list sorts them together.
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Required. Whitespace only is rejected.
+                  examples: [Lead handling]
+              required: [name]
+      responses:
+        '200':
+          description: Registered. The full list is returned, not just the new name.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  collections:
+                    type: array
+                    items: { type: string }
+        '400':
+          description: '`name` is missing or blank.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: name is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/collections/remove:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: removeWorkflowCollection
+      summary: Delete a collection
+      tags: [Collections]
+      description: |
+        De-registers the folder name and ungroups every workflow that pointed at
+        it, setting each one's `collection` to null in a batch.
+
+        **No workflow is deleted.** The folder disappears and its contents
+        return to the ungrouped list. This is a `POST` rather than a `DELETE`
+        because the name travels in the body, where it does not have to be URL
+        encoded.
+
+        Removing a name that was never registered succeeds and ungroups nothing.
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: |
+                    Required. Must match the registered name exactly, after
+                    trimming. Values come from
+                    [List collections](/docs/api-reference/workflows/collections/listWorkflowCollections).
+                  examples: [Lead handling]
+              required: [name]
+      responses:
+        '200':
+          description: Removed. The remaining list is returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  collections:
+                    type: array
+                    items: { type: string }
+        '400':
+          description: '`name` is missing or blank.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/node-definitions:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: listNodeDefinitions
+      summary: List node definitions
+      tags: [Node definitions]
+      description: |
+        The catalogue of nodes a canvas can place, split into triggers and
+        actions.
+
+        **Read this before building a canvas.** Each definition carries the
+        `id` you put in `data.nodeDefId`, the `configFields` that tell you what
+        belongs in `data.config`, the `outputs` downstream nodes can reference,
+        and, on branch nodes, the `outputHandles` that name valid `sourceHandle`
+        values for outgoing edges.
+
+        The catalogue is currently the same for every workspace.
+
+        Some fields offer choices loaded live rather than fixed. Those carry a
+        `loadOptions` block naming the endpoint to call and which properties to
+        read for the label and the value.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      parameters:
+        - name: includeDisabled
+          in: query
+          required: false
+          description: |
+            Pass `true` to include nodes that are announced but not yet
+            available. They are excluded by default. Any other value, including
+            `1`, is treated as false.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    description: Note the `data` envelope, which differs from the other endpoints in this reference.
+                    properties:
+                      triggers:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/NodeDefinition'
+                      actions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/NodeDefinition'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/node-definitions/{nodeId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - name: nodeId
+        in: path
+        required: true
+        description: |
+          The definition to read. IDs come from
+          [List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions),
+          and are the same values used as `data.nodeDefId` on a canvas node.
+        schema:
+          type: string
+          examples: [promptOffice]
+    get:
+      operationId: getNodeDefinition
+      summary: Get a node definition
+      tags: [Node definitions]
+      description: |
+        One definition, with its full configuration and output schema.
+
+        Useful for validating a canvas before saving it, since the save path
+        accepts any `nodeDefId` and reports the problem only through the
+        compiled graph afterwards.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    properties:
+                      node:
+                        $ref: '#/components/schemas/NodeDefinition'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No node with that ID exists in the catalogue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: Node definition not found
+        '500': { $ref: '#/components/responses/ServerError' }

@@ -1,0 +1,740 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Workspaces
+  version: v1
+  summary: The container almost every permission is written against.
+  description: |
+    A workspace groups offices, data, automations and conversations so separate
+    teams, or separate clients, can work in one account without seeing each
+    other's work.
+
+    It is also the resource nearly every permission grant names, which makes it
+    the practical unit of access. Scoping someone to a single workspace is how
+    you build an account where each person, or each customer, sees only their
+    own.
+
+    Start here. Almost every other endpoint in this reference takes a
+    `workspaceId`, and this is where those come from.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Workspaces
+    description: Creating, reading and removing the container itself.
+  - name: Budgets
+    description: Spend caps, scoped to one workspace.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`.
+
+  parameters:
+    WorkspaceIdPath:
+      name: workspaceId
+      in: path
+      required: true
+      description: |
+        The workspace to act on. IDs come from
+        [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+
+  responses:
+    BadRequest:
+      description: A required field is missing or malformed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Authenticated, but the caller lacks the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: No such workspace in this tenant.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing:
+              value:
+                success: false
+                error: Workspace not found
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, const: false }
+        error: { type: string }
+      required: [success, error]
+
+    Workspace:
+      type: object
+      description: |
+        Smaller than most people expect. A workspace is a name and a timezone.
+        Everything else you think of as being "in" it is a relationship held on
+        the thing itself.
+      properties:
+        id:
+          type: string
+          examples: [ws_a1b2c3]
+        tenantId:
+          type: string
+          description: The account this belongs to. Nothing crosses between accounts.
+        name:
+          type: string
+          description: The only field an update can change.
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        timeConfig:
+          type: object
+          description: Absent until set, which means UTC.
+          properties:
+            timezone: { type: string, examples: ['America/Toronto'] }
+            updatedAt: { type: string, format: date-time }
+            updatedBy: { type: string }
+
+    Budget:
+      type: object
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        name:
+          type: string
+          examples: [Daily model spend]
+        window:
+          type: string
+          enum: [daily, monthly]
+          description: |
+            Resets on the workspace's own calendar day or month, using its
+            timezone. Two workspaces in different regions roll over at different
+            moments.
+        metric:
+          type: array
+          description: |
+            Which kinds of spend this budget adds up. The total is their sum.
+          items:
+            type: string
+            enum: [platform, byok]
+        limitUsd:
+          type: number
+          description: The cap, in US dollars.
+        action:
+          type: string
+          enum: [block]
+          description: |
+            What happens at the cap. Blocking is the only behaviour, so there is
+            no warn-only budget today.
+        enabled: { type: boolean }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+paths:
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      summary: List workspaces
+      tags: [Workspaces]
+      description: |
+        Every workspace in the account **that the caller may read**.
+
+        This endpoint carries no permission gate of its own. Instead it checks
+        `workspace:read` against each workspace individually and returns only
+        those that pass. That behaviour is what makes single-workspace access
+        work: a person granted a role on one workspace sees exactly one entry
+        here, and has no way to learn that the others exist.
+
+        This is also the answer to "where do I get a `workspaceId`", which
+        nearly every other endpoint in this reference needs.
+
+        **Not paginated**, and the permission check runs per workspace, so an
+        account with very many will be slow rather than truncated.
+
+        **Permission:** none to call. Results are filtered by `workspace:read`.
+      responses:
+        '200':
+          description: OK. An empty array when the caller may read none.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workspaces:
+                    type: array
+                    items: { $ref: '#/components/schemas/Workspace' }
+              examples:
+                oneOnly:
+                  summary: A caller scoped to a single workspace
+                  value:
+                    success: true
+                    workspaces:
+                      - id: ws_a1b2c3
+                        tenantId: tn_9f2
+                        name: Northside Dental
+                        createdBy: usr_11
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createWorkspace
+      summary: Create a workspace
+      tags: [Workspaces]
+      description: |
+        Creates a workspace. Only `name` is required.
+
+        **This is a console-scope action.** The permission is checked at
+        `console`, not at any workspace, because there is no workspace to check
+        against yet. A person scoped to one workspace cannot create another,
+        which is what keeps a single-workspace user contained.
+
+        Creating one does more than write a record. It also registers the
+        workspace with the compute platform so offices can run in it, sets up a
+        default layout, and extends existing inherited access to it.
+
+        > **Those follow-on steps are best effort and are not retried.** A
+        > workspace can exist while one of them has not completed. If a newly
+        > created workspace behaves oddly, recreating it is more reliable than
+        > investigating.
+
+        **Permission:** `workspace:manage` @ `console`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Required. Not unique, so two workspaces may share a name.
+                  examples: [Northside Dental]
+              required: [name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workspace: { $ref: '#/components/schemas/Workspace' }
+        '400':
+          description: '`name` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: name is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceIdPath'
+
+    get:
+      operationId: getWorkspace
+      summary: Get a workspace
+      tags: [Workspaces]
+      description: |
+        One workspace.
+
+        **Permission:** `workspace:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workspace: { $ref: '#/components/schemas/Workspace' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: updateWorkspace
+      summary: Rename a workspace
+      tags: [Workspaces]
+      description: |
+        Changes the name. **That is the only field an update can change.**
+        Timezone has its own endpoint, and nothing else on the record is
+        writable.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+              required: [name]
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workspace: { $ref: '#/components/schemas/Workspace' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteWorkspace
+      summary: Delete a workspace
+      tags: [Workspaces]
+      description: |
+        Removes the workspace record.
+
+        > **Nothing inside it is removed.** Offices, automations, conversations,
+        > data and allocations are not cascaded and not cleaned up. They stop
+        > being reachable, because every route to them runs through a workspace
+        > that no longer exists, and any machines they were running keep
+        > running.
+        >
+        > **Empty a workspace before deleting it.** Delete its offices through
+        > [Delete an office](/docs/api-reference/offices/offices/deleteOffice),
+        > and its automations through
+        > [Delete a workflow](/docs/api-reference/workflows/workflows/deleteWorkflow),
+        > then delete the workspace.
+
+        Role assignments written against this workspace are also left in place.
+        They stop resolving to anything, and are worth removing through
+        [Access control](/docs/access-control/assignments) so the account does
+        not accumulate grants pointing at nothing.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/timeConfig:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceIdPath'
+
+    get:
+      operationId: getWorkspaceTimeConfig
+      summary: Get the timezone
+      tags: [Workspaces]
+      description: |
+        The workspace's timezone.
+
+        This is not cosmetic. It decides when a daily budget resets and when
+        scheduled work runs, so a workspace serving customers in another region
+        should carry that region's zone.
+
+        **Permission:** `workspace:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK. Unset means UTC.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  timeConfig:
+                    type: object
+                    properties:
+                      timezone: { type: string }
+                      updatedAt: { type: string, format: date-time }
+                      updatedBy: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateWorkspaceTimeConfig
+      summary: Set the timezone
+      tags: [Workspaces]
+      description: |
+        Sets the workspace's timezone, as an IANA name such as
+        `America/Toronto`.
+
+        Changing it moves the boundary a daily budget resets on, so a change
+        mid-day can lengthen or shorten the current window once.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                timezone:
+                  type: string
+                  description: Required. An IANA timezone name.
+                  examples: ['America/Toronto']
+              required: [timezone]
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  timeConfig:
+                    type: object
+                    properties:
+                      timezone: { type: string }
+        '400':
+          description: '`timezone` is missing or not a string.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: timezone (string) is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/budgets:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceIdPath'
+
+    get:
+      operationId: listWorkspaceBudgets
+      summary: List budgets
+      tags: [Budgets]
+      description: |
+        Every spend cap on this workspace.
+
+        **Permission:** `workspace:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budgets:
+                    type: array
+                    items: { $ref: '#/components/schemas/Budget' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createWorkspaceBudget
+      summary: Create a budget
+      tags: [Budgets]
+      description: |
+        Caps spend in this workspace over a daily or monthly window. When the
+        cap is reached, further work in that workspace is refused with a `402`
+        until the window resets.
+
+        Because a budget names one workspace, this is how you give each part of
+        an account its own ceiling without one overspending affecting another.
+
+        <br />
+
+        **What a budget covers, and what it does not.**
+
+        A budget sums the kinds of model spend you select. It does **not** cover
+        the cost of running machines. An office left running is not counted here
+        and cannot be capped this way, so a budget is not a total spend limit
+        for the workspace.
+
+        A caller that hits the cap sees `code: "budget_exceeded"` with the
+        window, the amount used and the limit. Nova returns exactly that on
+        [Send a prompt](/docs/api-reference/nova/running-nova/runNovaCycle).
+
+        [Spending](/docs/spend) explains the two meters and the order the checks
+        run in.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Required. A label you will recognise in a `402`.
+                metric:
+                  type: array
+                  description: |
+                    Required, and not empty. Which kinds of spend to add up.
+
+                    | Value | Counts |
+                    | --- | --- |
+                    | `platform` | Model use charged to your prepaid credit |
+                    | `byok` | Model use on your own model account, which never touches your credit |
+
+                    Selecting both caps model spend whoever is paying for it.
+                    Capping `byok` is the notable one: it limits what your AI
+                    employees may spend on an account we do not bill.
+                  items:
+                    type: string
+                    enum: [platform, byok]
+                limitUsd:
+                  type: number
+                  description: Required. The cap in US dollars.
+                window:
+                  type: string
+                  enum: [daily, monthly]
+                  description: Defaults to `daily`. Resets on the workspace's own calendar.
+                action:
+                  type: string
+                  enum: [block]
+                  description: Defaults to `block`, which is the only value.
+                enabled:
+                  type: boolean
+                  description: Defaults to true.
+              required: [name, metric, limitUsd]
+            examples:
+              perClient:
+                summary: A monthly ceiling for one workspace
+                value:
+                  name: Monthly model spend
+                  metric: [platform, byok]
+                  limitUsd: 250
+                  window: monthly
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budget: { $ref: '#/components/schemas/Budget' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/budgets/usage:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceIdPath'
+    get:
+      operationId: getWorkspaceSpend
+      summary: Get current spend
+      tags: [Budgets]
+      description: |
+        What this workspace has spent in the current window, for showing usage
+        against a cap.
+
+        Declared before the single-budget route, so `usage` is a reserved word
+        here and never read as a budget id.
+
+        **Permission:** `workspace:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  spend:
+                    type: object
+                    properties:
+                      platformUsd: { type: number }
+                      byokUsd: { type: number }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/budgets/{budgetId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceIdPath'
+      - name: budgetId
+        in: path
+        required: true
+        description: |
+          The budget to act on. IDs come from
+          [List budgets](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets),
+          and are also returned as `budgetId` on a `402` when a cap is hit.
+        schema:
+          type: string
+
+    get:
+      operationId: getWorkspaceBudget
+      summary: Get a budget
+      tags: [Budgets]
+      description: |
+        One budget.
+
+        **Permission:** `workspace:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budget: { $ref: '#/components/schemas/Budget' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such budget on this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateWorkspaceBudget
+      summary: Update a budget
+      tags: [Budgets]
+      description: |
+        Changes a budget's name, what it counts, its limit, or whether it is
+        enforced.
+
+        > **The window cannot be changed.** To move a budget from daily to
+        > monthly, delete it and create a new one.
+
+        Setting `enabled` to false is the way to lift a cap temporarily without
+        losing its configuration.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                metric:
+                  type: array
+                  items:
+                    type: string
+                    enum: [platform, byok]
+                limitUsd: { type: number }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budget: { $ref: '#/components/schemas/Budget' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such budget on this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteWorkspaceBudget
+      summary: Delete a budget
+      tags: [Budgets]
+      description: |
+        Removes the cap entirely. Spending in this workspace is then limited
+        only by the account's credit and any other budget still in force.
+
+        To pause a cap and keep it, set `enabled` to false with
+        [Update a budget](/docs/api-reference/workspaces/budgets/updateWorkspaceBudget)
+        instead.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such budget on this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }

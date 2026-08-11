@@ -1,0 +1,94 @@
+---
+title: Workspaces
+description: The container almost every permission is written against.
+---
+
+A workspace groups offices, automations, conversations and data. Almost every
+other endpoint in this reference takes a `workspaceId`, and this is where they
+come from.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [Tenants and workspaces](/docs/access-control/workspaces)
+  covers how an account is divided, how to give someone access to a single
+  workspace, and how to run one workspace per customer. This page describes the
+  API surface.
+</Callout>
+
+## Start here
+
+```bash
+curl "$HOS_API/workspaces" \
+  -H "Authorization: Bearer $HOS_API_KEY"
+```
+
+[List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces) is
+the first call to make with a new key. It returns the workspaces that key can
+reach, and everything else in this reference needs one of those IDs.
+
+It behaves differently from most endpoints here, deliberately. There is no
+permission gate on the call. Instead `workspace:read` is checked against each
+workspace individually and only the ones that pass are returned. **An empty
+array means the key holds no workspace grant**, not that the account is empty.
+
+## Two levels of permission
+
+| Action | Where it is checked |
+| --- | --- |
+| Create a workspace | `console` |
+| Read, rename, delete, budgets | The workspace itself |
+
+Creating is a console action because there is no workspace to check against yet.
+That asymmetry is what keeps a key scoped to one workspace from making itself
+another.
+
+## Budgets
+
+A budget caps spend in one workspace over a daily or monthly window. Past the
+cap, work in that workspace is refused with a `402` carrying
+`code: "budget_exceeded"`, while other workspaces are unaffected.
+
+Two limits worth knowing before you rely on one:
+
+<Callout type="warn">
+  **Model spend only.** The cost of running machines is not counted and cannot
+  be capped here.
+</Callout>
+
+<Callout type="warn">
+  **Blocking is the only behaviour.** There is no warn-only budget, so a cap you
+  set will stop work rather than notify you.
+</Callout>
+
+Windows reset on the workspace's own calendar, using its timezone rather than
+yours or UTC.
+
+A limit can also cap model use billed to **your own model account**, which never
+touches your credit here. [Spending](/docs/spend) covers why that matters and
+the order the checks run in.
+
+## What is not here
+
+**Account level settings.** The account record itself is not managed through
+this reference.
+
+**Membership and invitations.** Adding people to an account is a console flow.
+See [Access control](/docs/access-control).
+
+**Moving a resource between workspaces.** There is no endpoint for it.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Tenants and workspaces"
+    href="/docs/access-control/workspaces"
+    description="The model, and running one workspace per customer."
+  />
+  <Card
+    title="Offices"
+    href="/docs/api-reference/offices"
+    description="What you create inside a workspace."
+  />
+</Cards>

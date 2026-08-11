@@ -1,0 +1,136 @@
+---
+title: Nova
+description: The assistant that operates the platform on your behalf.
+---
+
+Nova is our agent framework, and the assistant inside your console and
+workspaces. You describe what you want, and it operates HumanikOS.
+
+<ApiSetup />
+
+## What it can actually do
+
+Not answer questions about the platform. Operate it.
+
+| | Examples |
+| --- | --- |
+| **Coordinate offices** | Check what is running, wake one, hand it work |
+| **Dispatch prompts** | Send a task to an AI employee and let it get on with it |
+| **Understand your setup** | Read how something is configured and explain why it behaves that way |
+| **Configure access** | Inspect roles and assignments, and change them |
+| **Build automations** | Author a workflow from a description, then save and run it |
+| **Operate the products** | The CRM, browsers, calendars, phone numbers, email domains |
+
+It reaches those through the same endpoints this reference documents, under the
+same permission checks. There is no privileged path.
+
+## How Nova is permissioned
+
+**Nova has no identity.** It holds no roles, no key, and no credentials. Every
+action it takes is taken as the caller who sent the prompt, using the roles on
+that request.
+
+This is the whole security model, and it has two layers worth understanding
+separately.
+
+<Callout type="warn">
+  **Reaching Nova requires `nova:manage` on the workspace, and that is a real
+  grant.** Nova can operate much of what the workspace contains. Treat granting
+  it as comparable to granting the underlying access, not as a small permission
+  for a chat feature.
+</Callout>
+
+**On top of that, sensitive work is checked again.** Administrative actions are
+gated individually against your roles at the moment they run, so the tool
+refuses rather than answering:
+
+| Area | Checked against |
+| --- | --- |
+| Billing and LLM providers | `billing:read` |
+| Members | `users:read` |
+| IAM and service accounts | `iam:read`, and `iam:manage` to change |
+| Tenant secrets | `secrets:read` / `secrets:write` |
+| Email domains | `email:read` / `email:manage` |
+| Browsers | `browser:read` / `browser:manage`, plus membership |
+| Group chats | `groupchat:read` / `groupchat:send` / `groupchat:manage` |
+| Calendars | `calendar:read` / `calendar:use` / `calendar:manage`, plus membership |
+| CRM | The same contact permissions your own calls need |
+
+The practical summary: **for administrative work, Nova can do exactly what you
+can do.** For ordinary work inside a workspace, `nova:manage` is the boundary.
+
+Because Nova acts as the caller, an API key with narrow roles gets a narrow
+Nova. That is the intended way to limit it.
+
+## Sending a prompt
+
+One endpoint does the work:
+[Send a prompt](/docs/api-reference/nova/running-nova/runNovaCycle).
+
+```bash
+curl -X POST "$HOS_API/ai/run" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspaceId": "ws_a1b2c3",
+    "message": "Which offices are running right now?"
+  }'
+```
+
+Three things about that call are worth knowing before you build on it.
+
+<Callout type="warn">
+  **A `200` does not mean the turn succeeded.** A failed cycle returns `200`
+  with `success: false`. Check the body.
+</Callout>
+
+<Callout type="warn">
+  **A client timeout is not a failure.** The turn continues server side and
+  finishes. Do not retry the prompt, or the work runs twice.
+</Callout>
+
+<Callout>
+  **Send `pageContext` when there is one.** It is how Nova knows what "this one"
+  refers to. Without it, anything positional in your prompt has no referent.
+</Callout>
+
+## Configuration is per person
+
+Nova is configured per user per workspace, not once for the workspace. Two
+people share a workspace and have separate names, tones, instructions, voices
+and model choices.
+
+Call [Boot Nova](/docs/api-reference/nova/configuration/bootNova) first. It
+returns the caller's Nova and creates it with defaults if it does not exist,
+which is what everything else reads from.
+
+## What is not here
+
+**Reading a chat's messages.** You get the reply on the response. There is no
+endpoint that returns a chat's history.
+
+**Nova's tool catalogue.** Which tools exist is not exposed as an endpoint.
+
+**Anything that widens what Nova may do.** Instructions and personality shape
+behaviour only. No configuration on this page grants a permission, because every
+tool call is still gated on the caller's roles.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Authoring a workflow"
+    href="/docs/workflows/authoring"
+    description="Where asking Nova beats writing the graph by hand."
+  />
+  <Card
+    title="Access control"
+    href="/docs/access-control"
+    description="Roles and assignments, which are what bound Nova."
+  />
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="What Nova coordinates."
+  />
+</Cards>

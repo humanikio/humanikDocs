@@ -1,0 +1,1877 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Nova
+  version: v1
+  summary: The assistant that operates the platform on your behalf.
+  description: |
+    Nova is our agent framework, and the assistant inside your console and
+    workspaces. You talk to it, and it operates HumanikOS: coordinating offices,
+    dispatching prompts to AI employees, reading how a system is configured,
+    authoring automations, and administering identity and access.
+
+    It is not a chatbot bolted onto a product. It reaches the same surfaces this
+    reference documents, through the same permission checks, which is why it can
+    do real work rather than describe it.
+
+    **Nova has no identity of its own.** It holds no credentials and no roles. It
+    acts as the caller, using the roles carried by the API key or signed-in user
+    that sent the prompt. That single fact governs everything on this page, and
+    is worth reading in full before granting anyone access.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Running Nova
+    description: Sending a prompt, managing chats, and cancelling work in progress.
+  - name: Configuration
+    description: Nova's identity and behaviour in a workspace.
+  - name: Personality
+    description: Custom prompt text, and the version history behind it.
+  - name: Voice
+    description: The voice catalogue, voice selection, and spoken conversation.
+  - name: Preferences
+    description: Per-user model and canvas choices.
+  - name: Preview ground
+    description: A throwaway chat for trying personality and voice changes.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`. Every endpoint here also accepts a
+        signed-in user's session. Whichever you use, Nova inherits its roles.
+
+  parameters:
+    WorkspaceIdQuery:
+      name: workspaceId
+      in: query
+      required: true
+      description: |
+        The workspace Nova runs in. Nova is always scoped to one.
+
+        IDs come from [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces),
+        which returns the workspaces your credential can reach.
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+
+  responses:
+    BadRequest:
+      description: A required field is missing or malformed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingWorkspace:
+              value:
+                success: false
+                error: workspaceId is required
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: |
+        Authenticated, but the caller lacks `nova:read` or `nova:manage` on this
+        workspace.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+      required: [success, error]
+
+    PageContext:
+      type: object
+      description: |
+        Where the caller is, so Nova can answer about what is in front of them.
+        Optional, and worth sending: without it a question like "delete this
+        one" has no referent.
+      properties:
+        path:
+          type: string
+          description: The route the caller is on.
+          examples: ['/w/ws_a1b2c3/automation/workflows/wf_7Kd2mQ']
+        page:
+          type: string
+          description: A short name for the page.
+          examples: [workflow-editor]
+        scope:
+          type: string
+          enum: [workspace, tenant, profile]
+          description: Which level the page belongs to. Defaults to `workspace`.
+        params:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Route parameters, such as `{ "id": "wf_7Kd2mQ" }`. Prefer this over
+            naming individual ID fields, since it needs no change when a new
+            page is added.
+        meta:
+          type: object
+          additionalProperties:
+            type: string
+
+    RunResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: |
+            False when the cycle failed, even though the status code is 200. See
+            the two failure layers on
+            [Send a prompt](/docs/api-reference/nova/running-nova/runNovaCycle).
+        chatId:
+          type: string
+          description: The chat this turn belongs to. Created if you sent none.
+        chatCreated:
+          type: boolean
+        cycleId:
+          type: string
+          description: This turn. Useful for correlating logs.
+        response:
+          type: string
+          description: Nova's reply. Empty when the cycle failed.
+        status:
+          type: string
+          enum:
+            - completed
+            - failed
+            - cancelled
+            - max_iterations_exceeded
+            - insufficient_balance
+            - budget_exceeded
+        toolCallCount:
+          type: integer
+          description: How many tools Nova used this turn.
+        iterations:
+          type: integer
+          description: How many times it went round the loop.
+
+    NovaConfig:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        workspaceId: { type: string }
+        userId:
+          type: string
+          description: Who this configuration belongs to. Nova is configured per person, not per workspace.
+        name:
+          type: string
+          description: What the assistant is called.
+        tone:
+          type: string
+          enum: [professional, friendly, concise]
+        customInstructions:
+          oneOf: [{ type: string }, { type: 'null' }]
+        autoRoute:
+          type: boolean
+          description: Whether Nova may navigate the caller between pages on its own.
+        confirmDestructive:
+          type: boolean
+          description: |
+            Whether Nova should ask before a destructive action. This shapes how
+            Nova is instructed to behave. It is not a server side gate, and it
+            is not a substitute for withholding a permission.
+        showReasoning:
+          type: boolean
+        voiceEnabled: { type: boolean }
+        voiceId:
+          oneOf: [{ type: string }, { type: 'null' }]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PromptConfig:
+      type: object
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        userId: { type: string }
+        customSystemPrompt:
+          oneOf: [{ type: string }, { type: 'null' }]
+          description: Replaces the base instructions entirely. Null leaves them in place.
+        additionalContext:
+          oneOf: [{ type: string }, { type: 'null' }]
+          description: Appended to the base instructions. The safer of the two.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PromptVersion:
+      type: object
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        userId: { type: string }
+        prompt: { type: string }
+        charCount: { type: integer }
+        source:
+          type: string
+          enum: [manual, enhanced]
+          description: Whether a person wrote it or it came back from the enhancer.
+        createdAt: { type: string, format: date-time }
+
+    VoiceConfig:
+      type: object
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        userId: { type: string }
+        voiceId:
+          oneOf: [{ type: string }, { type: 'null' }]
+        voiceName:
+          oneOf: [{ type: string }, { type: 'null' }]
+        voiceCategory:
+          oneOf: [{ type: string }, { type: 'null' }]
+        voiceDescription:
+          oneOf: [{ type: string }, { type: 'null' }]
+        voicePreviewUrl:
+          oneOf: [{ type: string }, { type: 'null' }]
+        voiceLabels:
+          oneOf:
+            - type: object
+              additionalProperties: { type: string }
+            - type: 'null'
+        stability:
+          oneOf: [{ type: number }, { type: 'null' }]
+        similarityBoost:
+          oneOf: [{ type: number }, { type: 'null' }]
+        style:
+          oneOf: [{ type: number }, { type: 'null' }]
+        useSpeakerBoost:
+          oneOf: [{ type: boolean }, { type: 'null' }]
+        voiceEnabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Chat:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PreviewSession:
+      type: object
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        userId: { type: string }
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+              content: { type: string }
+        createdAt: { type: string, format: date-time }
+        expiresAt:
+          type: string
+          format: date-time
+          description: Sessions are throwaway and stop resolving once past this.
+
+paths:
+  /ai/run:
+    post:
+      operationId: runNovaCycle
+      summary: Send a prompt
+      tags: [Running Nova]
+      description: |
+        Sends a message to Nova and returns its reply once the turn is finished.
+        This is the endpoint the console uses.
+
+        A turn is a loop, not a single call. Nova reads your message, decides
+        whether to use a tool, uses it, reads the result, and repeats until it
+        has an answer. `toolCallCount` and `iterations` on the response tell you
+        how much of that happened.
+
+        ## Nova acts as you
+
+        Every tool call is made with the roles carried by this request. Nova
+        holds no credentials of its own. A key with narrow permissions gets a
+        narrow Nova.
+
+        Reaching Nova at all requires `nova:manage` on the workspace, which is a
+        substantial grant on its own. For administrative work, such as billing,
+        members, identity and access, secrets, group chats or connected apps,
+        each action is checked a second time against your roles at the moment it
+        runs, so a caller who can reach Nova but not read billing gets a refusal
+        from the tool rather than an answer.
+
+        ## Two failure layers
+
+        This is the part most integrations get wrong.
+
+        A `200` means the request was accepted, **not** that the turn succeeded.
+        A cycle that fails returns `200` with `success: false` and a `status` of
+        `failed`. Check the body, not just the status code.
+
+        ## Long turns, and why a timeout is not a failure
+
+        A turn doing real work can run for minutes. The console allows four.
+
+        **The run continues server side if your connection drops.** A client
+        timeout is not a cancellation and not a failure. The work carries on and
+        finishes. If you time out, do not retry the prompt, or you will run it
+        twice.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        description: |
+          Send `application/json`, or `multipart/form-data` when attaching a
+          file. In multipart, the object fields travel as JSON strings and are
+          parsed server side.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  description: Required. May also travel as a query parameter.
+                message:
+                  type: string
+                  description: Required. What you are asking Nova to do.
+                chatId:
+                  type: string
+                  description: |
+                    Continue an existing chat. Omit to start a new one, whose id
+                    comes back as `chatId` with `chatCreated: true`. Existing ids
+                    come from [List chats](/docs/api-reference/nova/running-nova/listNovaChats).
+                officeId:
+                  type: string
+                  description: |
+                    Point Nova at one office for this turn. IDs come from
+                    [List offices](/docs/api-reference/offices/offices/listOffices).
+                pageContext:
+                  $ref: '#/components/schemas/PageContext'
+                specialCase:
+                  type: string
+                  description: |
+                    Requests extra prompt context for a known situation. This is
+                    a request rather than an instruction: eligibility is checked
+                    server side and anything that cannot be substantiated is
+                    ignored.
+                userActionResponse:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Your answer to something Nova asked for approval on, sent on
+                    the next turn to continue where it paused.
+                secretsProvisionResponse:
+                  type: object
+                  additionalProperties: true
+                  description: Your answer to a request for credentials Nova needed.
+              required: [workspaceId, message]
+            examples:
+              simple:
+                summary: A plain question
+                value:
+                  workspaceId: ws_a1b2c3
+                  message: Which offices are running right now?
+              withContext:
+                summary: Grounded in the page the caller is on
+                value:
+                  workspaceId: ws_a1b2c3
+                  message: Add a step here that waits three days
+                  chatId: cht_9Qm4
+                  pageContext:
+                    path: /w/ws_a1b2c3/automation/workflows/wf_7Kd2mQ
+                    page: workflow-editor
+                    scope: workspace
+                    params:
+                      id: wf_7Kd2mQ
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                message: { type: string }
+                chatId: { type: string }
+                officeId: { type: string }
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    Up to 20 MB. Images and PDFs are passed to the model
+                    directly. Other formats, such as spreadsheets and documents,
+                    have their text extracted server side first.
+                pageContext:
+                  type: string
+                  description: The `PageContext` object, JSON encoded.
+              required: [workspaceId, message]
+      responses:
+        '200':
+          description: |
+            The turn finished. **Check `success` before using `response`.**
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResult'
+              examples:
+                completed:
+                  summary: Worked
+                  value:
+                    success: true
+                    chatId: cht_9Qm4
+                    chatCreated: false
+                    cycleId: cyc_2Bd7
+                    response: 'Three offices are running: dispatch, billing and support.'
+                    status: completed
+                    toolCallCount: 2
+                    iterations: 3
+                cycleFailed:
+                  summary: Accepted, then failed
+                  value:
+                    success: false
+                    chatId: cht_9Qm4
+                    chatCreated: false
+                    cycleId: cyc_2Bd7
+                    error: The model provider returned an error
+                    status: failed
+                    toolCallCount: 0
+                    iterations: 1
+        '400':
+          description: '`workspaceId` or `message` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingMessage:
+                  value:
+                    success: false
+                    error: message is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402':
+          description: |
+            The tenant is out of credit, or a spending budget has been reached.
+            Branch on `code`, which is stable, rather than on the message.
+
+            This can arrive at the start of a turn or partway through one, and
+            the shape is the same either way.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: false }
+                  code:
+                    type: string
+                    enum: [insufficient_balance, budget_exceeded]
+                  error: { type: string }
+                  balanceUsd: { type: number }
+                  budgetId: { type: string }
+                  budgetWindow:
+                    type: string
+                    enum: [daily, monthly]
+                  usedUsd: { type: number }
+                  limitUsd: { type: number }
+              examples:
+                noCredit:
+                  summary: Out of credit
+                  value:
+                    success: false
+                    code: insufficient_balance
+                    error: Insufficient balance. Add credits to continue.
+                    balanceUsd: 0
+                budget:
+                  summary: A budget stopped it
+                  value:
+                    success: false
+                    code: budget_exceeded
+                    error: Monthly budget reached ("Ops"). Resets on the 1st of the month (workspace timezone).
+                    budgetId: bdg_5Kf
+                    budgetWindow: monthly
+                    usedUsd: 250
+                    limitUsd: 250
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /ai/cancel:
+    post:
+      operationId: cancelNovaCycle
+      summary: Cancel the running turn
+      tags: [Running Nova]
+      description: |
+        Stops the turn currently running in this workspace, if there is one.
+
+        **Always returns 200.** `cancelled` tells you whether there was anything
+        to stop, so cancelling when nothing is running is not an error.
+
+        Cancellation takes effect between steps rather than instantly. A tool
+        already in flight finishes, and its effects stand.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+              required: [workspaceId]
+      responses:
+        '200':
+          description: Handled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  cancelled:
+                    type: boolean
+                    description: False when nothing was running.
+                  runId: { type: string }
+                  scope: { type: string }
+              examples:
+                stopped:
+                  value: { success: true, cancelled: true, runId: run_8Xk, scope: command }
+                nothingRunning:
+                  value: { success: true, cancelled: false }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /ai/config:
+    get:
+      operationId: getNovaSessionConfig
+      summary: Get session state
+      tags: [Running Nova]
+      description: |
+        Which chat is current, and which turn is in progress. Use it to
+        reattach after a disconnect.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config:
+                    type: object
+                    properties:
+                      currentChatId:
+                        oneOf: [{ type: string }, { type: 'null' }]
+                      currentCycleId:
+                        oneOf: [{ type: string }, { type: 'null' }]
+                        description: Non-null while a turn is running.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /ai/chats:
+    post:
+      operationId: createNovaChat
+      summary: Create a chat
+      tags: [Running Nova]
+      description: |
+        Starts an empty conversation.
+
+        You rarely need this. Sending a prompt with no `chatId` creates one and
+        returns its id. Use this when you want the chat to exist before the
+        first message.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                name:
+                  type: string
+                  description: Optional label.
+              required: [workspaceId]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  chat: { $ref: '#/components/schemas/Chat' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    get:
+      operationId: listNovaChats
+      summary: List chats
+      tags: [Running Nova]
+      description: |
+        Every Nova conversation in this workspace for the calling identity.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  chats:
+                    type: array
+                    items: { $ref: '#/components/schemas/Chat' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /ai/chats/{chatId}:
+    delete:
+      operationId: deleteNovaChat
+      summary: Delete a chat
+      tags: [Running Nova]
+      description: |
+        Removes the conversation and its messages.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          description: |
+            The chat to delete. IDs come from
+            [List chats](/docs/api-reference/nova/running-nova/listNovaChats),
+            or from `chatId` on a
+            [prompt response](/docs/api-reference/nova/running-nova/runNovaCycle).
+          schema:
+            type: string
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such chat in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /ai/voice/run:
+    post:
+      operationId: runNovaVoiceCycle
+      summary: Send a voice prompt
+      tags: [Running Nova]
+      description: |
+        Takes recorded audio, transcribes it, runs the same turn as
+        [Send a prompt](/docs/api-reference/nova/running-nova/runNovaCycle), and
+        returns the reply as both text and audio.
+
+        Everything true of a text turn is true here: the same tools, the same
+        permissions, the same two failure layers.
+
+        For a spoken back and forth where waiting for the whole reply feels
+        slow, use
+        [Stream a voice prompt](/docs/api-reference/nova/running-nova/streamNovaVoiceCycle)
+        instead.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: The recording. Up to 10 MB.
+                workspaceId: { type: string }
+                chatId: { type: string }
+              required: [audio, workspaceId]
+      responses:
+        '200':
+          description: The turn finished. Check `success` as with a text turn.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  chatId: { type: string }
+                  transcript:
+                    type: string
+                    description: What the audio was heard as. Worth showing back.
+                  response: { type: string }
+                  audio:
+                    type: string
+                    description: The spoken reply, base64 encoded.
+        '400':
+          description: No audio was attached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noAudio:
+                  value:
+                    success: false
+                    error: Audio file is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /ai/voice/run/stream:
+    post:
+      operationId: streamNovaVoiceCycle
+      summary: Stream a voice prompt
+      tags: [Running Nova]
+      description: |
+        The same as
+        [Send a voice prompt](/docs/api-reference/nova/running-nova/runNovaVoiceCycle),
+        returning server-sent events so audio can start playing before the reply
+        is complete.
+
+        Read the response as an event stream rather than waiting for a body.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                workspaceId: { type: string }
+                chatId: { type: string }
+              required: [audio, workspaceId]
+      responses:
+        '200':
+          description: An event stream carrying the transcript, then audio chunks, then a final event.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/boot:
+    get:
+      operationId: bootNova
+      summary: Boot Nova
+      tags: [Configuration]
+      description: |
+        Returns the caller's Nova for this workspace, creating it with defaults
+        if it does not exist yet.
+
+        Call this first. Every other configuration endpoint reads something this
+        creates, so a fresh caller who skips it will find nothing configured.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK. Existing or freshly created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/NovaConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/config:
+    get:
+      operationId: getNovaConfig
+      summary: Get configuration
+      tags: [Configuration]
+      description: |
+        The caller's Nova settings for this workspace.
+
+        **Configuration is per person.** Two people in one workspace have
+        separate Novas with separate names, tones and instructions.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/NovaConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createNovaConfig
+      summary: Create configuration
+      tags: [Configuration]
+      description: |
+        Creates the caller's Nova explicitly.
+        [Boot Nova](/docs/api-reference/nova/configuration/bootNova) does this
+        for you, and is usually the better call.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                name: { type: string }
+                tone:
+                  type: string
+                  enum: [professional, friendly, concise]
+                customInstructions: { type: string }
+                autoRoute: { type: boolean }
+                confirmDestructive: { type: boolean }
+                showReasoning: { type: boolean }
+              required: [workspaceId]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/NovaConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: updateNovaConfig
+      summary: Update configuration
+      tags: [Configuration]
+      description: |
+        Partial update. Send only what changes.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                name: { type: string }
+                tone:
+                  type: string
+                  enum: [professional, friendly, concise]
+                customInstructions:
+                  oneOf: [{ type: string }, { type: 'null' }]
+                autoRoute: { type: boolean }
+                confirmDestructive: { type: boolean }
+                showReasoning: { type: boolean }
+                voiceEnabled: { type: boolean }
+                voiceId:
+                  oneOf: [{ type: string }, { type: 'null' }]
+                  description: |
+                    Must match an entry from
+                    [List voices](/docs/api-reference/nova/voice/listNovaVoices).
+                    Null clears the choice.
+              required: [workspaceId]
+            examples:
+              tone:
+                summary: Make it terser
+                value:
+                  workspaceId: ws_a1b2c3
+                  tone: concise
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/NovaConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteNovaConfig
+      summary: Delete configuration
+      tags: [Configuration]
+      description: |
+        Removes the caller's Nova settings.
+
+        To go back to defaults while keeping Nova available, prefer
+        [Reset configuration](/docs/api-reference/nova/configuration/resetNovaConfig).
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: There was no configuration to delete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/config/reset:
+    post:
+      operationId: resetNovaConfig
+      summary: Reset configuration
+      tags: [Configuration]
+      description: |
+        Returns every setting to its default, keeping Nova in place.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+              required: [workspaceId]
+      responses:
+        '200':
+          description: Reset.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/NovaConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/prompt-config:
+    get:
+      operationId: getNovaPromptConfig
+      summary: Get prompt configuration
+      tags: [Personality]
+      description: |
+        The caller's custom instruction text.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/PromptConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: upsertNovaPromptConfig
+      summary: Set prompt configuration
+      tags: [Personality]
+      description: |
+        Creates or updates the caller's instruction text.
+
+        Two fields, and the difference matters:
+
+        | Field | Effect |
+        | --- | --- |
+        | `additionalContext` | Appended to the base instructions. Safe |
+        | `customSystemPrompt` | Replaces them entirely |
+
+        **Prefer `additionalContext`.** The base instructions carry how Nova
+        uses tools and how it behaves around destructive work. Replacing them
+        wholesale means writing all of that yourself.
+
+        Instructions shape behaviour and grant nothing. Nothing written here can
+        widen what Nova may do, because every tool is still gated on your roles.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                additionalContext:
+                  oneOf: [{ type: string }, { type: 'null' }]
+                customSystemPrompt:
+                  oneOf: [{ type: string }, { type: 'null' }]
+              required: [workspaceId]
+            examples:
+              context:
+                summary: Add company context
+                value:
+                  workspaceId: ws_a1b2c3
+                  additionalContext: We are a two-person agency. Prefer short answers and always confirm before contacting a client.
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/PromptConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/prompt-config/enhance:
+    post:
+      operationId: enhanceNovaPrompt
+      summary: Improve a prompt
+      tags: [Personality]
+      description: |
+        Takes prompt text and returns a rewritten version.
+
+        **Nothing is saved.** The result comes back for you to review, and
+        keeping it means sending it to
+        [Set prompt configuration](/docs/api-reference/nova/personality/upsertNovaPromptConfig).
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userPrompt:
+                  type: string
+                  description: Required. The text to improve.
+                workspaceId: { type: string }
+              required: [userPrompt]
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  enhancedPrompt: { type: string }
+        '400':
+          description: '`userPrompt` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: userPrompt is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/prompt-versions:
+    get:
+      operationId: listNovaPromptVersions
+      summary: List prompt versions
+      tags: [Personality]
+      description: |
+        Saved snapshots of instruction text, newest first.
+
+        **The ten most recent only.** Older ones are not returned and there is
+        no paging, so treat this as recent history rather than a full record.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  versions:
+                    type: array
+                    items: { $ref: '#/components/schemas/PromptVersion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createNovaPromptVersion
+      summary: Save a prompt version
+      tags: [Personality]
+      description: |
+        Stores a snapshot of instruction text so you can come back to it.
+
+        **Saving a version does not apply it.** Applying means sending the text
+        to [Set prompt configuration](/docs/api-reference/nova/personality/upsertNovaPromptConfig).
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                prompt:
+                  type: string
+                  description: Required.
+                source:
+                  type: string
+                  enum: [manual, enhanced]
+                  description: Whether you wrote it or it came from the enhancer.
+              required: [workspaceId, prompt]
+      responses:
+        '201':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  version: { $ref: '#/components/schemas/PromptVersion' }
+        '400':
+          description: '`workspaceId` or `prompt` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingPrompt:
+                  value:
+                    success: false
+                    error: prompt is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/prompt-versions/{versionId}:
+    get:
+      operationId: getNovaPromptVersion
+      summary: Get a prompt version
+      tags: [Personality]
+      description: |
+        One saved snapshot, with its full text.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - name: versionId
+          in: path
+          required: true
+          description: |
+            IDs come from
+            [List prompt versions](/docs/api-reference/nova/personality/listNovaPromptVersions).
+          schema:
+            type: string
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  version: { $ref: '#/components/schemas/PromptVersion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such version. Note that only the ten most recent are retained.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/voices:
+    get:
+      operationId: listNovaVoices
+      summary: List voices
+      tags: [Voice]
+      description: |
+        The voices available for spoken replies.
+
+        Read this before setting a voice, since `voiceId` has to match one of
+        these.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  voices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        description: { type: string }
+                        previewUrl: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500':
+          description: The catalogue could not be read, or is empty and has never been populated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /nova/voices/seed:
+    post:
+      operationId: seedNovaVoices
+      summary: Populate the voice catalogue
+      tags: [Voice]
+      description: |
+        Fills the catalogue from the speech provider. A setup step, not
+        something to call routinely.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: Populated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  count: { type: integer }
+                  message: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/voice-config:
+    get:
+      operationId: getNovaVoiceConfig
+      summary: Get voice settings
+      tags: [Voice]
+      description: |
+        The caller's chosen voice and its delivery settings.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/VoiceConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: upsertNovaVoiceConfig
+      summary: Set voice settings
+      tags: [Voice]
+      description: |
+        Chooses a voice and how it is delivered.
+
+        The four delivery settings are optional and interact, so change one at a
+        time and listen to the result rather than reasoning about the numbers.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                voiceId:
+                  oneOf: [{ type: string }, { type: 'null' }]
+                  description: |
+                    Must match an entry from
+                    [List voices](/docs/api-reference/nova/voice/listNovaVoices).
+                    Null clears the choice.
+                voiceEnabled:
+                  type: boolean
+                  description: Whether Nova speaks its replies at all.
+                stability:
+                  oneOf: [{ type: number }, { type: 'null' }]
+                similarityBoost:
+                  oneOf: [{ type: number }, { type: 'null' }]
+                style:
+                  oneOf: [{ type: number }, { type: 'null' }]
+                useSpeakerBoost:
+                  oneOf: [{ type: boolean }, { type: 'null' }]
+              required: [workspaceId]
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config: { $ref: '#/components/schemas/VoiceConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/voice-chat:
+    post:
+      operationId: sendNovaVoiceChat
+      summary: Send a transcript
+      tags: [Voice]
+      description: |
+        Takes text you have already transcribed and returns Nova's reply as
+        text, for when you handle speech recognition yourself.
+
+        If you have audio rather than text, use
+        [Send a voice prompt](/docs/api-reference/nova/running-nova/runNovaVoiceCycle)
+        instead.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                transcript:
+                  type: string
+                  description: Required. What was said.
+                voiceId:
+                  type: string
+                  description: |
+                    Required when starting a new conversation. Values come from
+                    [List voices](/docs/api-reference/nova/voice/listNovaVoices).
+                sessionId:
+                  type: string
+                  description: Continues an existing conversation.
+              required: [workspaceId, transcript]
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  response: { type: string }
+                  sessionId: { type: string }
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                needsVoice:
+                  value:
+                    success: false
+                    error: voiceId is required for new sessions
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/models:
+    get:
+      operationId: listNovaModels
+      summary: List models
+      tags: [Preferences]
+      description: |
+        The models Nova can run on for this tenant.
+
+        What appears depends on your billing arrangement and on any keys or
+        local models you have configured, so read it rather than assuming a
+        fixed list.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  models:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Use this as `modelId` when setting a preference.
+                        name: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/model-preference:
+    get:
+      operationId: getNovaModelPreference
+      summary: Get model preference
+      tags: [Preferences]
+      description: |
+        Which model the caller has chosen in this workspace.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  preference:
+                    type: object
+                    properties:
+                      workspaceId: { type: string }
+                      userId: { type: string }
+                      modelId: { type: string }
+                      updatedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: upsertNovaModelPreference
+      summary: Set model preference
+      tags: [Preferences]
+      description: |
+        Chooses which model Nova runs on for this caller in this workspace.
+
+        Pass `auto` to let the platform choose, which is the default and usually
+        right. Otherwise pass an `id` from
+        [List models](/docs/api-reference/nova/preferences/listNovaModels).
+
+        **The value is not checked against the catalogue on save.** An id that
+        does not resolve is stored and surfaces as a failed turn later, so take
+        it from the list rather than typing it.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                modelId:
+                  type: string
+                  description: Required. `auto`, or an id from the catalogue.
+                  examples: [auto]
+              required: [workspaceId, modelId]
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  preference:
+                    type: object
+                    properties:
+                      modelId: { type: string }
+                      updatedAt: { type: string, format: date-time }
+        '400':
+          description: '`workspaceId` or `modelId` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: modelId is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/canvas-mode:
+    get:
+      operationId: getNovaCanvasMode
+      summary: Get canvas mode
+      tags: [Preferences]
+      description: |
+        Whether Nova lays out the console's side panels sparingly or freely.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  mode:
+                    type: string
+                    enum: [manual, auto]
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: setNovaCanvasMode
+      summary: Set canvas mode
+      tags: [Preferences]
+      description: |
+        A console preference, and a behavioural one rather than a layout limit.
+
+        | `mode` | Nova will |
+        | --- | --- |
+        | `manual` | Keep to one panel, opening more only when it clearly helps |
+        | `auto` | Use all three freely to lay out what you are working on |
+
+        Either way up to three panels are available. This changes how readily
+        Nova reaches for them.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                mode:
+                  type: string
+                  enum: [manual, auto]
+              required: [workspaceId, mode]
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  mode:
+                    type: string
+                    enum: [manual, auto]
+        '400':
+          description: '`workspaceId` is missing, or `mode` is not one of the two values.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badMode:
+                  value:
+                    success: false
+                    error: mode must be 'manual' or 'auto'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/preview-ground/sessions:
+    post:
+      operationId: createNovaPreviewSession
+      summary: Create a preview session
+      tags: [Preview ground]
+      description: |
+        Opens a throwaway chat for trying personality and voice changes before
+        keeping them.
+
+        **A preview has no tools.** It is for hearing how Nova sounds, not for
+        getting work done. Nothing said here reaches your workspace.
+
+        Sessions expire. Treat one as good for a sitting.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+              required: [workspaceId]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  session: { $ref: '#/components/schemas/PreviewSession' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/preview-ground/sessions/{sessionId}:
+    get:
+      operationId: getNovaPreviewSession
+      summary: Get a preview session
+      tags: [Preview ground]
+      description: |
+        The session and everything said in it.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: |
+            Returned by
+            [Create a preview session](/docs/api-reference/nova/preview-ground/createNovaPreviewSession).
+            There is no list endpoint, so keep it.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  session: { $ref: '#/components/schemas/PreviewSession' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: |
+            No such session, or it has expired. The two are not distinguished.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                gone:
+                  value:
+                    success: false
+                    error: Session not found or expired
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteNovaPreviewSession
+      summary: Delete a preview session
+      tags: [Preview ground]
+      description: |
+        Discards the session early. They expire on their own, so this is
+        optional.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: |
+            Returned by
+            [Create a preview session](/docs/api-reference/nova/preview-ground/createNovaPreviewSession).
+          schema:
+            type: string
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/preview-ground/chat:
+    post:
+      operationId: sendNovaPreviewMessage
+      summary: Send a preview message
+      tags: [Preview ground]
+      description: |
+        Says something in a preview session and gets a reply, using the
+        personality and voice settings being tried out.
+
+        No tools, and no effect on your workspace.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                sessionId:
+                  type: string
+                  description: |
+                    Required. From
+                    [Create a preview session](/docs/api-reference/nova/preview-ground/createNovaPreviewSession).
+                message:
+                  type: string
+                  description: Required.
+              required: [workspaceId, sessionId, message]
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  response: { type: string }
+        '400':
+          description: A required field is missing, or the session has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingSession:
+                  value:
+                    success: false
+                    error: sessionId is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }

@@ -1,0 +1,79 @@
+---
+title: Billing
+description: Credit, usage history, and what your machines cost.
+---
+
+Two meters, reported separately.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [Spending](/docs/spend) explains what each meter measures,
+  which one can be capped, and the order the checks run in. This page describes
+  the API surface.
+</Callout>
+
+## The split
+
+| | Model use | Compute |
+| --- | --- | --- |
+| Paid from | Prepaid credit | Billed by runtime |
+| Balance | [Get the balance](/docs/api-reference/billing/credit/getBalance) | Not a balance |
+| History | [List model usage](/docs/api-reference/billing/usage/listUsage) | [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary) |
+| Invoices | [Credit invoices](/docs/api-reference/billing/usage/listInvoices) | [Compute invoices](/docs/api-reference/billing/compute/listComputeInvoices) |
+| Can be capped | Yes, per workspace | No |
+
+<Callout type="warn">
+  **Nothing adds the two together.** There is no combined total anywhere in this
+  API. A figure for what an account spent is something you assemble from both
+  sides, and the two use different units and different invoices.
+</Callout>
+
+## Everything here is account-wide
+
+All of it is checked at `console` scope, so a key scoped to a single workspace
+reaches none of it. That is deliberate: billing is an account concern.
+
+Spend **limits** are the opposite. They are workspace-scoped and live in
+[Workspaces](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets), which
+is what lets you cap one team or customer without giving them sight of the
+account's finances.
+
+## Holding costs down
+
+The two meters need different tools.
+
+**Model use** is capped with a spending limit on a workspace. Past the ceiling,
+work stops.
+
+**Compute** has no cap. The only lever is
+[Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig):
+a smaller machine costs less per second awake, and a shorter idle timeout means
+fewer seconds awake. An office nobody stops keeps costing until it sleeps.
+
+## What is not here
+
+**Paying.** Cards, checkout and subscription management are console flows and
+reject API keys.
+
+**Adding credit directly.** Credit is added by paying, or by automatic top ups
+configured through
+[Configure automatic top ups](/docs/api-reference/billing/credit/updateAutoReload).
+
+**Rates.** What a given model or machine size costs is published in the console
+rather than through this API.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Spending"
+    href="/docs/spend"
+    description="The two meters, and the three checks before anything spends."
+  />
+  <Card
+    title="Budgets"
+    href="/docs/api-reference/workspaces/budgets/listWorkspaceBudgets"
+    description="Per-workspace spending limits."
+  />
+</Cards>

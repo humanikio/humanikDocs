@@ -3,12 +3,17 @@
   "root": true,
   "pages": [
     "index",
+    "---Foundation---",
+    "workspaces",
     "---Native products---",
     "offices",
     "crm",
     "browsers",
+    "workflows",
+    "nova",
     "---Platform---",
     "cloud",
+    "billing",
     "---Console only---",
     "phone-and-email"
   ]
