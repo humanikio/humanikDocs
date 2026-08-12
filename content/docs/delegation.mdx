@@ -1,0 +1,135 @@
+---
+title: Delegation
+description: How an AI employee finds the right colleague and hands work over.
+---
+
+Ask an AI employee *"who handles billing questions?"* and it needs a real answer.
+
+Without one, an agent does what agents do with a gap: it invents a colleague, or
+it tells the person it cannot help. Neither is what someone in an organisation
+does, because a person knows who sits next to them.
+
+## Two questions, kept separate
+
+Handing work to the right colleague needs two different facts, and they come from
+different places.
+
+| Question | Comes from |
+| --- | --- |
+| **Can they do this?** | What that employee is equipped with: its instructions, its scheduled work, its connected tools |
+| **Are they senior enough?** | What that employee is permitted to do |
+
+That split is the whole design. An employee looking for someone to *do* a job
+reads the first. An employee looking for someone to *approve* a job reads the
+second.
+
+## People and AI employees are on the same chart
+
+Everyone in a workspace appears in one list: your colleagues, your AI employees,
+and any other machine identity you have created.
+
+They are ordered on the same scale, which means **an AI employee escalating to a
+person and escalating to another AI employee are the same operation.** There is
+no separate path for handing something to a human.
+
+That ordering is derived from permissions rather than assigned by hand. Someone
+who can approve spending sits above someone who can read a contact, because that
+is what their access says.
+
+<Callout>
+  **This is not a performance score.** The ordering exists so an employee can
+  tell an escalation from a hand-off. It says who may decide what, not who is
+  doing well.
+</Callout>
+
+## Nothing here changes anyone's access
+
+Worth being unambiguous about, because a system where a model writes into
+anything permission-shaped deserves the question.
+
+**Permissions flow in. Nothing flows back out.** The ordering is computed from
+access and validated against it, and changing the ordering changes no one's
+access. An AI employee cannot promote anyone, including itself, and neither can
+the model that helps maintain the chart.
+
+An AI employee's own view of the chart is **read-only**. It can read who does
+what; it cannot edit the list, reorder it, or add anyone to it. Editing lives
+with people.
+
+### Where a model does help, and how that is bounded
+
+Permissions alone do not capture everything. Someone who administers nothing may
+still do the most valuable work, and a chart derived purely from access would put
+them at the bottom.
+
+So a model reads what each employee is actually equipped with and **proposes** a
+description and an adjustment. Proposals are not applied. An administrator
+resolves each one individually, and there is no accept-all.
+
+<Callout type="warn">
+  **Descriptions are written by a model and approved once.** They are a signal
+  for routing, not a verified account of what an employee does. They are not
+  rechecked as an employee changes, so an employee that gained a capability last
+  month may still be described without it.
+</Callout>
+
+## Staying honest as things change
+
+When someone's access changes, their entry is flagged as out of date rather than
+silently left wrong. An employee reading the chart can see that a particular
+entry is stale and weigh it accordingly.
+
+Detecting drift is not the same as fixing it. A stale entry stays stale until
+someone recomputes it, and nothing chases that on your behalf.
+
+## Then it routes
+
+Finding the right colleague is only half of it. The employee reads the
+descriptions, picks someone who fits or someone senior enough to decide, and
+sends the work to them in a conversation.
+
+```
+   "this needs a refund over $500"
+              │
+              ▼
+     who can approve that?          ← the chart answers
+              │
+              ▼
+     message that colleague         ← the conversation carries it
+```
+
+**The chart answers who. The conversation carries the work.** They are the same
+organisation seen twice: the structure, and the traffic moving along it.
+
+## What it will not do
+
+**It will not invent a colleague.** The list is the workspace's real membership,
+which is precisely what stops an employee routing work to somebody who does not
+exist. This was the original problem, and the fix is that there is now something
+true to read.
+
+**It will not always pick correctly.** Descriptions and ordering are signals, not
+guarantees. An employee can misjudge fit exactly as a person can.
+
+**It is not a reporting line.** One structure for finding people, not a
+management relationship. Nothing reports to anything.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="The employees that appear on the chart."
+  />
+  <Card
+    title="Access control"
+    href="/docs/access-control"
+    description="The permissions the ordering is derived from."
+  />
+  <Card
+    title="Skills and protocols"
+    href="/docs/skills-and-protocols"
+    description="What shapes an employee's description."
+  />
+</Cards>
