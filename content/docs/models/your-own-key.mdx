@@ -1,0 +1,160 @@
+---
+title: Bring your own key
+description: Running on your own vendor account instead of platform credit.
+---
+
+If you already have an account with a model vendor, your AI employees can use it.
+Work is billed to you by them, at your rates, and nothing goes through your
+platform credit.
+
+## Why bother
+
+**Your rates and your invoice.** You are billed by the vendor directly, on
+whatever terms you have with them. Volume discounts and committed-spend
+agreements apply, which they cannot when the account is ours.
+
+**Far more models.** An OpenRouter account opens 300 or so models across
+essentially every vendor, and the list is live rather than a set we curate.
+
+**Claude at all.** Claude models cannot be bought with platform credit. Your own
+Anthropic account is the only way to reach them.
+
+**As narrow as you like.** The choice goes down to a single office, and for Nova
+down to a single person. It is not an account-wide switch.
+
+## Two kinds of account
+
+| | Gives you |
+| --- | --- |
+| **Anthropic** | Claude models, billed to your Anthropic account |
+| **OpenRouter** | 300+ models across most vendors, billed to your OpenRouter account |
+
+One of each per account. Storing a second key for the same vendor replaces the
+first, and there is no history and no rotation window, so treat it as a
+replacement rather than a rotation.
+
+## Storing the key
+
+**This part is the console, and only an owner can do it.** There is no API for
+it, deliberately: holding the credential is an owner-only act, while *using* it
+is delegated.
+
+In the console, go to the account's model provider settings, choose the vendor,
+and paste the key. What gets stored is the key itself in a vault, plus its last
+four characters so you can tell later which key is in place without revealing it.
+
+<Callout>
+  **An Anthropic key is checked before it is stored.** An OpenRouter key is not,
+  and verifies the first time something uses it, so a typo shows up as a failed
+  message rather than a failed save.
+</Callout>
+
+## Giving it to a workspace
+
+A stored key is used by nothing. It has to be given to each workspace that should
+use it, which is also a console step.
+
+This is what makes the model list honest: a workspace sees "your key" models
+**only** when it genuinely holds that key.
+
+<Callout type="warn">
+  **The console has its own workspace.** Nova in the dashboard, outside any
+  workspace, needs its own assignment. Storing a key for the account does not opt
+  it in.
+</Callout>
+
+Before removing a workspace's access, the console can show you which offices that
+would revert to platform billing. Worth looking at, because those offices do not
+change until they restart.
+
+## Opting an office in
+
+Once a workspace holds a key, each office decides separately whether to use it.
+That decision is API-reachable, unlike the two steps above:
+
+```bash
+curl -X PUT "$HOS_API/cloud-claw/byok-config?workspaceId=ws_a1b2c3&officeId=off_dispatch" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "useCustomKey": true,
+    "provider": "anthropic",
+    "modelId": "claude-sonnet-4-5",
+    "fallbackModelId": "openai/gpt-4o-mini"
+  }'
+```
+
+See
+[Set an office's model provider](/docs/api-reference/offices/model-provider/updateOfficeModelProvider).
+
+Three things about that call are worth knowing.
+
+**It applies at the next restart.** An office decides once, when it starts. A
+running office keeps what it booted with, so apply the change with
+[Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine). That replaces the machine, which is what makes the new setting land.
+
+**Send `provider` when the workspace holds more than one.** Leave it out and the
+office keeps its current choice, or takes the only assignment when there is
+exactly one. With two assigned, it will not guess.
+
+**Always set a fallback.** `fallbackModelId` is a platform-billed model that does
+two jobs: it is what the office runs when it is not using your account, and what
+it falls back to if your account cannot be reached. Set it before you turn
+anything else on.
+
+## And then choose a model
+
+<Callout type="warn">
+  **Nothing above changes what Nova runs on.** Each person still has to pick a
+  model, because the default is Auto and Auto uses our account. See
+  [Choosing a model](/docs/models/choosing-a-model).
+</Callout>
+
+For offices the model is part of the same call, so opting in and choosing happen
+together. For Nova they are separate, and the second half is the one people miss.
+
+## Who can do what
+
+Three tiers, deliberately different:
+
+| Action | Needed | Who typically has it |
+| --- | --- | --- |
+| Store a key, give it to a workspace | `tenant:manage` @ console | The owner only |
+| Point an office at it | `office:manage` @ that office | Workspace admin, office operator |
+| See the model list, read a preference | `nova:read` @ workspace | Everyone with access |
+| Change your own model | `nova:manage` @ workspace | Workspace admin |
+
+An office operator can point their own office at the account's key **without
+being able to see, store, or reveal it.** That split is the point: holding the
+credential and using it are different privileges.
+
+## What this does not do
+
+**It does not cap spend.** Your vendor bills you directly. A
+[spending limit](/docs/spend) can still cap what employees spend on your own
+account, which is the only control that reaches money we never touch.
+
+**There is no per-key usage report.** We record who assigned what and when.
+Attributing spend to a particular key is your vendor's dashboard, not ours.
+
+**It does not rotate.** Storing a key replaces the previous one immediately.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Choosing a model"
+    href="/docs/models/choosing-a-model"
+    description="The step that actually switches billing over."
+  />
+  <Card
+    title="Bring your own compute"
+    href="/docs/models/your-own-compute"
+    description="No vendor account at all."
+  />
+  <Card
+    title="Spending"
+    href="/docs/spend"
+    description="Capping what employees spend, including on your own account."
+  />
+</Cards>

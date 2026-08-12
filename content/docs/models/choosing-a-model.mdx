@@ -1,0 +1,170 @@
+---
+title: Choosing a model
+description: Per person, per office, and when a smaller model is the better answer.
+---
+
+Two separate choices, made by different people at different times.
+
+| | Who chooses | When it applies |
+| --- | --- | --- |
+| **Nova** | Each person, for themselves | The next message |
+| **An office** | Whoever configures the office | The next restart, see below |
+
+Nova's choice is personal: two people in one workspace can be on different
+models, and neither affects the other. An office's choice is the office's, and
+everyone it works for gets it.
+
+## Choosing for yourself in Nova
+
+Read what your workspace can reach:
+
+```bash
+curl "$HOS_API/nova/models?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_API_KEY"
+```
+
+Then set yours:
+
+```bash
+curl -X PATCH "$HOS_API/nova/model-preference?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "modelId": "claude-sonnet-4-5" }'
+```
+
+See [List models](/docs/api-reference/nova/preferences/listNovaModels) and
+[Set model preference](/docs/api-reference/nova/preferences/upsertNovaModelPreference).
+
+<Callout type="warn">
+  **The value is not checked against the list when you save it.** A model that
+  does not resolve is stored happily and shows up as a failed message later. Take
+  it from the list rather than typing it.
+</Callout>
+
+## Choosing for an office
+
+An office carries two model settings, and both matter:
+
+| Setting | What it is |
+| --- | --- |
+| `modelId` | What the office runs on |
+| `fallbackModelId` | A platform-billed model, used when the office is not on your own account, and when that account cannot be reached |
+
+**Set the fallback even if you never expect to need it.** It is not only a
+safety net: it is what the office actually runs whenever it is not using your own
+account, so an office without one has no defined answer to a question it will be
+asked at every boot.
+
+```bash
+curl -X PUT "$HOS_API/cloud-claw/byok-config?workspaceId=ws_a1b2c3&officeId=off_dispatch" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "useCustomKey": true,
+    "provider": "openrouter",
+    "modelId": "anthropic/claude-sonnet-4.5",
+    "fallbackModelId": "openai/gpt-4o-mini"
+  }'
+```
+
+### What an office falls back to
+
+An office works down a list at boot, taking the first thing it finds:
+
+<Steps>
+
+<Step>
+**The model set on this office.** The specific choice, if there is one.
+</Step>
+
+<Step>
+**Whatever its workspace was configured with**, for offices set up before per-office
+choice existed.
+</Step>
+
+<Step>
+**The provider's own default**, if nothing above answered.
+</Step>
+
+</Steps>
+
+Whatever it lands on, a change only takes hold when the office next starts, and
+starting it properly means [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine).
+
+So an office with no model does not fail to start. It starts on something, and
+the something may not be what you assumed. Read it back with
+[Get an office's model provider](/docs/api-reference/offices/model-provider/getOfficeModelProvider)
+rather than inferring it.
+
+## Who can change what
+
+The two choices are governed differently, which matches who they affect.
+
+| Action | Needed |
+| --- | --- |
+| See what models a workspace can reach | `nova:read` @ workspace |
+| Change your own model in Nova | `nova:manage` @ workspace |
+| Change an office's model or machine | `office:manage` @ that office |
+
+Your Nova choice is yours alone, so it needs no authority over anyone else. An
+office's choice affects everything that office does for everybody, which is why
+it sits with whoever administers the office.
+
+Neither lets you add a provider. Bringing a vendor account or a machine into a
+workspace is owner-only and console-only. See
+[Bring your own key](/docs/models/your-own-key#who-can-do-what).
+
+## When a smaller model is the right answer
+
+The strongest model is not the right default for everything, and on a busy office
+the difference is not small.
+
+**A smaller model is usually right when the work is shaped rather than open
+ended.** Extracting fields from a document, classifying a message, deciding which
+of four branches to take, summarising something short, tidying formatting. The
+answer is constrained by the task, so extra reasoning buys little.
+
+**Reach for the strongest model when the work is genuinely open.** Multi-step
+plans where one wrong turn wastes the rest, writing that has to be good rather
+than correct, reading code, anything where the employee has to decide what the
+question even is.
+
+A useful test: **if you could describe the answer's shape before seeing it, a
+smaller model will probably produce it.** If you could not, pay for the reasoning.
+
+**A workflow is the third option and often the best one.** If a step is fully
+determined, a [workflow](/docs/workflows) does it identically every time for no
+model cost at all. Reserve the model for the step that actually requires
+judgement.
+
+### Mixing them deliberately
+
+Nothing requires one model everywhere. A common arrangement:
+
+- The office that handles inbound triage runs on something small and quick
+- The office that drafts customer-facing replies runs on the strongest you have
+- People running Nova pick per person, because their work varies more than an
+  office's does
+
+Since an office's choice is per office, this costs nothing to arrange beyond
+deciding it.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Bring your own key"
+    href="/docs/models/your-own-key"
+    description="Getting your own account into the list."
+  />
+  <Card
+    title="Spending"
+    href="/docs/spend"
+    description="Capping what any of this can cost."
+  />
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="The option that costs no model spend at all."
+  />
+</Cards>

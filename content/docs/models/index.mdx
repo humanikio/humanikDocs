@@ -1,0 +1,140 @@
+---
+title: Models
+description: What your AI employees think on, and who pays for it.
+---
+
+Every AI employee and every Nova conversation runs on a model. By default that
+model is ours, and the cost comes out of your credit.
+
+You can change that in two different ways, and they are not variations of one
+idea:
+
+| | What you bring | What it gets you |
+| --- | --- | --- |
+| **[Your own key](/docs/models/your-own-key)** | An account with a model vendor | Your rates, your invoice, your choice of 300+ models |
+| **[Your own compute](/docs/models/your-own-compute)** | A machine you own | No vendor and no per-token cost, and nothing leaves your building |
+
+The first is about billing. The second is about where the work physically
+happens. Most of this section applies to both, so start here.
+
+## The four layers
+
+Setting this up is four steps, and **each one is independent of the others**.
+
+<Steps>
+
+<Step>
+**Store the credential**, once for the account. Done in the console, and only an
+owner can do it.
+</Step>
+
+<Step>
+**Give it to a workspace.** A stored credential is used by nothing until a
+workspace holds it.
+</Step>
+
+<Step>
+**Opt an office in**, if you want that employee using it rather than credits.
+</Step>
+
+<Step>
+**Choose a model.** This is the step that actually changes what runs.
+</Step>
+
+</Steps>
+
+<Callout type="warn">
+  **Steps 1 to 3 change nothing on their own.** It is entirely possible to store
+  a key, assign every workspace, opt in every office, and still be billed for
+  every message, because nobody performed step 4. It is the step most often
+  skipped, and the only one that has an effect you can see on an invoice.
+</Callout>
+
+## The default runs on credits, deliberately
+
+Nova's model picker defaults to **Auto**, and Auto always uses our key and always
+draws your credit, even when your workspace has your own account assigned.
+
+That is on purpose rather than an oversight.
+
+> **Pick a model to start using your own account.** Auto means we choose, so we
+> pay. We will not spend your account on your behalf until you name a model
+> yourself.
+
+Naming a model is the act of consent. It is also the thing to check first when
+your own account looks like it is not being used: almost always, the people using
+that workspace never left Auto.
+
+## What decides who pays
+
+The model identifier carries the answer. You do not set billing separately, and
+there is no switch for it: choosing a model is choosing who pays.
+
+| What you pick | Runs on | Billed to |
+| --- | --- | --- |
+| A model under **Local machine** | That exact machine | Nobody. There is no per-token cost |
+| A model under **Your key** | Your vendor account | Your vendor invoice |
+| A model under **Platform models** | Our account | Your credit |
+| **Auto** | Our account | Your credit |
+
+The same model can appear in two sections at once, which looks redundant and is
+not: one row spends your account and the other spends your credit. That is why
+the section a model sits under matters more than its name.
+
+## What each workspace can see
+
+The picker shows a workspace **only the providers that workspace has been given**.
+This is a deliberate consequence of layer 2: "Your key" in the list always means
+*this workspace genuinely uses that account*, never *the account exists
+somewhere*.
+
+One consequence worth knowing before you go looking for a model that is missing:
+
+<Callout type="warn">
+  **Claude models require your own Anthropic account.** They cannot be bought
+  with platform credit. A workspace without an Anthropic assignment does not see
+  them greyed out, it does not see them at all.
+</Callout>
+
+## Nova and offices behave oppositely
+
+The same setup lands at different times depending on who is thinking.
+
+| | Nova | An office |
+| --- | --- | --- |
+| Decides which model on | Every message | Once, when it starts |
+| Chosen by | Each person, for themselves | The office's own configuration |
+| A change applies | Next message | **Next restart** |
+
+So removing a workspace's access stops Nova immediately and does **not** stop an
+office that is already running. An office keeps whatever it booted with until it
+restarts. Applying a change means [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine), which replaces the machine rather
+than rebooting it.
+
+This one distinction causes more confusion than anything else here, and it is
+worth holding onto: **Nova asks every time, an office asks once.**
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Bring your own key"
+    href="/docs/models/your-own-key"
+    description="Using your own vendor account, and what changes when you do."
+  />
+  <Card
+    title="Bring your own compute"
+    href="/docs/models/your-own-compute"
+    description="Running the thinking on hardware you own."
+  />
+  <Card
+    title="Choosing a model"
+    href="/docs/models/choosing-a-model"
+    description="Per person, per office, and when a smaller model is the right call."
+  />
+  <Card
+    title="Spending"
+    href="/docs/spend"
+    description="The two meters, and capping either kind of spend."
+  />
+</Cards>

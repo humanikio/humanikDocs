@@ -1,0 +1,206 @@
+---
+title: Bring your own compute
+description: Running the thinking on hardware you own.
+---
+
+Instead of a vendor account, you can point an office or a Nova conversation at a
+machine you own. The work happens there.
+
+This is a different argument from [bringing your own key](/docs/models/your-own-key).
+That one is about who invoices you. This one is about where the work physically
+happens, and for some organisations that is the only question that matters.
+
+## Why bother
+
+**Nothing leaves the building.** The prompt, the context and the response stay on
+your hardware. For work under a residency requirement, that is not a saving, it
+is the difference between possible and not.
+
+**No per-token cost.** There is no vendor and no meter. The machine is the cost,
+and you already own it.
+
+**Your own models.** The machine declares what it can run, so whatever you have
+pulled is what is on offer, including models nobody sells access to.
+
+## Getting a machine connected
+
+Enrolling a machine, choosing its flavor, and setting what it is allowed to do
+all live in [Devices](/docs/devices), which covers the whole setup. This page
+picks up once a machine is connected.
+
+Two kinds of machine can serve thinking:
+
+| Flavor | Serves | Behaves like |
+| --- | --- | --- |
+| **A** | Completions from a local model | A model |
+| **B** | A Claude Code agent turn | An agent |
+
+Flavor B is the common one, and the distinction matters more than it looks. See
+[the split](#one-turn-two-sets-of-tools) below.
+
+## Allocating it to a workspace
+
+A connected machine is not available until it is allocated to a workspace, which
+is a console step alongside the other credential settings.
+
+A workspace can hold **several machines** and nominates one as its default. That
+is different from keys, where there is one per vendor.
+
+Then an office picks which machine it runs on:
+
+```bash
+curl -X PUT "$HOS_API/cloud-claw/byok-config?workspaceId=ws_a1b2c3&officeId=off_dispatch" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "useCustomKey": true,
+    "provider": "local",
+    "deviceId": "dev_9f2a",
+    "fallbackModelId": "openai/gpt-4o-mini"
+  }'
+```
+
+Omit `deviceId` and the office uses the workspace default. As with any office
+setting, it lands when the office next starts, so follow it with [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine).
+
+<Callout>
+  **You do not pick a model for a local machine.** The machine declares what it
+  runs, so choosing the machine is choosing the model source. Picking a row under
+  *Local machine* is picking that exact machine.
+</Callout>
+
+## One turn, two sets of tools
+
+This is the part worth reading twice, because a flavor B machine serving an
+office holds **two different kinds of tool at once**, and they run in different
+places under different rules.
+
+```
+   ┌─ the office's tools ─────────────────────────────────┐
+   │  run on the office's own machine, with its own        │
+   │  credentials, reaching what the office was allocated  │
+   └──────────────────────────────────────────────────────┘
+                        ▲
+                        │  same turn, same agent
+                        ▼
+   ┌─ your machine's tools ───────────────────────────────┐
+   │  run on your laptop, reading your files, using your   │
+   │  connectors, bounded by the ceiling you set           │
+   └──────────────────────────────────────────────────────┘
+```
+
+The agent is thinking on your hardware, and in one turn it can read a file on
+your disk **and** do something inside the office it is working for.
+
+| | Your machine's tools | The office's tools |
+| --- | --- | --- |
+| Run where | On your machine | On the office's machine |
+| Using whose credentials | Yours | The office's |
+| Bounded by | The ceiling in your device's config | The office's own permissions |
+| Examples | Local files, your connected apps | The office's data, its integrations |
+
+**The office's credentials never travel to your laptop.** A tool that needs them
+runs where they already are, and only the result comes back. That is why this is
+safe to do at all, and it is also why your device's ceiling does not govern the
+office's tools: that ceiling exists to protect *your machine*, not to limit the
+office.
+
+The two are told apart by name and nothing else, which is why the agent is
+briefed on the distinction explicitly rather than left to work it out.
+
+## When to use this
+
+**Reach for a local machine when:**
+
+- Data cannot leave your premises
+- You have capable hardware sitting idle and a steady workload
+- The job needs your own files or your own connected apps in the same breath as
+  the office's work
+- You want a model nobody offers as a service
+
+**Reach for a key or platform credit when:**
+
+- The work needs the strongest available models
+- Volume is spiky, and a machine sitting idle costs more than tokens would
+- You need it to work when a particular laptop is closed
+
+## Who can do what
+
+Machines are governed more tightly than most things on the platform, and
+deliberately so: a machine is somebody's actual computer.
+
+| Action | Needed | Who typically has it |
+| --- | --- | --- |
+| Enrol a machine, revoke it, see the fleet | `tenant:manage` @ console | The owner only |
+| Allocate a machine to a workspace, set its default | `tenant:manage` @ console | The owner only |
+| Point an office at a machine | `office:manage` @ that office | Workspace admin, office operator |
+| Pick a local model for yourself in Nova | `nova:manage` @ workspace | Workspace admin |
+| See which machines a workspace has | `nova:read` @ workspace | Everyone with access |
+
+Two things follow from this that are worth saying plainly.
+
+**Everything about the machine itself is owner-only, and console-only.** Enrolling
+one, revoking it, and deciding which workspaces may use it are all held at the
+same level as storing a vendor key. There is no API for them, which is the same
+posture as [bringing your own key](/docs/models/your-own-key).
+
+**Using one is delegated.** Once a machine is allocated to a workspace, an office
+operator can point their own office at it without being able to enrol, revoke, or
+reallocate anything. Holding the machine and using it are different privileges.
+
+<Callout>
+  **An office reaches a machine as itself.** When an office runs on your
+  hardware, the request carries the office's own credential and is checked
+  against `device:use` in that office's workspace. The workspace is taken from
+  the credential rather than from the request, so an office cannot ask for a
+  machine belonging to a workspace it is not in, even by naming one.
+</Callout>
+
+## Things that will catch you out
+
+<Callout type="warn">
+  **An offline machine disappears from the picker.** It is absent rather than
+  greyed out, because a disconnected machine advertises nothing. A closed laptop
+  is the normal state of a machine that is enrolled and fine.
+</Callout>
+
+<Callout type="warn">
+  **There is no failover to another machine.** If the machine an office uses is
+  offline, work falls back to the cloud, never to a second machine. One machine
+  per role, so what a job runs on is predictable.
+</Callout>
+
+**A machine goes offline about ninety seconds after it stops answering.** Nothing
+polls it and nothing marks it down; its absence is the signal. A crash, a closed
+lid and a pulled cable all look the same, which is deliberate.
+
+**Your connected apps belong to your account, not the machine.** If you sign the
+machine into a different account, hosted connectors go with the old one. Servers
+registered on the device itself survive. For a machine meant to serve a
+workspace, prefer device-registered servers and treat the account it is signed
+into as part of the machine's configuration rather than a personal preference.
+
+**Allowing everything disables the machine.** A ceiling set to allow all tools
+does not widen what the machine will do, it removes the ceiling and makes the
+machine refuse every job. It stays online, looks healthy, and fails everything.
+Name the tools you want.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Devices"
+    href="/docs/devices"
+    description="Enrolling a machine, flavors, and the ceiling."
+  />
+  <Card
+    title="Choosing a model"
+    href="/docs/models/choosing-a-model"
+    description="Per person and per office, including defaults."
+  />
+  <Card
+    title="Bring your own key"
+    href="/docs/models/your-own-key"
+    description="The other way to leave platform billing."
+  />
+</Cards>

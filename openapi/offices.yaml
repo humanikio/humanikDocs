@@ -42,6 +42,8 @@ tags:
     description: Shared integration templates and website assets that offices draw from.
   - name: Machine
     description: Size, idle timeout, running instances, and logs.
+  - name: Model provider
+    description: Which model account or machine an office runs its thinking on.
   - name: Environment secrets
     description: The office's own vault, injected at boot.
 
@@ -77,6 +79,15 @@ components:
         examples: [off_9c1e7d]
 
   schemas:
+    MachineActionResult:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        status:
+          type: string
+          description: Where the machine is in its lifecycle.
+        message: { type: string }
+
     Error:
       type: object
       description: |
@@ -1237,7 +1248,7 @@ paths:
         The response carries `gatewayRestartNeeded`, which reports whether the
         office has protocol changes that are not live yet. Protocols are read
         into the employee's context when the office boots, so a change does not
-        take effect until it restarts.
+        take effect until it restarts. Apply them with [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine).
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -1942,7 +1953,8 @@ paths:
         Adds a named value to a secret group. Requires `secrets:write`.
 
         **Fields are injected when the office boots.** Adding one does nothing
-        until the office restarts. If you change a value and the employee's
+        until the office restarts, which you do with [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine). If you change a
+        value and the employee's
         behaviour does not change, this is almost always why.
       requestBody:
         required: true
@@ -3187,3 +3199,464 @@ paths:
                 $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /cloud-claw/byok-config:
+    get:
+      operationId: getOfficeModelProvider
+      summary: Get an office's model provider
+      tags: [Model provider]
+      description: |
+        What this office runs its thinking on, and what else it could run on.
+
+        The response answers four separate questions, and it is worth reading it
+        as four rather than one:
+
+        | Field | Answers |
+        | --- | --- |
+        | `useCustomKey` | Is this office on your own account, or on platform credits |
+        | `tenantKeyAvailable` | Has a key been stored for the account at all |
+        | `workspaceAssigned` | Has that key been given to this workspace |
+        | `officeAssigned` | Has this office been opted in |
+
+        All four must be true before an office runs on your own account. They are
+        set at different levels by different people, so a `false` tells you which
+        step is outstanding.
+
+        `availableProviders` is what this office may pick from, which is
+        narrower than what the account holds: only providers assigned to its
+        workspace appear.
+
+        **Permission:** `office:manage` @ `office/{officeId}`
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: |
+            IDs come from
+            [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+          schema: { type: string }
+        - name: officeId
+          in: query
+          required: true
+          description: |
+            IDs come from
+            [List offices](/docs/api-reference/offices/offices/listOffices).
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config:
+                    type: object
+                    properties:
+                      useCustomKey: { type: boolean }
+                      tenantKeyAvailable: { type: boolean }
+                      tenantKeyLastFour:
+                        type: string
+                        description: The last four characters, so you can tell which key is stored without revealing it.
+                      workspaceAssigned: { type: boolean }
+                      officeAssigned: { type: boolean }
+                      provider:
+                        type: string
+                        enum: [anthropic, openrouter, local]
+                        description: What this office boots on. Its own choice, not the workspace's.
+                      availableProviders:
+                        type: array
+                        items:
+                          type: string
+                          enum: [anthropic, openrouter, local]
+                        description: |
+                          What this office may pick. Empty means the workspace has
+                          nothing assigned that an office can use.
+                      localDevices:
+                        type: array
+                        description: Every machine allocated to this workspace.
+                        items:
+                          type: object
+                          properties:
+                            deviceId: { type: string }
+                            name: { type: string }
+                            online:
+                              type: boolean
+                              description: |
+                                Offline machines still appear here, flagged, so you
+                                can see one exists. They do not appear in a model
+                                picker.
+                            models:
+                              type: array
+                              items: { type: string }
+                              description: What the machine says it can run. It declares this itself.
+                            backend:
+                              oneOf: [{ type: string }, { type: 'null' }]
+                              description: |
+                                What kind of thing the machine serves. **Null when
+                                offline**, because this is live state rather than
+                                something recorded at enrolment.
+                      deviceId:
+                        type: string
+                        description: The machine this office runs on, or the workspace default.
+                      officeModelId:
+                        type: string
+                        description: The model set on this office specifically.
+                      fallbackModelId:
+                        type: string
+                        description: |
+                          A platform-billed model. Used when this office is not on
+                          your own account, and required as the fallback when your
+                          own account cannot be reached.
+                      updatedAt: { type: string, format: date-time }
+                      updatedBy: { type: string }
+        '400':
+          description: '`workspaceId` or `officeId` is missing.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: officeId is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateOfficeModelProvider
+      summary: Set an office's model provider
+      tags: [Model provider]
+      description: |
+        Chooses what this office thinks on, and which model.
+
+        > **This takes effect at the next boot, not now.** An office resolves its
+        > provider once when it starts and holds it for the machine's lifetime,
+        > so a running office keeps whatever it started with. Apply a change with
+        > [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine), which replaces the machine. Rebooting the existing one keeps
+        > what it was built with.
+        >
+        > This is the opposite of how Nova behaves, where a change lands on the
+        > next message.
+
+        ## Choosing a provider
+
+        `provider` is optional and the omission is meaningful. Leave it out and
+        the office keeps its current choice, or takes the workspace's sole
+        assignment when there is exactly one. Send it when the workspace holds
+        more than one, since the office cannot be asked to guess.
+
+        An office may only use a provider its workspace has been assigned.
+        Choosing one that is not returns `400` rather than failing at boot.
+
+        ## Always set a fallback
+
+        `fallbackModelId` is a platform-billed model, and it does two jobs: it is
+        what the office runs when it is not on your own account, and it is what
+        it falls back to when your own account cannot be reached. Setting it is
+        worth doing before you turn anything else on.
+
+        **Permission:** `office:manage` @ `office/{officeId}`
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: |
+            IDs come from
+            [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+          schema: { type: string }
+        - name: officeId
+          in: query
+          required: true
+          description: |
+            IDs come from
+            [List offices](/docs/api-reference/offices/offices/listOffices).
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                useCustomKey:
+                  type: boolean
+                  description: |
+                    Required, and must be a boolean. Whether this office runs on
+                    your own account rather than platform credits.
+                provider:
+                  type: string
+                  enum: [anthropic, openrouter, local]
+                  description: |
+                    Which of the workspace's assigned providers to boot on. Omit
+                    to keep the current choice, or to take the only assignment
+                    when there is one.
+                modelId:
+                  type: string
+                  description: |
+                    Which model to run. Values come from
+                    [List models](/docs/api-reference/nova/preferences/listNovaModels),
+                    which annotates each with what it would be billed to.
+
+                    Leave it out on a local machine: the machine declares what it
+                    can run, and the choice of machine is the choice of model
+                    source.
+                fallbackModelId:
+                  type: string
+                  description: |
+                    A platform-billed model, used when this office is not on your
+                    own account and when that account cannot be reached.
+                deviceId:
+                  type: string
+                  description: |
+                    Which machine to run on, when `provider` is `local`. IDs come
+                    from `localDevices` on
+                    [Get an office's model provider](/docs/api-reference/offices/model-provider/getOfficeModelProvider).
+                    Omit to use the workspace's default machine.
+              required: [useCustomKey]
+            examples:
+              platform:
+                summary: Run on platform credits with a named fallback
+                value:
+                  useCustomKey: false
+                  fallbackModelId: openai/gpt-4o-mini
+              ownAccount:
+                summary: Run on your own account
+                value:
+                  useCustomKey: true
+                  provider: anthropic
+                  modelId: claude-sonnet-4-5
+                  fallbackModelId: openai/gpt-4o-mini
+              ownMachine:
+                summary: Run on a machine you own
+                value:
+                  useCustomKey: true
+                  provider: local
+                  deviceId: dev_9f2a
+                  fallbackModelId: openai/gpt-4o-mini
+      responses:
+        '200':
+          description: Saved. Takes effect at the next boot.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400':
+          description: |
+            `useCustomKey` is missing or not a boolean, the provider is not one
+            of the three, the workspace is not assigned that provider, the choice
+            is ambiguous because the workspace holds several, or no key is
+            stored. All of these are yours to fix rather than server faults,
+            which is why they are `400` and not `500`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missingFlag:
+                  value:
+                    success: false
+                    error: useCustomKey (boolean) is required
+                badProvider:
+                  value:
+                    success: false
+                    error: Invalid provider
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /cloud-claw/machine/wake:
+    post:
+      operationId: wakeOfficeMachine
+      summary: Wake an office
+      tags: [Machine]
+      description: |
+        Starts a sleeping office so it can work.
+
+        You rarely need this. An office wakes on its own when something arrives
+        for it, and this exists for when you want it ready before that happens,
+        such as ahead of a burst of work.
+
+        **Permission:** `office:use` @ `office/{officeId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    IDs come from
+                    [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+                officeId:
+                  type: string
+                  description: |
+                    IDs come from
+                    [List offices](/docs/api-reference/offices/offices/listOffices).
+              required: [workspaceId, officeId]
+      responses:
+        '200':
+          description: The office is starting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineActionResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '502':
+          description: |
+            The office could not be reached. Nothing changed, so retrying is
+            safe.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /cloud-claw/machine/shutdown:
+    post:
+      operationId: shutdownOfficeMachine
+      summary: Shut down an office
+      tags: [Machine]
+      description: |
+        Stops the office gracefully, the same way it stops when it goes idle.
+        Work in progress is allowed to finish rather than being cut off.
+
+        The office is not deleted and nothing it holds is lost. It starts again
+        when something arrives for it, or when you
+        [wake it](/docs/api-reference/offices/machine/wakeOfficeMachine).
+
+        **This is the lever on machine cost.** An office that is awake costs
+        while it is awake, and that cost is not covered by a
+        [spending limit](/docs/spend). Shutting one down, or giving it a shorter
+        idle timeout, is the only way to bring it down.
+
+        **Permission:** `office:use` @ `office/{officeId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                officeId:
+                  type: string
+                  description: |
+                    IDs come from
+                    [List offices](/docs/api-reference/offices/offices/listOffices).
+              required: [workspaceId, officeId]
+      responses:
+        '200':
+          description: The office is stopping.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineActionResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '502':
+          description: The office could not be reached. Nothing changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /cloud-claw/machine/recreate:
+    post:
+      operationId: restartOfficeMachine
+      summary: Restart an office
+      tags: [Machine]
+      description: |
+        Restarts an office **so that configuration changes take effect**. This is
+        what the console's Restart button does.
+
+        ## It replaces the machine rather than rebooting it
+
+        A fresh machine is built with the office's current settings, brought up,
+        checked, and only then is the old one stopped. There is no gap in
+        service.
+
+        That indirection is the point. An office reads its settings once, when it
+        starts, and holds them for as long as that machine lives. Rebooting the
+        same machine keeps what it was built with, so a genuine restart means a
+        new machine.
+
+        ## When you need it
+
+        Anything an office reads at startup needs this before it applies:
+
+        | Change | Applies after |
+        | --- | --- |
+        | [Model provider or model](/docs/api-reference/offices/model-provider/updateOfficeModelProvider) | This call |
+        | [Environment secrets](/docs/api-reference/offices/environment-secrets/listOfficeSecrets) | This call |
+        | Integrations | This call |
+        | [Protocols](/docs/api-reference/offices/protocols/listOfficeProtocols) | This call |
+        | Skills | Immediately, no restart needed |
+
+        <br />
+
+        **The response comes back before the work is done.** You get a
+        `deploymentId` and the replacement continues in the background, so a
+        `200` means it started rather than finished. Watch
+        [List instances](/docs/api-reference/offices/machine/listOfficeInstances)
+        to see the new machine appear.
+
+        **Permission:** `office:use` @ `office/{officeId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId: { type: string }
+                officeId:
+                  type: string
+                  description: |
+                    IDs come from
+                    [List offices](/docs/api-reference/offices/offices/listOffices).
+              required: [workspaceId, officeId]
+            examples:
+              afterModelChange:
+                summary: Apply a model change
+                value:
+                  workspaceId: ws_a1b2c3
+                  officeId: off_dispatch
+      responses:
+        '200':
+          description: |
+            The replacement has been started. It is not finished yet.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/MachineActionResult'
+                  - type: object
+                    properties:
+                      deploymentId:
+                        type: string
+                        description: Identifies this replacement.
+              examples:
+                started:
+                  value:
+                    success: true
+                    deploymentId: dep_7Kd2mQ
+                    message: Recreate started
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '502':
+          description: |
+            The office could not be reached, so no replacement was started. The
+            existing machine is untouched and retrying is safe.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
