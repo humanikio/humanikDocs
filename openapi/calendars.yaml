@@ -1,0 +1,1979 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Calendars
+  version: v1
+  summary: One calendar over several providers, shared with people and employees alike.
+  description: |
+    A calendar here is not a copy of a Google or Outlook calendar. It is a
+    container you create, bind one or more provider accounts to, and then share.
+    Reads and writes pass through to the bound providers, so nothing is
+    duplicated and nothing drifts.
+
+    Two things make it worth reading before you call anything.
+
+    **Access is membership, not workspace.** A calendar lives in a workspace, but
+    what decides who may read and write it is the member list. A member from any
+    workspace passes, and a non-member with the right role usually does not.
+
+    **An AI employee is a member the same way a person is.** An office joins the
+    member list as an ordinary row and calls the same endpoints a person calls,
+    through the same checks. There is no separate agent path.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Calendars
+    description: Creating the container, and the settings that apply to all of it.
+  - name: Members
+    description: Who may use a calendar, whether a person or an AI employee.
+  - name: Sources
+    description: Binding provider accounts, and what feeds the calendar.
+  - name: Events
+    description: Reading and writing appointments through the bound providers.
+  - name: Tasks
+    description: Reading and writing to-dos through the bound providers.
+  - name: Preferences
+    description: Per-caller display settings.
+  - name: Booking links
+    description: Shareable pages that let someone else pick a slot.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`. An AI employee uses exactly this, and is
+        subject to the same membership rules as a person.
+
+  parameters:
+    CalendarId:
+      name: calendarId
+      in: path
+      required: true
+      description: |
+        The calendar to act on. IDs come from
+        [List calendars](/docs/api-reference/calendars/calendars/listCalendars).
+      schema:
+        type: string
+        examples: [cal_7Kd2mQ]
+
+  responses:
+    BadRequest:
+      description: A required field is missing or malformed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: |
+        Either the caller lacks the permission, or it holds the permission and is
+        not a member of this calendar. Both return `403`, and the two are worth
+        distinguishing while debugging: check
+        [List members](/docs/api-reference/calendars/members/listCalendarMembers)
+        before assuming the role is wrong.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: No such calendar in this account.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, const: false }
+        error: { type: string }
+      required: [success, error]
+
+    Source:
+      type: object
+      description: One provider account bound to this calendar.
+      properties:
+        accountId:
+          type: string
+          description: |
+            The connected account this reads through. Values come from
+            [List available sources](/docs/api-reference/calendars/sources/listAvailableSources).
+        app:
+          type: string
+          description: Which provider it is.
+          examples: [google_calendar]
+        kind:
+          type: string
+          enum: [calendar, tasks, cron]
+          description: |
+            What this source feeds. Defaults to `calendar`. A `tasks` source uses
+            the task list fields and ignores `sourceCalendarId`.
+        sourceCalendarId:
+          type: string
+          description: Which calendar inside that account. Defaults to `primary`.
+        sourceCalendarName: { type: string }
+        sourceTaskListId:
+          type: string
+          description: Set when `kind` is `tasks`.
+        sourceTaskListName: { type: string }
+        officeId:
+          type: string
+          description: Set when `kind` is `cron`. The office whose scheduled work appears here.
+        sourceOfficeName: { type: string }
+        color:
+          type: string
+          description: Hex without the leading hash.
+        enabled:
+          type: boolean
+          description: |
+            When false the source stays bound and is skipped while syncing, which
+            is how you mute one provider without unbinding it.
+        addedBy: { type: string }
+        addedAt: { type: string, format: date-time }
+
+    Calendar:
+      type: object
+      properties:
+        calendarId: { type: string }
+        tenantId: { type: string }
+        ownerId: { type: string }
+        name: { type: string }
+        workspaceId:
+          type: string
+          description: |
+            Which workspace it belongs to. One at a time, and reassignable
+            through [Update a calendar](/docs/api-reference/calendars/calendars/updateCalendar).
+        color:
+          type: string
+          description: Default colour for events with no colour of their own. Hex without the hash.
+        timezone:
+          type: string
+          description: The zone the calendar reads in. Defaults to `UTC`.
+          examples: ['America/New_York']
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/Source' }
+        defaultSourceKey:
+          type: string
+          description: |
+            Where new events go by default, written as
+            `accountId:sourceCalendarId`. Falls back to the first bound source.
+          examples: ['acc_9f2:primary']
+        linkAutoCreateContact:
+          type: boolean
+          description: |
+            Whether a booking creates or matches a CRM contact for the person who
+            booked. Defaults to true. Set false when you would rather an
+            automation decide, using a booking as its trigger.
+        status:
+          type: string
+          enum: [active, archived, deleted]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Member:
+      type: object
+      properties:
+        memberId: { type: string }
+        memberType:
+          type: string
+          enum: [user, office]
+        workspaceId:
+          type: string
+          description: Present for an office member.
+        displayName: { type: string }
+        role: { type: string }
+        addedBy: { type: string }
+        addedAt: { type: string, format: date-time }
+
+    TimeRanges:
+      type: array
+      description: |
+        Windows within a day, in the link's timezone. An empty array means no
+        availability.
+      items:
+        type: object
+        properties:
+          start:
+            type: string
+            description: 24-hour `HH:MM`.
+            examples: ['09:00']
+          end:
+            type: string
+            description: 24-hour `HH:MM`.
+            examples: ['17:00']
+        required: [start, end]
+
+    BookingLink:
+      type: object
+      properties:
+        linkId: { type: string }
+        calendarId: { type: string }
+        slug:
+          type: string
+          description: |
+            The public part of the URL. **Slugs are unique across the whole
+            platform**, not just your account, so a name already taken by someone
+            else will be rejected. Prefer something specific.
+        name: { type: string }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      additionalProperties: true
+
+paths:
+  /calendars:
+    post:
+      operationId: createCalendar
+      summary: Create a calendar
+      tags: [Calendars]
+      description: |
+        Creates an empty calendar in a workspace. It has no sources and no
+        members yet, so it shows nothing and nobody can use it.
+
+        Two more steps make it work:
+        [bind a source](/docs/api-reference/calendars/sources/bindCalendarSource)
+        so there is something to read, and
+        [add members](/docs/api-reference/calendars/members/addCalendarMember)
+        so someone may read it.
+
+        **Permission:** `calendar:manage` @ `console`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                workspaceId:
+                  type: string
+                  description: |
+                    Required. IDs come from
+                    [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+                timezone:
+                  type: string
+                  description: IANA name. Defaults to `UTC`.
+                color:
+                  type: string
+                  description: Hex without the hash.
+                linkAutoCreateContact:
+                  type: boolean
+                  description: Defaults to true.
+              required: [name, workspaceId]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  calendar: { $ref: '#/components/schemas/Calendar' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    get:
+      operationId: listCalendars
+      summary: List calendars
+      tags: [Calendars]
+      description: |
+        Every calendar in the account.
+
+        This is the account-wide view, checked at `console`. For the calendars
+        belonging to one workspace, use
+        [List a workspace's calendars](/docs/api-reference/calendars/calendars/listWorkspaceCalendars),
+        which is the narrower grant.
+
+        **Permission:** `calendar:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  calendars:
+                    type: array
+                    items: { $ref: '#/components/schemas/Calendar' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/workspace/{workspaceId}:
+    get:
+      operationId: listWorkspaceCalendars
+      summary: List a workspace's calendars
+      tags: [Calendars]
+      description: |
+        The calendars placed in one workspace.
+
+        Prefer this over the account-wide list when you can. It is checked at the
+        workspace rather than the console, so it can be granted to someone
+        responsible for one team without showing them everything.
+
+        **Permission:** `calendar:read` @ `workspace/{workspaceId}`
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: |
+            IDs come from
+            [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  calendars:
+                    type: array
+                    items: { $ref: '#/components/schemas/Calendar' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+
+    get:
+      operationId: getCalendar
+      summary: Get a calendar
+      tags: [Calendars]
+      description: |
+        One calendar, with its bound sources.
+
+        **Two checks, not one.** The caller needs `calendar:read`, **and** must
+        either be a member or hold `calendar:manage` on this calendar. Holding
+        the role without membership is enough here, because reading the container
+        is a governance action rather than using it.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, plus membership
+        or `calendar:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  calendar: { $ref: '#/components/schemas/Calendar' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: updateCalendar
+      summary: Update a calendar
+      tags: [Calendars]
+      description: |
+        Partial update of the container's own settings. Sources and members have
+        their own endpoints.
+
+        **Changing `workspaceId` moves the calendar.** Permissions written
+        against the old workspace stop applying, so check who still needs access
+        before moving one.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                workspaceId:
+                  type: string
+                  description: Reassigns the calendar to a different workspace.
+                color: { type: string }
+                timezone: { type: string }
+                status:
+                  type: string
+                  enum: [active, archived, deleted]
+                defaultSourceKey:
+                  type: string
+                  description: |
+                    Where new events go by default, as
+                    `accountId:sourceCalendarId`. Both halves come from
+                    [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+                linkAutoCreateContact: { type: boolean }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  calendar: { $ref: '#/components/schemas/Calendar' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteCalendar
+      summary: Delete a calendar
+      tags: [Calendars]
+      description: |
+        Removes the calendar.
+
+        **Nothing is deleted at the provider.** Events written through this
+        calendar live in the Google or Outlook account they were written to and
+        stay there. What you lose is the container, its member list, and its
+        bindings.
+
+        To stop a calendar being used without losing it, set `status` to
+        `archived` through
+        [Update a calendar](/docs/api-reference/calendars/calendars/updateCalendar).
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/sync:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+    post:
+      operationId: syncCalendar
+      summary: Sync now
+      tags: [Calendars]
+      description: |
+        Refreshes from the bound providers immediately rather than waiting for
+        the next scheduled refresh.
+
+        Worth calling after binding a source, or when a provider has changed
+        something you expect to see.
+
+        > **A source marked broken is not repaired by this.** If a provider
+        > connection has failed, syncing will not bring it back. Rebind the
+        > account through
+        > [Bind a source](/docs/api-reference/calendars/sources/bindCalendarSource).
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      responses:
+        '200':
+          description: Sync ran.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/members:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+
+    get:
+      operationId: listCalendarMembers
+      summary: List members
+      tags: [Members]
+      description: |
+        Everyone who may use this calendar, people and AI employees together in
+        one list.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, plus membership
+        or `calendar:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  members:
+                    type: array
+                    items: { $ref: '#/components/schemas/Member' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: addCalendarMember
+      summary: Add a member
+      tags: [Members]
+      description: |
+        Grants use of this calendar to a person or to an AI employee.
+
+        **Membership is what authorises reading and writing**, not the workspace
+        the calendar sits in. A member from any workspace passes, and someone
+        with `calendar:read` who is not a member cannot list events.
+
+        ## Two kinds of member
+
+        The body changes shape depending on which you are adding.
+
+        | | `memberType: "user"` | `memberType: "office"` |
+        | --- | --- | --- |
+        | `memberId` is | A user ID | An office ID |
+        | `workspaceId` | Not used | **Required** |
+
+        An office added here is an ordinary row in the same list as a person, and
+        it calls the same endpoints through the same checks.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memberId:
+                  type: string
+                  description: |
+                    Required. For a person, a user ID. For an office, an office
+                    ID from
+                    [List offices](/docs/api-reference/offices/offices/listOffices).
+                memberType:
+                  type: string
+                  enum: [user, office]
+                workspaceId:
+                  type: string
+                  description: |
+                    Required when `memberType` is `office`. The workspace that
+                    office belongs to, from
+                    [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+                displayName:
+                  type: string
+                  description: Optional label. Defaults to empty.
+                role:
+                  type: string
+                  description: Optional role within the calendar.
+              required: [memberId]
+            examples:
+              person:
+                summary: Add a person
+                value:
+                  memberId: usr_11
+                  memberType: user
+                  displayName: Dana Reid
+              office:
+                summary: Add an AI employee
+                value:
+                  memberId: off_dispatch
+                  memberType: office
+                  workspaceId: ws_a1b2c3
+                  displayName: Dispatch
+      responses:
+        '201':
+          description: Added.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  member: { $ref: '#/components/schemas/Member' }
+        '400':
+          description: '`memberId` is missing, or an office was sent with no workspace.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                officeNeedsWorkspace:
+                  value:
+                    success: false
+                    error: workspaceId is required when memberType is office
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/members/{memberId}:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: memberId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List members](/docs/api-reference/calendars/members/listCalendarMembers).
+        schema: { type: string }
+    delete:
+      operationId: removeCalendarMember
+      summary: Remove a member
+      tags: [Members]
+      description: |
+        Revokes use of this calendar. Takes effect on the next call, for a person
+        and an AI employee alike.
+
+        Events they already created stay where they are.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      responses:
+        '200':
+          description: Removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/available-sources:
+    get:
+      operationId: listAvailableSources
+      summary: List connectable calendar accounts
+      tags: [Sources]
+      description: |
+        Provider accounts already connected to your account that could be bound
+        to a calendar.
+
+        Read this first. Binding needs an `accountId`, and this is where they
+        come from.
+
+        **Permission:** `calendar:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        accountId: { type: string }
+                        app: { type: string }
+                      additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/available-task-sources:
+    get:
+      operationId: listAvailableTaskSources
+      summary: List connectable task accounts
+      tags: [Sources]
+      description: |
+        The same, for accounts that provide task lists rather than calendars.
+
+        **Permission:** `calendar:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/sources:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+
+    get:
+      operationId: listCalendarSources
+      summary: List bound sources
+      tags: [Sources]
+      description: |
+        What this calendar reads from.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, plus membership
+        or `calendar:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  sources:
+                    type: array
+                    items: { $ref: '#/components/schemas/Source' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: bindCalendarSource
+      summary: Bind a source
+      tags: [Sources]
+      description: |
+        Points this calendar at a provider account, so its events appear here and
+        writes pass through to it.
+
+        Bind more than one and they merge into a single view. Each keeps its own
+        colour, and each can be muted with `enabled` without unbinding.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                  description: |
+                    Required. From
+                    [List connectable calendar accounts](/docs/api-reference/calendars/sources/listAvailableSources),
+                    or the task equivalent when binding a task list.
+                sourceCalendarId:
+                  type: string
+                  description: Which calendar inside that account. Defaults to `primary`.
+                kind:
+                  type: string
+                  enum: [calendar, tasks]
+                  description: Defaults to `calendar`.
+                sourceTaskListId:
+                  type: string
+                  description: Required when `kind` is `tasks`.
+                color:
+                  type: string
+                  description: Hex without the hash.
+              required: [accountId]
+      responses:
+        '200':
+          description: Bound.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  calendar: { $ref: '#/components/schemas/Calendar' }
+        '400':
+          description: '`accountId` is missing.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: accountId is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/sources/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: accountId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+        schema: { type: string }
+    delete:
+      operationId: unbindCalendarSource
+      summary: Unbind a source
+      tags: [Sources]
+      description: |
+        Stops this calendar reading from that account. Nothing is deleted at the
+        provider.
+
+        To hide a source temporarily instead, set `enabled` to false rather than
+        unbinding, which keeps its settings.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      responses:
+        '200':
+          description: Unbound.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/available-cron-sources:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+    get:
+      operationId: listAvailableCronSources
+      summary: List offices with scheduled work
+      tags: [Sources]
+      description: |
+        Offices whose scheduled work could be shown on this calendar.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, plus membership
+        or `calendar:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  offices:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/cron-sources:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+    post:
+      operationId: bindCronSource
+      summary: Show an office's scheduled work
+      tags: [Sources]
+      description: |
+        Puts an office's scheduled work on this calendar, so what an AI employee
+        is booked to do appears beside what people are booked to do.
+
+        This is read-only. Scheduled work is not created or edited here.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                officeId:
+                  type: string
+                  description: |
+                    Required. From
+                    [List offices with scheduled work](/docs/api-reference/calendars/sources/listAvailableCronSources).
+                color: { type: string }
+              required: [officeId]
+      responses:
+        '200':
+          description: Bound.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  calendar: { $ref: '#/components/schemas/Calendar' }
+        '400':
+          description: '`officeId` is missing.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: officeId is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/cron-sources/{officeId}:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: officeId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List offices](/docs/api-reference/offices/offices/listOffices).
+        schema: { type: string }
+    delete:
+      operationId: unbindCronSource
+      summary: Stop showing an office's scheduled work
+      tags: [Sources]
+      description: |
+        Removes that office's scheduled work from this calendar. The schedule
+        itself is untouched.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
+        membership needed
+      responses:
+        '200':
+          description: Unbound.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/events:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+
+    get:
+      operationId: listCalendarEvents
+      summary: List events
+      tags: [Events]
+      description: |
+        Events across every bound source, for a window you specify.
+
+        **Both bounds are required.** There is no default window, and no way to
+        ask for everything.
+
+        **Members only.** Holding `calendar:manage` is not enough here. Using a
+        calendar requires being on its member list, which is the difference
+        between governing a calendar and reading what is in it.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, and membership
+      parameters:
+        - name: timeMin
+          in: query
+          required: true
+          description: Start of the window, ISO-8601.
+          schema: { type: string, examples: ['2026-08-01T00:00:00Z'] }
+        - name: timeMax
+          in: query
+          required: true
+          description: End of the window, ISO-8601.
+          schema: { type: string, examples: ['2026-08-31T23:59:59Z'] }
+        - name: timeZone
+          in: query
+          required: false
+          description: IANA name. Defaults to the calendar's own timezone.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '400':
+          description: A bound is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                noWindow:
+                  value:
+                    success: false
+                    error: timeMin and timeMax are required (ISO-8601)
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createCalendarEvent
+      summary: Create an event
+      tags: [Events]
+      description: |
+        Writes an event **to a provider**, through this calendar. It is created in
+        the Google or Outlook account you name, and appears here because that
+        account is bound.
+
+        You must say where it goes. There is no implicit destination on this
+        endpoint even when the calendar has a default.
+
+        **Permission:** `calendar:use` @ `calendar/{calendarId}`, and membership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                  description: |
+                    Required. Which bound account to write to, from
+                    [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+                sourceCalendarId:
+                  type: string
+                  description: Required. Which calendar inside that account.
+                event:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Required. The event, in the shape that provider expects.
+                notify:
+                  type: string
+                  enum: [all, none]
+                  description: Whether the provider should email attendees.
+              required: [accountId, sourceCalendarId, event]
+      responses:
+        '201':
+          description: Created at the provider.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  event:
+                    type: object
+                    additionalProperties: true
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: accountId, sourceCalendarId, and event are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/events/{sourceEventId}:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: sourceEventId
+        in: path
+        required: true
+        description: |
+          The provider's own ID for the event, as returned by
+          [List events](/docs/api-reference/calendars/events/listCalendarEvents).
+          This is the provider's identifier, not one of ours.
+        schema: { type: string }
+
+    patch:
+      operationId: updateCalendarEvent
+      summary: Update an event
+      tags: [Events]
+      description: |
+        Changes an event at the provider.
+
+        **Permission:** `calendar:use` @ `calendar/{calendarId}`, and membership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                  description: |
+                    Required. Which bound account holds it, from
+                    [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+                sourceCalendarId:
+                  type: string
+                  description: Required. Which calendar inside that account.
+                patch:
+                  type: object
+                  additionalProperties: true
+                  description: Required. The fields to change.
+                notify:
+                  type: string
+                  enum: [all, none]
+              required: [accountId, sourceCalendarId, patch]
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  event:
+                    type: object
+                    additionalProperties: true
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: accountId, sourceCalendarId, and patch are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteCalendarEvent
+      summary: Delete an event
+      tags: [Events]
+      description: |
+        Deletes the event **at the provider**. This is not reversible here.
+
+        Both identifiers travel as query parameters rather than in a body.
+
+        **Permission:** `calendar:use` @ `calendar/{calendarId}`, and membership
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          description: |
+            From
+            [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+          schema: { type: string }
+        - name: sourceCalendarId
+          in: query
+          required: true
+          description: Which calendar inside that account.
+          schema: { type: string }
+        - name: notify
+          in: query
+          required: false
+          description: Whether the provider should tell attendees.
+          schema: { type: string, enum: [all, none] }
+      responses:
+        '200':
+          description: Deleted at the provider.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400':
+          description: An identifier is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: accountId and sourceCalendarId query params are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+
+    get:
+      operationId: listCalendarTasks
+      summary: List tasks
+      tags: [Tasks]
+      description: |
+        To-dos from a bound task list.
+
+        Unlike events, this reads **one** task list rather than merging every
+        bound source, so both identifiers are required.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, and membership
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          description: |
+            From
+            [List connectable task accounts](/docs/api-reference/calendars/sources/listAvailableTaskSources)
+            or the calendar's bound sources.
+          schema: { type: string }
+        - name: sourceTaskListId
+          in: query
+          required: true
+          description: Which task list inside that account.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '400':
+          description: An identifier is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: accountId and sourceTaskListId query params are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createCalendarTask
+      summary: Create a task
+      tags: [Tasks]
+      description: |
+        Writes a to-do to a bound task list at the provider.
+
+        **Permission:** `calendar:use` @ `calendar/{calendarId}`, and membership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                  description: |
+                    Required. Which bound account holds the list, from
+                    [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+                sourceTaskListId:
+                  type: string
+                  description: Required. Which task list inside that account.
+                task:
+                  type: object
+                  additionalProperties: true
+                  description: Required. The task, in the shape that provider expects.
+              required: [accountId, sourceTaskListId, task]
+      responses:
+        '201':
+          description: Created at the provider.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  task:
+                    type: object
+                    additionalProperties: true
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: accountId, sourceTaskListId, and task are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/tasks/{sourceTaskId}:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: sourceTaskId
+        in: path
+        required: true
+        description: |
+          The provider's own ID for the task, from
+          [List tasks](/docs/api-reference/calendars/tasks/listCalendarTasks).
+        schema: { type: string }
+
+    patch:
+      operationId: updateCalendarTask
+      summary: Update a task
+      tags: [Tasks]
+      description: |
+        Changes a to-do at the provider. Completing one is a patch like any
+        other.
+
+        **Permission:** `calendar:use` @ `calendar/{calendarId}`, and membership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                  description: |
+                    Required. Which bound account holds the list, from
+                    [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+                sourceTaskListId:
+                  type: string
+                  description: Required. Which task list inside that account.
+                patch:
+                  type: object
+                  additionalProperties: true
+              required: [accountId, sourceTaskListId, patch]
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  task:
+                    type: object
+                    additionalProperties: true
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: accountId, sourceTaskListId, and patch are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteCalendarTask
+      summary: Delete a task
+      tags: [Tasks]
+      description: |
+        Removes a to-do at the provider.
+
+        **Permission:** `calendar:use` @ `calendar/{calendarId}`, and membership
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          description: |
+            Which bound account holds the list, from
+            [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources).
+          schema: { type: string }
+        - name: sourceTaskListId
+          in: query
+          required: true
+          description: Which task list inside that account.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted at the provider.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/preferences:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+
+    get:
+      operationId: getCalendarPreferences
+      summary: Get display preferences
+      tags: [Preferences]
+      description: |
+        The caller's own view settings for this calendar. Per caller, not shared.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, plus membership
+        or `calendar:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  preferences:
+                    type: object
+                    additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateCalendarPreferences
+      summary: Set display preferences
+      tags: [Preferences]
+      description: |
+        Saves the caller's own view settings.
+
+        > **This write is gated on `calendar:read`, not `calendar:manage`.** That
+        > is deliberate rather than an oversight: preferences belong to the
+        > caller and affect nobody else, so anyone who may look at the calendar
+        > may set how they look at it.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`, plus membership
+        or `calendar:manage`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  preferences:
+                    type: object
+                    additionalProperties: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/booking-links:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+
+    get:
+      operationId: listBookingLinks
+      summary: List booking links
+      tags: [Booking links]
+      description: |
+        The shareable booking pages on this calendar.
+
+        > **Booking links are governed by permission alone.** Unlike events and
+        > tasks, there is no membership check on this route family, so a caller
+        > with `calendar:read` on the calendar can list its links without being a
+        > member. Worth knowing when deciding who gets that role.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: |
+            `event-type` for a reusable page, `single-use` for a one-time link.
+          schema: { type: string, enum: [event-type, single-use] }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [active, used, expired, revoked] }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  links:
+                    type: array
+                    items: { $ref: '#/components/schemas/BookingLink' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createBookingLink
+      summary: Create a booking link
+      tags: [Booking links]
+      description: |
+        Creates a page someone outside your account can open to pick a slot. A
+        booking made there becomes an event on this calendar, and can start an
+        automation.
+
+        Only `name` is required. Everything else has a sensible default, so the
+        shortest useful call is one field.
+
+        **Bind a source first.** A calendar with nothing bound has nowhere to put
+        the booking, and creating a link on one is refused.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Required. Also used to derive the slug when you send none.
+                slug:
+                  type: string
+                  description: |
+                    The public part of the URL. Derived from `name` when omitted.
+                    Three to sixty-four characters, lowercase letters, digits and
+                    hyphens.
+
+                    **Slugs are unique across the whole platform.** A name in use
+                    elsewhere is rejected even though it is not in use by you, so
+                    prefer something specific over something generic.
+                description: { type: string }
+                host:
+                  type: string
+                  description: Who the booking is with, as shown on the page.
+                timezone:
+                  type: string
+                  description: |
+                    IANA name. Defaults to the calendar's timezone, then `UTC`.
+                    An unrecognised zone is rejected.
+                durationMin:
+                  type: integer
+                  description: How long a booking runs. Defaults to 30.
+                slotIntervalMin:
+                  type: integer
+                  description: How far apart offered slots start. Defaults to 30.
+                bufferBeforeMin:
+                  type: integer
+                  description: Gap kept before each booking. Defaults to 0.
+                bufferAfterMin:
+                  type: integer
+                  description: Gap kept after each booking. Defaults to 0.
+                minNoticeMin:
+                  type: integer
+                  description: |
+                    How far ahead someone must book. Defaults to 240, which is
+                    four hours.
+                rollingWindowDays:
+                  type: integer
+                  description: How far into the future slots are offered. Defaults to 60.
+                workingHours:
+                  type: object
+                  description: |
+                    When slots may fall, by weekday. **A weekday you leave out is
+                    a day with no availability**, so this is the first way to
+                    block time out.
+
+                    Defaults to Monday through Friday, 09:00 to 17:00. Sending
+                    this replaces that default entirely.
+                  properties:
+                    sun: { $ref: '#/components/schemas/TimeRanges' }
+                    mon: { $ref: '#/components/schemas/TimeRanges' }
+                    tue: { $ref: '#/components/schemas/TimeRanges' }
+                    wed: { $ref: '#/components/schemas/TimeRanges' }
+                    thu: { $ref: '#/components/schemas/TimeRanges' }
+                    fri: { $ref: '#/components/schemas/TimeRanges' }
+                    sat: { $ref: '#/components/schemas/TimeRanges' }
+                dateOverrides:
+                  type: object
+                  description: |
+                    Per-date exceptions, keyed `YYYY-MM-DD`. A date listed here
+                    **replaces** that day's working hours entirely rather than
+                    adding to them, and an empty array means the day is closed.
+
+                    This is how you block out a specific date: send `[]` for it.
+                  additionalProperties:
+                    $ref: '#/components/schemas/TimeRanges'
+                  examples:
+                    - '2026-12-25': []
+                      '2026-08-14': [{ start: '09:00', end: '12:00' }]
+                maxPerDay:
+                  type: integer
+                  default: 0
+                  description: |
+                    Most bookings allowed on one day. `0` means no cap, which is
+                    the default.
+
+                    > **A capped day cannot be rescheduled within itself.** A
+                    > booking being moved still counts toward the day it is
+                    > leaving, so moving one to a later slot on the same day is
+                    > refused once the cap is reached. Moving it to another day
+                    > works.
+                maxPerSlot:
+                  type: integer
+                  default: 1
+                  description: |
+                    Most bookings allowed at the same start time. **Defaults to
+                    1**, so a slot disappears once someone takes it. Raise it for
+                    something several people join at once, or set `0` for no cap.
+                conference:
+                  type: string
+                  enum: [meet, teams, none]
+                  default: none
+                  description: |
+                    Whether a meeting link is created with the booking. Defaults
+                    to `none`.
+
+                    **Only Google Meet is attached at creation.** Selecting
+                    `teams` records the choice and does not produce a link on the
+                    booking, so treat Meet as the one that works end to end
+                    today.
+                form:
+                  type: object
+                  description: |
+                    The questions asked on the booking page. Sending this
+                    **replaces** the default set of name, email, phone and notes
+                    rather than adding to it, so include the ones you still want.
+
+                    > **`required` is not enforced when a booking is made.** It
+                    > marks a field required on the page, and a request that
+                    > omits it is still accepted. Validate anything you depend on
+                    > yourself.
+                  properties:
+                    fields:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key: { type: string }
+                          label: { type: string }
+                          type:
+                            type: string
+                            enum: [text, email, phone, textarea, select]
+                          required: { type: boolean }
+                        required: [key, label, type, required]
+                  required: [fields]
+                confirmation:
+                  type: object
+                  description: |
+                    What the booker sees after booking. Defaults to a message
+                    reading "Your booking is confirmed."
+                  properties:
+                    type:
+                      type: string
+                      enum: [message, redirect]
+                    value:
+                      type: string
+                      description: The message to show, or the URL to send them to.
+                writeTarget:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Which bound source the booking is written to. Defaults to the
+                    calendar's own default destination.
+              required: [name]
+            examples:
+              minimal:
+                summary: The shortest useful call
+                value:
+                  name: Intro call
+              tuned:
+                summary: A tighter booking window
+                value:
+                  name: Intro call
+                  slug: northside-intro
+                  durationMin: 20
+                  minNoticeMin: 1440
+                  rollingWindowDays: 14
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  link: { $ref: '#/components/schemas/BookingLink' }
+        '400':
+          description: |
+            A field is invalid, the slug is taken or malformed, or the calendar
+            has no bound source.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                badSlug:
+                  value:
+                    success: false
+                    error: 'slug must be 3–64 chars: lowercase letters, digits, hyphens'
+                noSource:
+                  value:
+                    success: false
+                    error: Bind a source to this calendar before creating a booking link
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/booking-links/{linkId}:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: linkId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List booking links](/docs/api-reference/calendars/booking-links/listBookingLinks).
+        schema: { type: string }
+
+    get:
+      operationId: getBookingLink
+      summary: Get a booking link
+      tags: [Booking links]
+      description: |
+        One booking page and its settings.
+
+        **Permission:** `calendar:read` @ `calendar/{calendarId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  link: { $ref: '#/components/schemas/BookingLink' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such link on this calendar.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: updateBookingLink
+      summary: Update a booking link
+      tags: [Booking links]
+      description: |
+        Changes a booking page's settings.
+
+        **Changes apply to future bookings only.** Anything already booked keeps
+        the terms it was booked under.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: The fields to change, in the shape create accepts.
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  link: { $ref: '#/components/schemas/BookingLink' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteBookingLink
+      summary: Delete a booking link
+      tags: [Booking links]
+      description: |
+        Removes the page and everything derived from it.
+
+        > **A link with bookings still ahead of it returns `409`, not `404`.**
+        > That is a refusal rather than a failure: it means the link exists and
+        > deleting it would strand people who have already booked. Send
+        > `?force=true` to delete anyway.
+
+        To stop new bookings while keeping what is booked, use
+        [Enable or disable a booking link](/docs/api-reference/calendars/booking-links/setBookingLinkEnabled)
+        instead.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`
+      parameters:
+        - name: force
+          in: query
+          required: false
+          description: Send `true` to delete despite upcoming bookings.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such link on this calendar.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: |
+            The link has upcoming bookings. Retry with `?force=true` if you mean
+            to delete it regardless.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/booking-links/{linkId}/enabled:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: linkId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List booking links](/docs/api-reference/calendars/booking-links/listBookingLinks).
+        schema: { type: string }
+    patch:
+      operationId: setBookingLinkEnabled
+      summary: Enable or disable a booking link
+      tags: [Booking links]
+      description: |
+        Turns a booking page on or off without deleting it.
+
+        Disabling stops new bookings and leaves existing ones alone, which makes
+        it the safe way to pause something you intend to bring back.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                  description: Required, and must be a boolean.
+              required: [enabled]
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  link: { $ref: '#/components/schemas/BookingLink' }
+        '400':
+          description: '`enabled` is missing or not a boolean.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: 'body { enabled: boolean } required'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /calendars/{calendarId}/booking-links/{linkId}/single-use:
+    parameters:
+      - $ref: '#/components/parameters/CalendarId'
+      - name: linkId
+        in: path
+        required: true
+        description: |
+          The reusable link to mint from. IDs come from
+          [List booking links](/docs/api-reference/calendars/booking-links/listBookingLinks).
+        schema: { type: string }
+    post:
+      operationId: generateSingleUseLink
+      summary: Mint a single-use link
+      tags: [Booking links]
+      description: |
+        Creates a one-time link from an existing booking page. It works once and
+        then stops.
+
+        Useful for sending someone a specific invitation rather than a page
+        anyone could book from.
+
+        **The new link is a snapshot.** It copies the parent's settings at the
+        moment it is minted, so later changes to the parent do not reach links
+        already sent.
+
+        **Permission:** `calendar:manage` @ `calendar/{calendarId}`
+      responses:
+        '201':
+          description: Minted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  link: { $ref: '#/components/schemas/BookingLink' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }

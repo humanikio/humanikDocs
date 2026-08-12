@@ -54,4 +54,5 @@ export const apis = [
   system('billing', 'billing.yaml'),
   system('workflows', 'workflows.yaml'),
   system('nova', 'nova.yaml'),
+  system('calendars', 'calendars.yaml'),
 ];

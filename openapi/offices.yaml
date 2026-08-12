@@ -352,6 +352,7 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403': { $ref: '#/components/responses/Forbidden' }
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
@@ -437,6 +438,7 @@ paths:
                     const: true
                   office:
                     $ref: '#/components/schemas/Office'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -483,6 +485,7 @@ paths:
                     const: true
                   office:
                     $ref: '#/components/schemas/Office'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -525,6 +528,7 @@ paths:
                   success:
                     type: boolean
                     const: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -551,6 +555,7 @@ paths:
       responses:
         '200':
           description: The office's machine configuration.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -586,6 +591,7 @@ paths:
       responses:
         '200':
           description: Current settings and the options available.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -659,6 +665,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`workspaceId` or `userConfig` is missing, or the update was rejected.'
           content:
@@ -693,6 +700,7 @@ paths:
       responses:
         '200':
           description: Running instances, if any.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -715,6 +723,7 @@ paths:
       responses:
         '200':
           description: Log output.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -750,6 +759,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Integration'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -856,6 +866,7 @@ paths:
                     const: true
                   integration:
                     $ref: '#/components/schemas/Integration'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: |
             A required field is missing, `baseUrl` is malformed, or credentials
@@ -923,6 +934,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Skill'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1014,6 +1026,7 @@ paths:
                     const: true
                   skill:
                     $ref: '#/components/schemas/Skill'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A required field is missing, the name is invalid, or the skill already exists.
           content:
@@ -1067,6 +1080,8 @@ paths:
                     const: true
                   skill:
                     $ref: '#/components/schemas/Skill'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1136,6 +1151,7 @@ paths:
                     const: true
                   skill:
                     $ref: '#/components/schemas/Skill'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1158,6 +1174,8 @@ paths:
                   success:
                     type: boolean
                     const: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           description: Missing workspace, or no such skill.
           content:
@@ -1200,6 +1218,7 @@ paths:
       responses:
         '200':
           description: Regenerated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1239,6 +1258,7 @@ paths:
                   gatewayRestartNeeded:
                     type: boolean
                     description: True when protocol changes are pending an office restart.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1297,6 +1317,7 @@ paths:
                     const: true
                   protocol:
                     $ref: '#/components/schemas/Protocol'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A required field is missing.
           content:
@@ -1328,6 +1349,7 @@ paths:
       responses:
         '200':
           description: The office's namespace allocations.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1373,6 +1395,7 @@ paths:
       responses:
         '201':
           description: Allocated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A required field is missing.
           content:
@@ -1425,6 +1448,7 @@ paths:
       responses:
         '200':
           description: The allocation.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1439,6 +1463,7 @@ paths:
       responses:
         '200':
           description: Deallocated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1456,6 +1481,7 @@ paths:
       responses:
         '200':
           description: The office's app allocations.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1484,6 +1510,7 @@ paths:
       responses:
         '201':
           description: Allocated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A required field is missing.
           content:
@@ -1510,6 +1537,7 @@ paths:
       responses:
         '200':
           description: The office's website allocations.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1542,6 +1570,7 @@ paths:
       responses:
         '201':
           description: Allocated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`websiteId` is missing.'
           content:
@@ -1587,6 +1616,7 @@ paths:
       responses:
         '201':
           description: Allocated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`websiteId` is missing, or `includeIntegrations` is not an array of strings.'
           content:
@@ -1640,6 +1670,8 @@ paths:
                     type: array
                     items:
                       type: object
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1663,6 +1695,8 @@ paths:
       responses:
         '200':
           description: The office's service account and its grants.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1679,6 +1713,7 @@ paths:
       responses:
         '200':
           description: The office's keys, without secrets.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1697,6 +1732,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1721,6 +1757,7 @@ paths:
       responses:
         '200':
           description: The new key. Capture it now.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1741,6 +1778,7 @@ paths:
       responses:
         '200':
           description: Revoked.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1765,6 +1803,7 @@ paths:
       responses:
         '201':
           description: Provisioned.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1785,6 +1824,7 @@ paths:
       responses:
         '200':
           description: The office's secret groups.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: The office has no vault provisioned.
           content:
@@ -1825,6 +1865,7 @@ paths:
       responses:
         '201':
           description: The group was created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`secretName` is missing, or the office has no vault.'
           content:
@@ -1861,6 +1902,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1886,6 +1928,7 @@ paths:
       responses:
         '200':
           description: Field names.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1918,6 +1961,7 @@ paths:
       responses:
         '201':
           description: The field was added.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A required field is missing.
           content:
@@ -1979,6 +2023,7 @@ paths:
                       value:
                         type: string
                         description: The decrypted secret. Handle accordingly.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2005,6 +2050,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2018,6 +2064,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2053,6 +2100,7 @@ paths:
                     const: true
                   integration:
                     $ref: '#/components/schemas/Integration'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2082,6 +2130,7 @@ paths:
       responses:
         '200':
           description: The updated integration.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: No integration with that ID.
           content:
@@ -2105,6 +2154,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2137,6 +2187,7 @@ paths:
       responses:
         '201':
           description: Instantiated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`globalIntegrationId` is missing.'
           content:
@@ -2184,6 +2235,7 @@ paths:
       responses:
         '200':
           description: Synced.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2230,6 +2282,7 @@ paths:
       responses:
         '201':
           description: Published as a new template version.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2264,6 +2317,7 @@ paths:
       responses:
         '200':
           description: Synced.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: No integration with that ID.
           content:
@@ -2307,6 +2361,8 @@ paths:
                     type: array
                     items:
                       type: object
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500':
           $ref: '#/components/responses/ServerError'
     post:
@@ -2363,6 +2419,7 @@ paths:
                   secretName:
                     type: string
                     description: 'The secret group being referenced. Names a group in the office or tenant vault.'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A field is missing or invalid, or the office has no vault.
           content:
@@ -2410,6 +2467,7 @@ paths:
       responses:
         '200':
           description: Removed.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2434,6 +2492,7 @@ paths:
       responses:
         '200':
           description: The tenant secrets reaching this office.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -2466,6 +2525,7 @@ paths:
                     const: true
                   protocol:
                     $ref: '#/components/schemas/Protocol'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2506,6 +2566,7 @@ paths:
       responses:
         '200':
           description: The updated protocol.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2519,6 +2580,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2542,6 +2604,7 @@ paths:
       responses:
         '200':
           description: The allocation.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2556,6 +2619,7 @@ paths:
       responses:
         '200':
           description: Deallocated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2583,6 +2647,7 @@ paths:
       responses:
         '200':
           description: Deallocated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2611,6 +2676,7 @@ paths:
       responses:
         '200':
           description: Offices holding this app.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2639,6 +2705,7 @@ paths:
       responses:
         '200':
           description: Offices holding this namespace.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2662,6 +2729,7 @@ paths:
       responses:
         '200':
           description: The template library.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -2724,6 +2792,7 @@ paths:
       responses:
         '201':
           description: The template was created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A required field is missing, or `baseUrl` is malformed.
           content:
@@ -2780,6 +2849,7 @@ paths:
       responses:
         '200':
           description: The template.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     patch:
@@ -2817,6 +2887,7 @@ paths:
       responses:
         '200':
           description: The updated template.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: No template with that ID.
           content:
@@ -2842,6 +2913,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -2866,6 +2938,7 @@ paths:
       responses:
         '200':
           description: Version history.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -2885,6 +2958,7 @@ paths:
       responses:
         '200':
           description: The referenced tenant secret groups.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
@@ -2910,6 +2984,7 @@ paths:
       responses:
         '201':
           description: Reference added.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2936,6 +3011,7 @@ paths:
       responses:
         '200':
           description: Removed.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -2948,6 +3024,7 @@ paths:
       responses:
         '200':
           description: The website library.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
@@ -2974,6 +3051,7 @@ paths:
       responses:
         '201':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A required field is missing.
           content:
@@ -3003,6 +3081,7 @@ paths:
       responses:
         '200':
           description: The website.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     patch:
@@ -3027,6 +3106,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     delete:
@@ -3042,6 +3122,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -3064,6 +3145,7 @@ paths:
       responses:
         '200':
           description: The site's integrations.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: No website with that ID.
           content:
@@ -3096,6 +3178,7 @@ paths:
       responses:
         '200':
           description: Offices holding this website.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: No website with that ID.
           content:

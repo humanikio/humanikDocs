@@ -243,6 +243,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Contact'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -314,6 +315,7 @@ paths:
                     const: true
                   contact:
                     $ref: '#/components/schemas/Contact'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: Missing workspace, no identifying field, or a malformed phone number.
           content:
@@ -359,6 +361,7 @@ paths:
       responses:
         '200':
           description: The match, if any.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`phoneNumber` is missing.'
           content:
@@ -404,6 +407,7 @@ paths:
                     type: array
                     items:
                       type: object
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -429,6 +433,7 @@ paths:
       responses:
         '200':
           description: The updated contact.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -449,6 +454,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -467,6 +473,7 @@ paths:
       responses:
         '200':
           description: Archived.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -485,6 +492,8 @@ paths:
       responses:
         '200':
           description: Marked read.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -528,6 +537,7 @@ paths:
       responses:
         '201':
           description: Sent.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -577,6 +587,7 @@ paths:
       responses:
         '201':
           description: Sent.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -597,6 +608,8 @@ paths:
       responses:
         '200':
           description: Composer defaults.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -613,6 +626,8 @@ paths:
       responses:
         '200':
           description: The contact's notes.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     post:
@@ -639,6 +654,8 @@ paths:
       responses:
         '201':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -669,6 +686,8 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     delete:
@@ -686,6 +705,8 @@ paths:
       responses:
         '200':
           description: Reported as deleted. See the warning above.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -704,6 +725,8 @@ paths:
       responses:
         '200':
           description: The registry.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     post:
@@ -716,6 +739,8 @@ paths:
       responses:
         '201':
           description: Added.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     delete:
@@ -728,6 +753,8 @@ paths:
       responses:
         '200':
           description: Removed.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -749,6 +776,7 @@ paths:
       responses:
         '200':
           description: Tagged.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -763,6 +791,8 @@ paths:
       responses:
         '200':
           description: Untagged.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -780,6 +810,7 @@ paths:
       responses:
         '200':
           description: Import result.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -811,6 +842,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Opportunity'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -862,6 +894,7 @@ paths:
       responses:
         '201':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -884,6 +917,8 @@ paths:
       responses:
         '200':
           description: The opportunity.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     patch:
@@ -930,6 +965,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -943,6 +979,8 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -957,6 +995,8 @@ paths:
       responses:
         '200':
           description: The workspace's pipelines.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     post:
@@ -969,6 +1009,8 @@ paths:
       responses:
         '201':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -989,6 +1031,8 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     delete:
@@ -1000,6 +1044,8 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -1037,6 +1083,8 @@ paths:
                     type: array
                     items:
                       type: object
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -1051,6 +1099,8 @@ paths:
       responses:
         '200':
           description: The definitions.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     post:
@@ -1065,6 +1115,7 @@ paths:
       responses:
         '201':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1087,6 +1138,8 @@ paths:
       responses:
         '200':
           description: The definition.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     patch:
@@ -1098,6 +1151,8 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'
     delete:
@@ -1109,5 +1164,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400':
           $ref: '#/components/responses/BadRequest'

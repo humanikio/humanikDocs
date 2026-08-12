@@ -75,6 +75,13 @@ components:
       required: [success, error]
 
   responses:
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
     BadRequest:
       description: A required field is missing, or Humanik Cloud rejected the request.
       content:
@@ -117,6 +124,7 @@ paths:
       responses:
         '200':
           description: The tenant's services.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -164,6 +172,7 @@ paths:
       responses:
         '200':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`serviceName` or `serviceType` is missing.'
           content:
@@ -199,6 +208,7 @@ paths:
       responses:
         '200':
           description: Available service types and sizes.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -233,6 +243,7 @@ paths:
       responses:
         '200':
           description: Created and deploying.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -251,6 +262,7 @@ paths:
       responses:
         '200':
           description: The service.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -285,6 +297,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: Nothing to change.
           content:
@@ -316,6 +329,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -362,6 +376,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`userConfig` is missing.'
           content:
@@ -393,6 +408,7 @@ paths:
       responses:
         '200':
           description: Running instances, if any.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -409,6 +425,7 @@ paths:
       responses:
         '200':
           description: Log output.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -425,6 +442,7 @@ paths:
       responses:
         '200':
           description: Deployment started.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -445,6 +463,7 @@ paths:
       responses:
         '200':
           description: Redeployment started.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -461,6 +480,7 @@ paths:
       responses:
         '200':
           description: Deployments.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -483,6 +503,7 @@ paths:
       responses:
         '200':
           description: The deployment.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -501,6 +522,7 @@ paths:
       responses:
         '200':
           description: The tenant's projects.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -524,6 +546,7 @@ paths:
       responses:
         '200':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: '`projectName` is missing.'
           content:
@@ -551,6 +574,7 @@ paths:
       responses:
         '200':
           description: The project.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -573,6 +597,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':

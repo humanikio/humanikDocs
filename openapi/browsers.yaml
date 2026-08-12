@@ -38,6 +38,14 @@ tags:
     description: Chats, messages, and the cycles behind them.
   - name: Identity
     description: The browser's own service account credential.
+  - name: Scripts
+    description: Saved automations a browser can replay.
+  - name: Environment secrets
+    description: Credentials injected into the browser at boot.
+  - name: Namespaces
+    description: Data the browser is allowed to reach.
+  - name: Model provider
+    description: Whose model account this browser spends.
 
 components:
   securitySchemes:
@@ -90,6 +98,22 @@ components:
           type: string
       required: [success, error]
 
+    Script:
+      type: object
+      properties:
+        scriptId: { type: string }
+        browserId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        source:
+          type: string
+          description: The script body.
+        timeoutMs:
+          type: integer
+          description: How long a run may take before it is abandoned.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
     Browser:
       type: object
       properties:
@@ -117,6 +141,13 @@ components:
   responses:
     BadRequest:
       description: The request is malformed or a required field is missing.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
       content:
         application/json:
           schema:
@@ -186,6 +217,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Browser'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -232,6 +264,7 @@ paths:
           description: Created. The credential may still be missing.
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -250,6 +283,7 @@ paths:
       responses:
         '200':
           description: The browser.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -295,6 +329,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           description: The permission gate refused, on the source or the destination workspace.
           content:
@@ -312,6 +347,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -332,6 +368,7 @@ paths:
       responses:
         '200':
           description: The members.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
@@ -505,6 +542,7 @@ paths:
                   value:
                     success: false
                     error: User is already a member of this browser
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -569,6 +607,7 @@ paths:
                     error: Member not found
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -585,6 +624,7 @@ paths:
       responses:
         '200':
           description: Waking.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -599,6 +639,7 @@ paths:
       responses:
         '200':
           description: Shutting down.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -618,6 +659,7 @@ paths:
       responses:
         '200':
           description: Restarting.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -636,6 +678,7 @@ paths:
       responses:
         '200':
           description: Navigating.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -649,6 +692,7 @@ paths:
       responses:
         '200':
           description: Navigated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -662,6 +706,7 @@ paths:
       responses:
         '200':
           description: Navigated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -675,6 +720,7 @@ paths:
       responses:
         '200':
           description: Reloading.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -691,6 +737,7 @@ paths:
       responses:
         '200':
           description: Accepted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -705,6 +752,7 @@ paths:
       responses:
         '200':
           description: Cancelled.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -724,6 +772,7 @@ paths:
       responses:
         '200':
           description: The chats.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
@@ -734,6 +783,7 @@ paths:
       responses:
         '201':
           description: Created.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -748,6 +798,7 @@ paths:
       responses:
         '200':
           description: Switched.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -768,6 +819,7 @@ paths:
       responses:
         '200':
           description: The chat.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     delete:
@@ -778,6 +830,7 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -798,6 +851,7 @@ paths:
       responses:
         '200':
           description: The messages.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -812,6 +866,7 @@ paths:
       responses:
         '200':
           description: The sessions.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -825,6 +880,7 @@ paths:
       responses:
         '200':
           description: The session.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -844,6 +900,7 @@ paths:
       responses:
         '200':
           description: The session.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -862,6 +919,7 @@ paths:
       responses:
         '200':
           description: The cycles.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -881,6 +939,7 @@ paths:
       responses:
         '200':
           description: The cycle.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -895,6 +954,7 @@ paths:
       responses:
         '200':
           description: The configuration.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -915,8 +975,62 @@ paths:
       responses:
         '200':
           description: The key record, without the secret.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
+
+    delete:
+      operationId: deleteBrowserApiKey
+      summary: Delete the credential
+      tags: [Identity]
+      description: |
+        Removes the browser's credential record entirely.
+
+        **This is not the same as revoking.**
+        [Revoke the credential](/docs/api-reference/browsers/identity/revokeBrowserApiKey)
+        invalidates the key and keeps the record; this removes the record too, so
+        there is nothing left to inspect afterwards.
+
+        Prefer revoking when a credential may have leaked and you want a trail.
+        Delete when you are decommissioning.
+
+        A browser without a credential cannot act. Mint a new one with
+        [Provision a credential](/docs/api-reference/browsers/identity/provisionBrowserApiKey).
+
+        **Permission:** `browser:manage` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: |
+            Required, and note it travels in the query here while
+            [Revoke](/docs/api-reference/browsers/identity/revokeBrowserApiKey)
+            takes it in the body. IDs come from
+            [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400':
+          description: '`workspaceId` is missing.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: workspaceId is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /browsers/{browserId}/api-keys/cycle:
     parameters:
@@ -934,6 +1048,7 @@ paths:
       responses:
         '200':
           description: The new key. Capture it now.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -948,6 +1063,7 @@ paths:
       responses:
         '200':
           description: Revoked.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -965,6 +1081,7 @@ paths:
       responses:
         '201':
           description: Provisioned.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -991,6 +1108,8 @@ paths:
                     type: array
                     items:
                       type: object
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1005,6 +1124,7 @@ paths:
       responses:
         '200':
           description: The proxy configuration.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     patch:
@@ -1015,6 +1135,7 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -1035,6 +1156,7 @@ paths:
       responses:
         '200':
           description: The configuration.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -1049,6 +1171,7 @@ paths:
       responses:
         '200':
           description: The compute configuration.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
     put:
@@ -1059,19 +1182,841 @@ paths:
       responses:
         '200':
           description: Updated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /browsers/{browserId}/scripts:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+
+    get:
+      operationId: listBrowserScripts
+      summary: List scripts
+      tags: [Scripts]
+      description: |
+        Saved automations on this browser.
+
+        **Permission:** `browser:read` @ `browser/{browserId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  scripts:
+                    type: array
+                    items: { $ref: '#/components/schemas/Script' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createBrowserScript
+      summary: Save a script
+      tags: [Scripts]
+      description: |
+        Stores an automation this browser can replay later.
+
+        A script is a repeatable sequence, so work you have already proven can be
+        run again without an agent deciding it afresh each time. That makes it
+        cheaper and, more usefully, predictable.
+
+        **Permission:** `browser:use` @ `browser/{browserId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Required.
+                source:
+                  type: string
+                  description: Required. The script body.
+                description: { type: string }
+                timeoutMs:
+                  type: integer
+                  description: |
+                    How long a run may take before it is abandoned. A default
+                    applies when omitted, and a per-run value overrides this.
+              required: [name, source]
+      responses:
+        '201':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  script: { $ref: '#/components/schemas/Script' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/scripts/{scriptId}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: scriptId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List scripts](/docs/api-reference/browsers/scripts/listBrowserScripts).
+        schema: { type: string }
+
+    get:
+      operationId: getBrowserScript
+      summary: Get a script
+      tags: [Scripts]
+      description: |
+        One script, including its body.
+
+        **Permission:** `browser:read` @ `browser/{browserId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  script: { $ref: '#/components/schemas/Script' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such script on this browser.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      operationId: updateBrowserScript
+      summary: Update a script
+      tags: [Scripts]
+      description: |
+        Changes a saved script.
+
+        > **There is no version history.** An edit replaces what was there, and
+        > the previous body is not recoverable. Keep anything you may want back
+        > outside the platform.
+
+        **Permission:** `browser:manage` @ `browser/{browserId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                source: { type: string }
+                description: { type: string }
+                timeoutMs: { type: integer }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  script: { $ref: '#/components/schemas/Script' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such script on this browser.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteBrowserScript
+      summary: Delete a script
+      tags: [Scripts]
+      description: |
+        Removes the script. Runs already finished keep their records.
+
+        **Permission:** `browser:manage` @ `browser/{browserId}`
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such script on this browser.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/scripts/{scriptId}/run:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: scriptId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List scripts](/docs/api-reference/browsers/scripts/listBrowserScripts).
+        schema: { type: string }
+    post:
+      operationId: runBrowserScript
+      summary: Run a script
+      tags: [Scripts]
+      description: |
+        Runs a saved script on this browser and waits for the result.
+
+        ## Two kinds of failure, and they are not the same status
+
+        This is the part to get right in a client.
+
+        | | Means |
+        | --- | --- |
+        | `502` | The browser could not be reached at all. Nothing ran |
+        | `200` with `ok: false` | The script ran and failed. Read `error` |
+
+        A script that fails is a **successful request**. Branching on the status
+        code alone will report a working browser as broken.
+
+        **The browser must be awake.** Wake it first with
+        [Wake the machine](/docs/api-reference/browsers/machine/wakeBrowser) if
+        it may have gone to sleep.
+
+        **Permission:** `browser:use` @ `browser/{browserId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    The workspace this run belongs to. IDs come from
+                    [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+                params:
+                  type: object
+                  additionalProperties: true
+                  description: Values passed to the script.
+                timeoutMs:
+                  type: integer
+                  description: Overrides the script's own timeout for this run.
+      responses:
+        '200':
+          description: |
+            The browser ran it. **Check `ok` before treating the run as
+            successful.**
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  ok:
+                    type: boolean
+                    description: False when the script itself failed.
+                  error: { type: string }
+                  result:
+                    type: object
+                    additionalProperties: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such script on this browser.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: |
+            The browser could not be reached. Nothing ran, so retrying is safe.
+            Usually means it is asleep or still starting.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/environment/secrets:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+
+    get:
+      operationId: listBrowserSecrets
+      summary: List secrets
+      tags: [Environment secrets]
+      description: |
+        The credential groups available to this browser.
+
+        **Names only.** Values are never returned by any endpoint here, so this
+        tells you what exists rather than what it is.
+
+        **Permission:** `secrets:read` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  secrets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                      additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createBrowserSecret
+      summary: Create a secret
+      tags: [Environment secrets]
+      description: |
+        Creates a named group of credentials for this browser.
+
+        A secret is a container. The values live in fields inside it, added
+        separately, which is what lets you rotate one credential without
+        touching the rest.
+
+        **These reach the browser at boot.** A change takes effect when the
+        machine next starts, not immediately. Restart it with
+        [Restart the machine](/docs/api-reference/browsers/machine/restartBrowser)
+        if you need the new value now.
+
+        **Permission:** `secrets:write` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Required. The group name, used to reference it later.
+              required: [name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/environment/secrets/{secretName}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: secretName
+        in: path
+        required: true
+        description: |
+          Names come from
+          [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets).
+        schema: { type: string }
+    delete:
+      operationId: deleteBrowserSecret
+      summary: Delete a secret
+      tags: [Environment secrets]
+      description: |
+        Removes the group and every field in it.
+
+        **Anything relying on it breaks at the next boot**, not now. A running
+        browser keeps the values it started with.
+
+        **Permission:** `secrets:write` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/environment/secrets/{secretName}/fields:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: secretName
+        in: path
+        required: true
+        description: |
+          Names come from
+          [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets).
+        schema: { type: string }
+
+    get:
+      operationId: listBrowserSecretFields
+      summary: List fields
+      tags: [Environment secrets]
+      description: |
+        The field names inside a secret. **Names only, never values.**
+
+        **Permission:** `secrets:read` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  fields:
+                    type: array
+                    items: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: addBrowserSecretField
+      summary: Add a field
+      tags: [Environment secrets]
+      description: |
+        Puts a value into a secret, under a name the browser reads at boot.
+
+        **Permission:** `secrets:write` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldName:
+                  type: string
+                  description: Required. What the browser will read it as.
+                value:
+                  type: string
+                  description: Required. Stored encrypted and never returned.
+              required: [fieldName, value]
+      responses:
+        '201':
+          description: Added.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/environment/secrets/{secretName}/fields/{fieldName}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: secretName
+        in: path
+        required: true
+        description: |
+          Names come from
+          [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets).
+        schema: { type: string }
+      - name: fieldName
+        in: path
+        required: true
+        description: |
+          Names come from
+          [List fields](/docs/api-reference/browsers/environment-secrets/listBrowserSecretFields).
+        schema: { type: string }
+
+    get:
+      operationId: readBrowserSecretField
+      summary: Read a field
+      tags: [Environment secrets]
+      description: |
+        Reads one field's metadata.
+
+        **Permission:** `secrets:read` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateBrowserSecretField
+      summary: Update a field
+      tags: [Environment secrets]
+      description: |
+        Replaces a field's value. This is how you rotate one credential without
+        disturbing the others in the group.
+
+        Takes effect at the next boot.
+
+        **Permission:** `secrets:write` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+                  description: Required. The new value.
+              required: [value]
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteBrowserSecretField
+      summary: Delete a field
+      tags: [Environment secrets]
+      description: |
+        Removes one field, leaving the rest of the group in place.
+
+        **Permission:** `secrets:write` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/namespaces:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+
+    get:
+      operationId: listBrowserNamespaces
+      summary: List allocated data
+      tags: [Namespaces]
+      description: |
+        The data this browser is allowed to reach.
+
+        **Permission:** `browser:read` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: |
+            IDs come from
+            [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  namespaces:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        namespaceId: { type: string }
+                        namespaceName: { type: string }
+                      additionalProperties: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: allocateBrowserNamespace
+      summary: Allocate data to a browser
+      tags: [Namespaces]
+      description: |
+        Gives this browser access to a body of data.
+
+        Allocation is the boundary. A browser reaches what has been allocated to
+        it and nothing else, so this is the grant to be deliberate about rather
+        than the permission alone.
+
+        **Allocating the same data twice is refused**, not treated as a repeat,
+        so the call is not idempotent.
+
+        **Permission:** `browser:manage` @ `browser/{browserId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  description: Required.
+                namespaceId:
+                  type: string
+                  description: Required. Which body of data to allocate.
+                namespaceName:
+                  type: string
+                  description: |
+                    Required. Its name, stored alongside the ID so a listing
+                    reads without a second lookup.
+              required: [workspaceId, namespaceId, namespaceName]
+      responses:
+        '201':
+          description: Allocated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400':
+          description: A field is missing, or it is already allocated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                already:
+                  value:
+                    success: false
+                    error: Namespace already associated with this browser
+                missing:
+                  value:
+                    success: false
+                    error: namespaceId and namespaceName are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/namespaces/{namespaceId}:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+      - name: namespaceId
+        in: path
+        required: true
+        description: |
+          IDs come from
+          [List allocated data](/docs/api-reference/browsers/namespaces/listBrowserNamespaces).
+        schema: { type: string }
+
+    get:
+      operationId: getBrowserNamespace
+      summary: Get an allocation
+      tags: [Namespaces]
+      description: |
+        One allocation.
+
+        **Permission:** `browser:read` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Not allocated to this browser.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: Namespace association not found
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deallocateBrowserNamespace
+      summary: Revoke allocated data
+      tags: [Namespaces]
+      description: |
+        Takes the data away from this browser. The data itself is untouched.
+
+        **Permission:** `browser:manage` @ `browser/{browserId}`
+      responses:
+        '200':
+          description: Revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /browsers/{browserId}/byok-config:
+    parameters:
+      - $ref: '#/components/parameters/BrowserId'
+
+    get:
+      operationId: getBrowserModelProvider
+      summary: Get the model provider
+      tags: [Model provider]
+      description: |
+        Which model account this browser spends when its agent works.
+
+        **Permission:** `browser:read` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  config:
+                    type: object
+                    additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateBrowserModelProvider
+      summary: Set the model provider
+      tags: [Model provider]
+      description: |
+        Chooses whose model account this browser spends.
+
+        **This is a manage-tier action because it decides who pays.** Pointing a
+        browser at your own model account moves its spend off your platform
+        credit entirely, which is why it is not a read-adjacent setting.
+
+        **The change applies at the next boot.** The browser reads this when it
+        starts, so a running browser keeps whatever it started with.
+
+        **Permission:** `browser:manage` @ `browser/{browserId}`, plus membership
+        or `browser:manage`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: The provider configuration to apply.
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /browsers/{browserId}/usage:
     parameters:
       - $ref: '#/components/parameters/BrowserId'
-    get:
+    post:
+      operationId: reportBrowserUsage
+      summary: Report usage
       tags: [Machine]
-      summary: Get usage
-      operationId: getBrowserUsage
-      description: Requires `browser:read` and membership.
+      description: |
+        Records what a browser has spent on model work.
+
+        **A browser reports its own usage and nothing else.** The browser is
+        identified from the key on the request rather than the path, so a
+        credential cannot record spend against a different browser even if it
+        names one.
+
+        You are unlikely to call this yourself. It exists so a running browser
+        can account for its own work, and it is documented because the endpoint
+        is reachable with an ordinary key.
+
+        **Permission:** `browser:use` @ `browser/{browserId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: The usage to record.
       responses:
         '200':
-          description: Usage figures.
-        '403':
-          $ref: '#/components/responses/Forbidden'
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }

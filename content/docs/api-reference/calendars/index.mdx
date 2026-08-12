@@ -1,0 +1,168 @@
+---
+title: Calendars
+description: One calendar over several providers, shared with people and employees alike.
+---
+
+A calendar here is a container you create and bind provider accounts to. Reads
+and writes pass through to those providers, so nothing is duplicated and nothing
+drifts.
+
+<ApiSetup />
+
+## Getting one working
+
+A new calendar shows nothing and nobody can use it. Two more steps fix that.
+
+<Steps>
+
+<Step>
+**Create it.**
+[Create a calendar](/docs/api-reference/calendars/calendars/createCalendar)
+takes a name and a workspace.
+</Step>
+
+<Step>
+**Bind a source.**
+[List connectable calendar accounts](/docs/api-reference/calendars/sources/listAvailableSources)
+gives you an `accountId`, then
+[Bind a source](/docs/api-reference/calendars/sources/bindCalendarSource) points
+the calendar at it. Bind several and they merge into one view.
+</Step>
+
+<Step>
+**Add members.**
+[Add a member](/docs/api-reference/calendars/members/addCalendarMember) for each
+person or AI employee who needs it. Until this, even you cannot list events.
+</Step>
+
+</Steps>
+
+## Membership is the thing that authorises
+
+This is the part that surprises people, and it is worth getting right before you
+debug a `403`.
+
+A calendar belongs to a workspace, but the workspace is **not** what decides who
+may use it. The member list is.
+
+| | Needs membership |
+| --- | --- |
+| Reading and writing events and tasks | **Yes.** Holding `calendar:manage` is not enough |
+| Reading the calendar, members, sources | Membership **or** `calendar:manage` |
+| Governing it: rename, bind, delete, members | No. The role alone is enough |
+| Booking links | No. Permission alone, with no membership layer |
+
+A member from **any** workspace passes. So sharing a calendar across teams is
+adding people to its member list, not moving anything.
+
+<Callout type="warn">
+  **A `403` here has two causes.** Either the role is missing, or the role is
+  there and the caller is not a member. Both look identical. Check
+  [List members](/docs/api-reference/calendars/members/listCalendarMembers)
+  before assuming the grant is wrong.
+</Callout>
+
+## An AI employee is a member like anyone else
+
+An office joins the member list as an ordinary row, with `memberType: "office"`,
+and then calls the same endpoints a person calls through the same checks. There
+is no separate agent path and no elevated access.
+
+This is the cleanest example of the idea on the platform: give an employee a
+calendar the same way you give a colleague one, and remove it the same way.
+
+```bash
+curl -X POST "$HOS_API/calendars/cal_7Kd2mQ/members" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "memberId": "off_dispatch",
+    "memberType": "office",
+    "workspaceId": "ws_a1b2c3",
+    "displayName": "Dispatch"
+  }'
+```
+
+## Writes go to a provider, not to us
+
+Creating an event writes it into the Google or Outlook account you name. Two
+consequences worth planning for:
+
+- **You must say where.** Every event and task write takes an `accountId` and the
+  identifier of the calendar or list inside it.
+- **Deleting a calendar deletes nothing at the provider.** You lose the
+  container, its members and its bindings. The events stay where they were
+  written.
+
+## Booking links
+
+A booking link is a page someone outside your account opens to pick a slot.
+Bookings land on this calendar and can start an automation.
+
+### Blocking time out
+
+Availability is computed from five things, and understanding which one to reach
+for saves a lot of guessing.
+
+| To block | Use |
+| --- | --- |
+| A recurring day or part of a day | `workingHours`. A weekday you omit has no availability at all |
+| One specific date | `dateOverrides`, with `[]` for that date |
+| Around real commitments | Nothing. Events on the bound calendars already remove slots automatically |
+| Padding around each booking | `bufferBeforeMin` and `bufferAfterMin` |
+| Volume | `maxPerDay` and `maxPerSlot` |
+
+A date in `dateOverrides` **replaces** that day's working hours rather than
+adding to them, which is what makes `[]` mean closed.
+
+Existing events are the part you do not configure. Anything on a bound calendar
+that is not marked free removes the slots it overlaps, so blocking an afternoon
+is a matter of putting something in your own calendar.
+
+<Callout type="warn">
+  **A day with `maxPerDay` set cannot be rescheduled within itself.** A booking
+  being moved still counts toward the day it is leaving, so once the cap is
+  reached, moving it to a later slot the same day is refused. Moving it to
+  another day works.
+</Callout>
+
+Two more behaviours to know:
+
+<Callout type="warn">
+  **Slugs are unique across the whole platform.** A slug already taken by
+  somebody else is rejected even though it is not taken by you. Prefer something
+  specific.
+</Callout>
+
+<Callout>
+  **Deleting a link with bookings ahead of it returns `409`, not `404`.** That is
+  a refusal, not a failure: deleting would strand people who already booked. Send
+  `?force=true` to override, or disable the link instead to stop new bookings
+  while keeping the ones you have.
+</Callout>
+
+## What is not here
+
+**The public booking page endpoints.** The routes a booker's browser calls are
+not documented yet.
+
+**Provider setup.** Connecting a Google or Outlook account is a console flow.
+This reference starts once an account exists.
+
+**Internal tool routes.** The paths an office uses in-process are not
+caller-facing.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="A booking can start a deterministic sequence."
+  />
+  <Card
+    title="Access control"
+    href="/docs/access-control"
+    description="The three calendar actions, and how membership sits on top."
+  />
+</Cards>
