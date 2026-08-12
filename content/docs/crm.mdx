@@ -1,0 +1,211 @@
+---
+title: Contacts and conversations
+description: One record per person, one thread across every channel.
+---
+
+The CRM is where every channel lands. A text message, an email, a phone call and
+a booking all resolve to the same person and the same conversation.
+
+That join is the point of it. An AI employee that answers a text and then follows
+up by email is continuing one conversation, not starting a second one, and the
+person on the other end experiences it that way too.
+
+## One person, one thread
+
+A contact is the stable identity for someone your workspace talks to. Their
+conversation holds everything, in order, whatever channel it arrived on.
+
+```
+   Dana Reid
+     ├─ 09:14  sms      "do you have anything Thursday?"
+     ├─ 09:16  sms      "yes, 2pm or 4pm"
+     ├─ 11:02  email    "confirming 2pm, here are the details"
+     └─ 14:30  call     inbound, 4m12s
+```
+
+**The identity survives a channel change. The conversation does not fork.** This
+is why a contact is not a phone number: one person can hold several numbers, and
+the record has to outlive any of them.
+
+## How someone becomes a contact
+
+Most of the time this happens by itself. Someone texts a number you own, and a
+contact exists before anyone has done anything.
+
+What that resolution does depends on how they arrived, and the differences
+matter:
+
+| They arrive by | Matched on | Two at once |
+| --- | --- | --- |
+| Text or call | Their number | Safe. A call and a text landing together produce one contact |
+| Email or a booking | Their address | Not guaranteed. Two simultaneous first touches can produce two records |
+| CSV import | Their number, and repeats within the file | Skipped rather than duplicated |
+| Creating one through the API | **Nothing** | Always creates |
+
+<Callout type="warn">
+  **Creating a contact does not check whether one already exists.** It makes a
+  new record every time, and if you supply a phone number it takes ownership of
+  that number, pointing it away from whoever held it before. Check first with
+  [Find a contact by phone](/docs/api-reference/crm/contacts/findContactByPhone).
+</Callout>
+
+### Someone who texts and later emails becomes two contacts
+
+This is deliberate, and worth understanding rather than working around.
+
+A contact created from a text has a number and no address. When that same person
+emails you, nothing matches them, so a second record appears.
+
+The alternative is guessing that a number and an address belong to the same
+human, and a wrong guess puts one person's conversation in front of another's.
+The system will not do that.
+
+<Callout type="warn">
+  **There is no merge.** Once two records exist for one person, nothing joins
+  them. Deciding which address or number is canonical, before people are in the
+  system, is worth more here than it looks.
+</Callout>
+
+## Reaching people
+
+Two outbound channels, both reaching a real person under your own identity.
+
+**Text messages** go from a number allocated to that workspace. You can name
+which one, and anything outside the workspace's own numbers is refused. Left
+unspecified it uses the number that conversation is already on, or the
+workspace's only number, or asks you to choose.
+
+**Email** goes from an address your workspace holds. Who may send from which
+address depends on the sender: a person with broad permission can use any address
+in the account, and anyone else, including an AI employee, is limited to
+addresses assigned to them specifically.
+
+### What you write is not quite what is sent
+
+Both channels support placeholders like `{{contact.first_name}}`, and they are
+filled in **at the moment of sending**, against the person receiving it.
+
+The practical consequence: you compose a template, and the finished message is
+only visible afterwards, in the thread. Nobody sees the final wording before it
+is delivered. Worth knowing before you rely on a proofread.
+
+A placeholder naming a field you have defined but not filled resolves to nothing
+rather than printing the raw token.
+
+## Opting out
+
+One flag per contact covers **every** channel. Marking someone opted out stops
+texts, emails and calls together, and it is checked in four separate places
+before anything leaves.
+
+Someone replying STOP to a text sets it themselves, and that flows back to the
+contact record.
+
+<Callout type="warn">
+  **There is no email unsubscribe.** STOP works on text messages. Nothing
+  equivalent exists on email: no unsubscribe link is added, and no inbound
+  handler watches for one. If you email marketing content, you are responsible
+  for honouring opt-outs that arrive by reply.
+</Callout>
+
+<Callout type="warn">
+  **The flag can be cleared by anything that can edit a contact.** It is an
+  ordinary field, so the permission to update a contact is the permission to
+  un-opt-out someone, including for an AI employee. If that matters to you, it
+  is a reason to be careful with `contact:manage` rather than something the
+  system prevents.
+</Callout>
+
+## What an AI employee can do here
+
+This is the clearest example on the platform of an AI employee being an ordinary
+member of staff rather than a special case.
+
+An employee reaches the CRM **through the same endpoints a person's browser
+calls**, carrying its own service account key, passing the same permission
+checks. There is no agent-only path and no elevated access. A denial arrives as
+a `403`, exactly as it would for a person.
+
+Its key is bound to one workspace, and that binding comes from the credential
+rather than from anything the model says, so an employee cannot aim a change at a
+workspace it is not in even if it tried.
+
+By default an employee can read contacts, tag them, create and update them, send
+texts, send email **only from its own assigned addresses**, and manage deals.
+
+<Callout type="warn">
+  **Nothing asks you before a message is sent.** There is no approval step, no
+  queue, and no confirmation on either channel. An employee that decides to send
+  a text sends it, to a real person, immediately.
+
+  The control you have is permissions, not review. If an employee should not be
+  messaging people, do not grant it `phone:send` or the email actions. Withhold
+  the capability rather than expecting to be asked.
+</Callout>
+
+That is the honest shape of it today. Instructions in a protocol are guidance,
+and guidance is not a gate. See
+[Skills and protocols](/docs/skills-and-protocols) for the difference.
+
+## Notes, tags and custom fields
+
+**Notes** are internal. They are attached to a contact, timestamped and
+attributed, and the contact never sees them.
+
+**Tags** are workspace-wide labels. The registry is shared, so a tag created for
+one contact is available for all of them.
+
+**Custom fields** are yours to define, typed, and available as placeholders in
+messages.
+
+## Deals
+
+A **pipeline** is an ordered list of stages. An **opportunity** is a deal sitting
+in one stage of one pipeline, optionally linked to a contact.
+
+Two things to know before you build on them:
+
+**The contact link is loose.** A deal stores a contact's ID and a copy of their
+name, and neither is checked. The name is a snapshot that never refreshes, and
+deleting a contact leaves their deals behind pointing at nothing.
+
+**Deleting a pipeline deletes its deals.** There is no soft delete and no restore
+window. Removing a stage from a pipeline, on the other hand, leaves deals sitting
+in a stage that no longer exists.
+
+<Callout>
+  **Nothing fires when a deal is won.** Deals are not a trigger source for
+  automations. If you want something to happen at a stage change, drive it from
+  the change itself rather than expecting an event.
+</Callout>
+
+## What this is not
+
+It is contacts, conversations, notes, tags, custom fields and a deal board.
+
+There is **no reporting or forecasting**, no email campaign tooling, and no
+metering on messaging: nothing counts or caps what is sent, so a
+[spending limit](/docs/spend) does not reach it.
+
+Unread counts are **shared across the workspace**, not per person. When one
+person opens a conversation it is read for everybody.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="CRM API"
+    href="/docs/api-reference/crm"
+    description="Contacts, messaging, notes, tags and deals."
+  />
+  <Card
+    title="Skills and protocols"
+    href="/docs/skills-and-protocols"
+    description="Shaping what an employee does, and why that is not a gate."
+  />
+  <Card
+    title="Access control"
+    href="/docs/access-control"
+    description="The permissions that actually bound an employee."
+  />
+</Cards>

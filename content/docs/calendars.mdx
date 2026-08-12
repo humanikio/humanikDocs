@@ -1,0 +1,144 @@
+---
+title: Calendars and booking
+description: One calendar over several accounts, shared with people and employees alike.
+---
+
+A calendar here is not a copy of your Google or Outlook calendar. It is a
+container you create, point at one or more real accounts, and then share.
+
+Reads and writes pass straight through to those accounts. Nothing is duplicated,
+so nothing drifts, and deleting anything here never deletes anything there.
+
+## One view, several accounts
+
+Bind more than one account and they merge into a single view. Each keeps its own
+colour, and any of them can be muted without unbinding it.
+
+```
+   Sales calendar
+     ├─ google      hello@acme.com        ● shown
+     ├─ outlook     bookings@acme.com     ● shown
+     └─ google      personal@…            ○ muted
+```
+
+An office's scheduled work can appear alongside them, so what an AI employee is
+booked to do sits beside what people are booked to do. That view is read-only:
+schedules are not created here.
+
+## Membership is what grants access
+
+This is the part that surprises people, and it is worth getting right before you
+debug a refusal.
+
+A calendar belongs to a workspace, but **the workspace is not what decides who
+may use it.** The member list is.
+
+| To | You need |
+| --- | --- |
+| Read or write events and tasks | To be a member. Holding the manage permission is not enough |
+| Read the calendar, its members, its accounts | Membership **or** the manage permission |
+| Rename it, bind accounts, add members, delete it | The manage permission. Membership not required |
+
+A member from **any** workspace passes. So sharing a calendar with another team
+means adding them to its member list, not moving anything.
+
+The split is deliberate: **governing a calendar and using one are different
+jobs.** Someone can administer a calendar they cannot read the appointments in.
+
+<Callout type="warn">
+  **A refusal has two possible causes and they look identical.** Either the
+  permission is missing, or the permission is there and the caller is not a
+  member. Check the member list before assuming a role is wrong.
+</Callout>
+
+## An AI employee is a member like anyone else
+
+An office joins the member list as an ordinary row, and then calls the same
+endpoints a person calls, through the same checks.
+
+There is no agent path and no elevated access. You give an employee a calendar
+the same way you give a colleague one, and you take it away the same way.
+
+This is the cleanest example of the idea on the platform: the thing that decides
+whether an AI employee can see Thursday afternoon is a row in a list, which you
+can look at.
+
+## Letting other people book
+
+A booking link is a page someone outside your account opens to pick a slot. What
+they book becomes an event on your calendar and can start an
+[automation](/docs/workflows).
+
+You can hand out a reusable page, or mint a one-time link for a specific person.
+A one-time link is a snapshot: it copies the settings as they are when you create
+it, so later changes do not reach links already sent.
+
+<Callout type="warn">
+  **A link's address must be unique across the whole platform**, not just your
+  account. A name someone else has taken is refused even though it is not taken
+  by you. Prefer something specific to something generic.
+</Callout>
+
+### Deciding when people can book
+
+Availability comes from five things, and knowing which one to reach for saves a
+lot of guessing:
+
+| To block out | Use |
+| --- | --- |
+| A recurring day, or part of one | Working hours. A weekday you leave out has no availability at all |
+| One specific date | A date override, set to nothing |
+| Time you are genuinely busy | Nothing. Real events on the bound accounts already remove those slots |
+| Breathing room around each booking | A buffer before, after, or both |
+| Volume | A cap per day, or per slot |
+
+A date override **replaces** that day's hours rather than adding to them, which
+is what makes an empty one mean closed.
+
+The part you do not configure is the useful part: **anything already in your
+calendar removes the slots it covers.** Blocking Thursday afternoon is a matter
+of putting something in your own calendar.
+
+<Callout type="warn">
+  **A day with a cap cannot be rescheduled within itself.** A booking being moved
+  still counts toward the day it is leaving, so once the cap is reached, moving
+  it to a later slot the same day is refused. Moving it to another day works.
+</Callout>
+
+## Writes go to a real account
+
+Creating an event writes it into the Google or Outlook account you name, and it
+appears here because that account is bound.
+
+Two consequences worth planning for:
+
+- **You have to say where.** Every write names the account and the calendar
+  inside it. There is no implicit destination.
+- **Deleting a calendar deletes nothing at the provider.** You lose the
+  container, its members and its bindings. The appointments stay where they were
+  written.
+
+<Callout>
+  **A broken connection stays broken.** If an account's authorisation fails,
+  syncing will not repair it. Rebind the account.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Calendars API"
+    href="/docs/api-reference/calendars"
+    description="Calendars, members, accounts, events, tasks and booking links."
+  />
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="A booking can start a deterministic sequence."
+  />
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="What joins the member list alongside your colleagues."
+  />
+</Cards>

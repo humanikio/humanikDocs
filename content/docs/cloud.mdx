@@ -1,0 +1,126 @@
+---
+title: Where offices run
+description: The machines behind your AI employees, and what they cost while awake.
+---
+
+Every office runs on a machine. Understanding when that machine exists, and when
+it does not, is most of what you need to reason about performance and cost.
+
+## An office is a service
+
+An office is not a process inside a shared system. It is its own machine, with
+its own environment, its own secrets, and its own view of your data.
+
+That is why an office can be resized, given an idle timeout, inspected while
+running, and read for logs. It is also why two offices cannot see each other's
+credentials: they are not in the same place.
+
+## Sleeping is the normal state
+
+An office that is not working does not exist as a running machine, and **an
+employee that is not working costs nothing to run.**
+
+```
+   work arrives ──▶ machine starts ──▶ works ──▶ idle ──▶ sleeps
+                         ▲                                  │
+                         └──────────  work arrives  ────────┘
+```
+
+Nothing is lost when it sleeps. Its configuration, its data and its conversations
+are not on the machine.
+
+### The first request after sleeping waits
+
+Waking is not instant. A request arriving at a sleeping office does not fail, it
+waits while the machine starts, and then it is served.
+
+How long depends on the size of the machine and what it has to load. For
+interactive work this is the one thing worth designing around: if somebody is
+waiting on the other end, a first message after a quiet period feels slower than
+the ones after it.
+
+If that matters, keep the office awake rather than trying to make waking faster.
+
+<Callout>
+  **Sleeping is a cost decision, not a correctness one.** An office that sleeps
+  and one that never does behave identically. The difference is what you pay and
+  how the first message feels.
+</Callout>
+
+## The two levers on cost
+
+Machine time is billed while an office is awake, and unlike model spend it
+**cannot be capped**. A [spending limit](/docs/spend) does not reach it.
+
+So the controls are structural rather than a ceiling:
+
+| Lever | Effect |
+| --- | --- |
+| **Size** | A smaller machine costs less for every second it is awake |
+| **Idle timeout** | A shorter one means fewer seconds awake |
+
+An office left running with a long timeout is the usual explanation for a compute
+bill nobody expected. Nothing will stop it, and nothing will warn you.
+
+You can also stop one directly with
+[Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine),
+which is graceful: work in progress finishes rather than being cut off.
+
+## Configuration is read at startup
+
+An office reads its settings once, when it starts, and holds them for as long as
+that machine lives.
+
+| Changing | Applies |
+| --- | --- |
+| Skills | Immediately |
+| Model provider, secrets, integrations, protocols | At the next restart |
+
+<Callout type="warn">
+  **Restarting means replacing the machine, not rebooting it.**
+  [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine)
+  builds a fresh machine with the current settings, brings it up, checks it, and
+  only then stops the old one. Rebooting the existing machine would keep what it
+  was built with, which is exactly what you are trying to change.
+</Callout>
+
+There is no gap in service while that happens.
+
+## What else runs here
+
+Offices are the common case, but they are not the only thing. Anything running
+for your account appears in the same place, which is why the cost breakdown
+separates what it can identify as an office from what it cannot.
+
+Use the [Humanik Cloud API](/docs/api-reference/cloud) when you want a view
+across everything, and the office's own endpoints when you are working with one
+employee. The office route is narrower, and it can be granted to someone
+responsible for a single employee without giving them the whole account.
+
+<Callout type="warn">
+  **Do not create or delete an office as a service.** Creating an office through
+  [Create an office](/docs/api-reference/offices/offices/createOffice) sets up its
+  identity, its vault and its data access alongside the machine. A bare service
+  has none of that, and deleting the service alone leaves an office whose machine
+  no longer exists.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Humanik Cloud API"
+    href="/docs/api-reference/cloud"
+    description="Services, sizing and logs across the account."
+  />
+  <Card
+    title="Spending"
+    href="/docs/spend"
+    description="The two meters, and which one can be capped."
+  />
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="What runs on these machines."
+  />
+</Cards>
