@@ -1,0 +1,708 @@
+---
+title: Actions
+description: Every permission the platform checks, and what each one allows.
+---
+
+Every gated operation checks one action at one resource. This is the full
+list.
+
+You need it when writing a custom role. For built-in roles, which cover most
+cases, see [Roles and policies](/docs/access-control/roles).
+
+<Callout>
+  **An action alone is not access.** A grant is an action *and* a resource, and
+  both have to match. `office:manage` assigned at one workspace grants nothing
+  at another. See [Granting access](/docs/access-control/assignments).
+</Callout>
+
+The **Usually written at** column is the resource level a grant normally names.
+A parent covers its descendants, so an action listed at `office` can also be
+granted at the workspace above it to cover every office in it.
+
+## Tenant
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `tenant:read` | Read account-level settings. | `console` |
+| `tenant:manage` | Administer the account: stored credentials, workspace assignment, the shared template library. The highest grant on the platform, and no built-in role carries it. | `console` |
+
+<Accordions>
+<Accordion title="Endpoints that need `tenant:manage` (9)">
+- [Add a template secret reference](/docs/api-reference/offices/tenant-libraries/addGlobalIntegrationSecretRef)
+- [Create an integration template](/docs/api-reference/offices/tenant-libraries/createGlobalIntegration)
+- [Delete an integration template](/docs/api-reference/offices/tenant-libraries/deleteGlobalIntegration)
+- [Delete a website](/docs/api-reference/offices/tenant-libraries/deleteTenantWebsite)
+- [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations)
+- [List template versions](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrationVersions)
+- [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites)
+- [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
+- [Update an integration template](/docs/api-reference/offices/tenant-libraries/updateGlobalIntegration)
+</Accordion>
+</Accordions>
+
+## Console
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `console:read` | View the management console. | `console` |
+| `console:manage` | Change things in the management console. | `console` |
+
+## Cloud
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `cloud:read` | View every service running for the account, plus deployments, instances and logs. | `console` |
+| `cloud:manage` | Create, deploy, configure and rotate services across the account. | `console` |
+
+<Accordions>
+<Accordion title="Endpoints that need `cloud:read` (9)">
+- [Get a deployment](/docs/api-reference/cloud/deployments/getCloudDeployment)
+- [Get a project](/docs/api-reference/cloud/projects/getCloudProject)
+- [Get a service](/docs/api-reference/cloud/services/getCloudService)
+- [Get service logs](/docs/api-reference/cloud/services/getCloudServiceLogs)
+- [Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions)
+- [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments)
+- [List projects](/docs/api-reference/cloud/projects/listCloudProjects)
+- [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances)
+- [List services](/docs/api-reference/cloud/services/listCloudServices)
+</Accordion>
+<Accordion title="Endpoints that need `cloud:manage` (9)">
+- [Create and deploy a service](/docs/api-reference/cloud/services/createAndDeployCloudService)
+- [Create a project](/docs/api-reference/cloud/projects/createCloudProject)
+- [Create a service](/docs/api-reference/cloud/services/createCloudService)
+- [Delete a service](/docs/api-reference/cloud/services/deleteCloudService)
+- [Deploy a service](/docs/api-reference/cloud/deployments/deployCloudService)
+- [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService)
+- [Update a project](/docs/api-reference/cloud/projects/updateCloudProject)
+- [Update a service](/docs/api-reference/cloud/services/updateCloudService)
+- [Update service settings](/docs/api-reference/cloud/services/updateCloudServiceUserConfig)
+</Accordion>
+</Accordions>
+
+## Iam
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `iam:read` | Read roles, policies and who holds what. | `console` |
+| `iam:manage` | Create and change roles and policies, and grant them to people and machines. | `console` |
+
+<Accordions>
+<Accordion title="Endpoints that need `iam:read` (1)">
+- [Get the office's identity](/docs/api-reference/offices/identity/getOfficeIam)
+</Accordion>
+</Accordions>
+
+## Settings
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `settings:read` | Read account settings. | `console` |
+| `settings:manage` | Change account settings, including billing and connected source control. | `console` |
+
+## Users
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `users:read` | See who is a member of the account. | `console` |
+| `users:manage` | Invite, remove and change members. | `console` |
+
+<Accordions>
+<Accordion title="Endpoints that need `users:read` (1)">
+- [Grant access to a browser](/docs/api-reference/browsers/members/addBrowserMember)
+</Accordion>
+</Accordions>
+
+## Workspace
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `workspace:read` | See a workspace and its contents. | `workspace` |
+| `workspace:manage` | Rename or delete a workspace, and set its spending limits. Creating one is checked at the console. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `workspace:read` (6)">
+- [Get a workspace](/docs/api-reference/workspaces/workspaces/getWorkspace)
+- [Get a budget](/docs/api-reference/workspaces/budgets/getWorkspaceBudget)
+- [Get current spend](/docs/api-reference/workspaces/budgets/getWorkspaceSpend)
+- [Get the timezone](/docs/api-reference/workspaces/workspaces/getWorkspaceTimeConfig)
+- [List budgets](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets)
+- [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces)
+</Accordion>
+<Accordion title="Endpoints that need `workspace:manage` (7)">
+- [Create a workspace](/docs/api-reference/workspaces/workspaces/createWorkspace)
+- [Create a budget](/docs/api-reference/workspaces/budgets/createWorkspaceBudget)
+- [Delete a workspace](/docs/api-reference/workspaces/workspaces/deleteWorkspace)
+- [Delete a budget](/docs/api-reference/workspaces/budgets/deleteWorkspaceBudget)
+- [Rename a workspace](/docs/api-reference/workspaces/workspaces/updateWorkspace)
+- [Update a budget](/docs/api-reference/workspaces/budgets/updateWorkspaceBudget)
+- [Set the timezone](/docs/api-reference/workspaces/workspaces/updateWorkspaceTimeConfig)
+</Accordion>
+</Accordions>
+
+## Office
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `office:read` | See an office and its configuration. | `office` |
+| `office:use` | Operate an office: send it prompts, drive its chats, and start or stop its machine. Distinct from administering it. | `office` |
+| `office:manage` | Administer an office: its integrations, scheduled work, configuration, and the office itself. | `office` |
+
+<Accordions>
+<Accordion title="Endpoints that need `office:read` (15)">
+- [Get an office](/docs/api-reference/offices/offices/getOffice)
+- [Get office cloud config](/docs/api-reference/offices/offices/getOfficeCloudConfig)
+- [Get the office's identity](/docs/api-reference/offices/identity/getOfficeIam)
+- [Get an integration](/docs/api-reference/offices/integrations/getOfficeIntegration)
+- [List office API keys](/docs/api-reference/offices/identity/listOfficeApiKeys)
+- [List allocated browsers](/docs/api-reference/offices/allocations/listOfficeBrowsers)
+- [List inherited tenant secrets](/docs/api-reference/offices/integrations/listOfficeInheritedTenantSecrets)
+- [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations)
+- [List secret references](/docs/api-reference/offices/integrations/listOfficeIntegrationSecretRefs)
+- [List allocated namespaces](/docs/api-reference/offices/allocations/listOfficeNamespaces)
+- [List protocols](/docs/api-reference/offices/protocols/listOfficeProtocols)
+- [Find offices using an app](/docs/api-reference/offices/allocations/listOfficesByApp)
+- [Find offices using a namespace](/docs/api-reference/offices/allocations/listOfficesByNamespace)
+- [List skills](/docs/api-reference/offices/skills/listOfficeSkills)
+- [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
+</Accordion>
+<Accordion title="Endpoints that need `office:use` (3)">
+- [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine)
+- [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine)
+- [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine)
+</Accordion>
+<Accordion title="Endpoints that need `office:manage` (30)">
+- [Add a secret reference](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef)
+- [Allocate an app](/docs/api-reference/offices/allocations/allocateOfficeApp)
+- [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
+- [Allocate a website](/docs/api-reference/offices/allocations/allocateOfficeWebsite)
+- [Allocate a website with its integrations](/docs/api-reference/offices/allocations/allocateOfficeWebsiteWithIntegrations)
+- [Create an integration](/docs/api-reference/offices/integrations/createOfficeIntegration)
+- [Create an integration from a template](/docs/api-reference/offices/integrations/createOfficeIntegrationFromTemplate)
+- [Create a protocol](/docs/api-reference/offices/protocols/createOfficeProtocol)
+- [Create a skill](/docs/api-reference/offices/skills/createOfficeSkill)
+- [Cycle the office API key](/docs/api-reference/offices/identity/cycleOfficeApiKey)
+- [Deallocate an app](/docs/api-reference/offices/allocations/deallocateOfficeApp)
+- [Deallocate a namespace](/docs/api-reference/offices/allocations/deallocateOfficeNamespace)
+- [Deallocate a website](/docs/api-reference/offices/allocations/deallocateOfficeWebsite)
+- [Delete an office](/docs/api-reference/offices/offices/deleteOffice)
+- [Delete the office API key](/docs/api-reference/offices/identity/deleteOfficeApiKey)
+- [Delete an integration](/docs/api-reference/offices/integrations/deleteOfficeIntegration)
+- [Get an office's model provider](/docs/api-reference/offices/model-provider/getOfficeModelProvider)
+- [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
+- [Provision a missing office API key](/docs/api-reference/offices/identity/provisionOfficeApiKey)
+- [Regenerate a skill body](/docs/api-reference/offices/skills/regenerateOfficeSkill)
+- [Remove a secret reference](/docs/api-reference/offices/integrations/removeOfficeIntegrationSecretRef)
+- [Revoke the office API key](/docs/api-reference/offices/identity/revokeOfficeApiKey)
+- [Sync an integration from its template](/docs/api-reference/offices/integrations/syncOfficeIntegrationFromTemplate)
+- [Sync the integration's skill](/docs/api-reference/offices/integrations/syncOfficeIntegrationSkill)
+- [Update an office](/docs/api-reference/offices/offices/updateOffice)
+- [Update machine configuration](/docs/api-reference/offices/machine/updateOfficeComputeConfig)
+- [Update an integration](/docs/api-reference/offices/integrations/updateOfficeIntegration)
+- [Set an office's model provider](/docs/api-reference/offices/model-provider/updateOfficeModelProvider)
+- [Update a protocol](/docs/api-reference/offices/protocols/updateOfficeProtocol)
+- [Update a skill](/docs/api-reference/offices/skills/updateOfficeSkill)
+</Accordion>
+</Accordions>
+
+## Instance
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `instance:read` | Read what an office machine is specified at, and what it costs. | `office` |
+| `instance:manage` | Change an office machine’s size and whether it stays awake. | `office` |
+
+<Accordions>
+<Accordion title="Endpoints that need `instance:read` (3)">
+- [Get machine configuration](/docs/api-reference/offices/machine/getOfficeComputeConfig)
+- [Get machine logs](/docs/api-reference/offices/machine/getOfficeLogs)
+- [List running instances](/docs/api-reference/offices/machine/listOfficeInstances)
+</Accordion>
+<Accordion title="Endpoints that need `instance:manage` (2)">
+- [Update service settings](/docs/api-reference/cloud/services/updateCloudServiceUserConfig)
+- [Update machine configuration](/docs/api-reference/offices/machine/updateOfficeComputeConfig)
+</Accordion>
+</Accordions>
+
+## Groupchat
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `groupchat:read` | Read conversations you are a member of. | `workspace` |
+| `groupchat:send` | Send messages in conversations you are a member of. | `workspace` |
+| `groupchat:manage` | Create, rename and delete conversations, and change who is in them. | `workspace` |
+| `groupchat:read:all` | Read any conversation in the workspace, including ones you are not in. Membership is checked first; this is what lets an administrator through when it fails, and every access it grants is logged. | `workspace` |
+
+## Phone
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `phone:read` | See the phone numbers a workspace holds. | `workspace` |
+| `phone:send` | Send a text message from a workspace number. | `workspace` |
+| `phone:call` | Place a call from the browser. | `workspace` |
+| `phone:manage` | Allocate and deallocate phone numbers to a workspace. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `phone:send` (1)">
+- [Send an SMS to a contact](/docs/api-reference/crm/messaging/sendContactMessage)
+</Accordion>
+</Accordions>
+
+## Email
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `email:read` | Read email across the workspace. | `workspace` |
+| `email:send` | Send from any address the account holds. | `workspace` |
+| `email:manage` | Administer domains and address assignment. | `console` |
+| `email:me:read` | Read email sent to addresses assigned to you. | `workspace` |
+| `email:me:use` | Send only from addresses assigned to you. This is what makes an AI employee a self-scoped sender rather than a broad one. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `email:read` (1)">
+- [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
+</Accordion>
+<Accordion title="Endpoints that need `email:send` (2)">
+- [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
+- [Send an email to a contact](/docs/api-reference/crm/messaging/sendContactEmail)
+</Accordion>
+<Accordion title="Endpoints that need `email:me:read` (1)">
+- [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
+</Accordion>
+<Accordion title="Endpoints that need `email:me:use` (2)">
+- [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
+- [Send an email to a contact](/docs/api-reference/crm/messaging/sendContactEmail)
+</Accordion>
+</Accordions>
+
+## Contact
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `contact:read` | Read contacts, their conversations, notes and tags. | `workspace` |
+| `contact:tag` | Apply and remove tags on a contact, without being able to create, edit or archive one. | `workspace` |
+| `contact:manage` | Create, update, archive, import and delete contacts, and curate the tag registry. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `contact:read` (7)">
+- [Find a contact by phone](/docs/api-reference/crm/contacts/findContactByPhone)
+- [Get a contact](/docs/api-reference/crm/contacts/getContact)
+- [List notes](/docs/api-reference/crm/notes/listContactNotes)
+- [List contacts](/docs/api-reference/crm/contacts/listContacts)
+- [List custom field definitions](/docs/api-reference/crm/custom-fields/listCustomFields)
+- [List the tag registry](/docs/api-reference/crm/tags/listTags)
+- [Mark a conversation read](/docs/api-reference/crm/contacts/markContactRead)
+</Accordion>
+<Accordion title="Endpoints that need `contact:tag` (2)">
+- [Tag a contact](/docs/api-reference/crm/tags/addContactTag)
+- [Untag a contact](/docs/api-reference/crm/tags/removeContactTag)
+</Accordion>
+<Accordion title="Endpoints that need `contact:manage` (13)">
+- [Tag a contact](/docs/api-reference/crm/tags/addContactTag)
+- [Archive a contact](/docs/api-reference/crm/contacts/archiveContact)
+- [Create a contact](/docs/api-reference/crm/contacts/createContact)
+- [Add a note](/docs/api-reference/crm/notes/createContactNote)
+- [Create a custom field definition](/docs/api-reference/crm/custom-fields/createCustomField)
+- [Add a tag to the registry](/docs/api-reference/crm/tags/createTag)
+- [Delete a contact](/docs/api-reference/crm/contacts/deleteContact)
+- [Delete a note](/docs/api-reference/crm/notes/deleteContactNote)
+- [Remove a tag from the registry](/docs/api-reference/crm/tags/deleteTag)
+- [Import contacts](/docs/api-reference/crm/contacts/importContacts)
+- [Mark a conversation read](/docs/api-reference/crm/contacts/markContactRead)
+- [Untag a contact](/docs/api-reference/crm/tags/removeContactTag)
+- [Update a contact](/docs/api-reference/crm/contacts/updateContact)
+</Accordion>
+</Accordions>
+
+## Opportunity
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `opportunity:read` | Read deals and pipelines. | `workspace` |
+| `opportunity:manage` | Create and change deals and pipelines, including deleting a pipeline and everything in it. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `opportunity:read` (3)">
+- [List opportunities](/docs/api-reference/crm/opportunities/listOpportunities)
+- [List pipelines](/docs/api-reference/crm/opportunities/listPipelines)
+- [List stages](/docs/api-reference/crm/opportunities/listStages)
+</Accordion>
+<Accordion title="Endpoints that need `opportunity:manage` (3)">
+- [Create an opportunity](/docs/api-reference/crm/opportunities/createOpportunity)
+- [Create a pipeline](/docs/api-reference/crm/opportunities/createPipeline)
+- [Update an opportunity](/docs/api-reference/crm/opportunities/updateOpportunity)
+</Accordion>
+</Accordions>
+
+## Secrets
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `secrets:read` | See which credentials exist for an office or browser. Never their values. | `office` |
+| `secrets:write` | Add, change and remove credentials injected at startup. | `office` |
+
+<Accordions>
+<Accordion title="Endpoints that need `secrets:read` (6)">
+- [List fields](/docs/api-reference/browsers/environment-secrets/listBrowserSecretFields)
+- [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets)
+- [List field names](/docs/api-reference/offices/environment-secrets/listOfficeSecretFields)
+- [List secret groups](/docs/api-reference/offices/environment-secrets/listOfficeSecrets)
+- [Read a field](/docs/api-reference/browsers/environment-secrets/readBrowserSecretField)
+- [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
+</Accordion>
+<Accordion title="Endpoints that need `secrets:write` (10)">
+- [Add a field](/docs/api-reference/browsers/environment-secrets/addBrowserSecretField)
+- [Add a field](/docs/api-reference/offices/environment-secrets/addOfficeSecretField)
+- [Create a secret](/docs/api-reference/browsers/environment-secrets/createBrowserSecret)
+- [Create a secret group](/docs/api-reference/offices/environment-secrets/createOfficeSecret)
+- [Delete a secret](/docs/api-reference/browsers/environment-secrets/deleteBrowserSecret)
+- [Delete a field](/docs/api-reference/browsers/environment-secrets/deleteBrowserSecretField)
+- [Delete a secret group](/docs/api-reference/offices/environment-secrets/deleteOfficeSecret)
+- [Delete a field](/docs/api-reference/offices/environment-secrets/deleteOfficeSecretField)
+- [Update a field](/docs/api-reference/browsers/environment-secrets/updateBrowserSecretField)
+- [Update a field value](/docs/api-reference/offices/environment-secrets/updateOfficeSecretField)
+</Accordion>
+</Accordions>
+
+## Integration
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `integration:publish` | Add an integration to the account’s shared library. Contribute-only: editing and removing existing entries stays with account administration. | `console` |
+
+<Accordions>
+<Accordion title="Endpoints that need `integration:publish` (1)">
+- [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
+</Accordion>
+</Accordions>
+
+## Datasource
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `datasource:read` | Read a data namespace and what is in it. | `workspace` |
+| `datasource:manage` | Create and change data namespaces, sources and subscriptions. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `datasource:read` (1)">
+- [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
+</Accordion>
+</Accordions>
+
+## Workflow
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `workflow:read` | Read automations, their versions and their run history. | `workspace` |
+| `workflow:manage` | Create, save, delete and test-fire automations. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `workflow:read` (10)">
+- [Get a node definition](/docs/api-reference/workflows/node-definitions/getNodeDefinition)
+- [Get a workflow](/docs/api-reference/workflows/workflows/getWorkflow)
+- [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
+- [Get a run](/docs/api-reference/workflows/runs/getWorkflowRun)
+- [Get a version](/docs/api-reference/workflows/versions/getWorkflowVersion)
+- [List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions)
+- [List collections](/docs/api-reference/workflows/collections/listWorkflowCollections)
+- [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns)
+- [List workflows](/docs/api-reference/workflows/workflows/listWorkflows)
+- [List versions](/docs/api-reference/workflows/versions/listWorkflowVersions)
+</Accordion>
+<Accordion title="Endpoints that need `workflow:manage` (6)">
+- [Register a collection name](/docs/api-reference/workflows/collections/addWorkflowCollection)
+- [Create a workflow](/docs/api-reference/workflows/workflows/createWorkflow)
+- [Delete a workflow](/docs/api-reference/workflows/workflows/deleteWorkflow)
+- [Delete a collection](/docs/api-reference/workflows/collections/removeWorkflowCollection)
+- [Test fire a workflow](/docs/api-reference/workflows/runs/testWorkflow)
+- [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow)
+</Accordion>
+</Accordions>
+
+## Nova
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `nova:read` | See which models a workspace can reach, and read your own preference. | `workspace` |
+| `nova:manage` | Send prompts to the assistant, and change model and personality settings. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `nova:read` (12)">
+- [Boot Nova](/docs/api-reference/nova/configuration/bootNova)
+- [Get canvas mode](/docs/api-reference/nova/preferences/getNovaCanvasMode)
+- [Get configuration](/docs/api-reference/nova/configuration/getNovaConfig)
+- [Get model preference](/docs/api-reference/nova/preferences/getNovaModelPreference)
+- [Get prompt configuration](/docs/api-reference/nova/personality/getNovaPromptConfig)
+- [Get a prompt version](/docs/api-reference/nova/personality/getNovaPromptVersion)
+- [Get session state](/docs/api-reference/nova/running-nova/getNovaSessionConfig)
+- [Get voice settings](/docs/api-reference/nova/voice/getNovaVoiceConfig)
+- [List chats](/docs/api-reference/nova/running-nova/listNovaChats)
+- [List models](/docs/api-reference/nova/preferences/listNovaModels)
+- [List prompt versions](/docs/api-reference/nova/personality/listNovaPromptVersions)
+- [List voices](/docs/api-reference/nova/voice/listNovaVoices)
+</Accordion>
+<Accordion title="Endpoints that need `nova:manage` (22)">
+- [Cancel the running turn](/docs/api-reference/nova/running-nova/cancelNovaCycle)
+- [Create a chat](/docs/api-reference/nova/running-nova/createNovaChat)
+- [Create configuration](/docs/api-reference/nova/configuration/createNovaConfig)
+- [Create a preview session](/docs/api-reference/nova/preview-ground/createNovaPreviewSession)
+- [Save a prompt version](/docs/api-reference/nova/personality/createNovaPromptVersion)
+- [Delete a chat](/docs/api-reference/nova/running-nova/deleteNovaChat)
+- [Delete configuration](/docs/api-reference/nova/configuration/deleteNovaConfig)
+- [Delete a preview session](/docs/api-reference/nova/preview-ground/deleteNovaPreviewSession)
+- [Improve a prompt](/docs/api-reference/nova/personality/enhanceNovaPrompt)
+- [Get a preview session](/docs/api-reference/nova/preview-ground/getNovaPreviewSession)
+- [Reset configuration](/docs/api-reference/nova/configuration/resetNovaConfig)
+- [Send a prompt](/docs/api-reference/nova/running-nova/runNovaCycle)
+- [Send a voice prompt](/docs/api-reference/nova/running-nova/runNovaVoiceCycle)
+- [Populate the voice catalogue](/docs/api-reference/nova/voice/seedNovaVoices)
+- [Send a preview message](/docs/api-reference/nova/preview-ground/sendNovaPreviewMessage)
+- [Send a transcript](/docs/api-reference/nova/voice/sendNovaVoiceChat)
+- [Set canvas mode](/docs/api-reference/nova/preferences/setNovaCanvasMode)
+- [Stream a voice prompt](/docs/api-reference/nova/running-nova/streamNovaVoiceCycle)
+- [Update configuration](/docs/api-reference/nova/configuration/updateNovaConfig)
+- [Set model preference](/docs/api-reference/nova/preferences/upsertNovaModelPreference)
+- [Set prompt configuration](/docs/api-reference/nova/personality/upsertNovaPromptConfig)
+- [Set voice settings](/docs/api-reference/nova/voice/upsertNovaVoiceConfig)
+</Accordion>
+</Accordions>
+
+## Profile
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `profile:manage` | Change your own profile. Always self-scoped. | `workspace` |
+
+## Subscription
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `subscription:read` | Read the bindings that decide what starts an automation. | `workspace` |
+| `subscription:manage` | Create and remove those bindings. | `workspace` |
+
+## Billing
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `billing:read` | Read the balance, usage history and invoices. | `console` |
+| `billing:manage` | Configure automatic top-ups and account billing. | `console` |
+
+<Accordions>
+<Accordion title="Endpoints that need `billing:read` (10)">
+- [Check before spending](/docs/api-reference/billing/credit/checkBalance)
+- [Get the balance](/docs/api-reference/billing/credit/getBalance)
+- [Get a compute invoice](/docs/api-reference/billing/compute/getComputeInvoice)
+- [Get a service's settings](/docs/api-reference/billing/compute/getComputeServiceConfig)
+- [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
+- [Get a usage series](/docs/api-reference/billing/usage/getUsageSeries)
+- [Get a usage summary](/docs/api-reference/billing/usage/getUsageSummary)
+- [List compute invoices](/docs/api-reference/billing/compute/listComputeInvoices)
+- [List credit invoices](/docs/api-reference/billing/usage/listInvoices)
+- [List model usage](/docs/api-reference/billing/usage/listUsage)
+</Accordion>
+<Accordion title="Endpoints that need `billing:manage` (3)">
+- [Create the balance](/docs/api-reference/billing/credit/initializeBalance)
+- [Configure automatic top ups](/docs/api-reference/billing/credit/updateAutoReload)
+- [Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig)
+</Accordion>
+</Accordions>
+
+## Phoenix
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `phoenix:read` | Read projects and containers. | `workspace` |
+| `phoenix:write` | Change projects and containers. | `workspace` |
+| `phoenix:manage` | Administer projects and containers. | `workspace` |
+
+## Notification
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `notification:read` | Read notifications. | `workspace` |
+| `notification:manage` | Change notification settings. | `workspace` |
+
+## Surface
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `surface:read` | View a shared surface. | `workspace` |
+| `surface:edit` | Change the contents of a shared surface. | `workspace` |
+| `surface:manage` | Create, delete and share surfaces. | `workspace` |
+
+## Browser
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `browser:read` | See a cloud browser and its configuration. | `browser` |
+| `browser:use` | Drive a browser: navigate, prompt its agent, and start or stop its machine. | `browser` |
+| `browser:manage` | Administer a browser: members, credentials, allocated data and its own key. | `browser` |
+
+<Accordions>
+<Accordion title="Endpoints that need `browser:read` (14)">
+- [Get a browser](/docs/api-reference/browsers/browsers/getBrowser)
+- [Get the browser API key](/docs/api-reference/browsers/identity/getBrowserApiKey)
+- [Get cloud configuration](/docs/api-reference/browsers/machine/getBrowserCloudConfig)
+- [Get compute configuration](/docs/api-reference/browsers/machine/getBrowserComputeConfig)
+- [Get the model provider](/docs/api-reference/browsers/model-provider/getBrowserModelProvider)
+- [Get an allocation](/docs/api-reference/browsers/namespaces/getBrowserNamespace)
+- [Get proxy configuration](/docs/api-reference/browsers/browsers/getBrowserProxyConfig)
+- [Get a script](/docs/api-reference/browsers/scripts/getBrowserScript)
+- [List chats](/docs/api-reference/browsers/sessions/listBrowserChats)
+- [List members](/docs/api-reference/browsers/members/listBrowserMembers)
+- [List allocated data](/docs/api-reference/browsers/namespaces/listBrowserNamespaces)
+- [List browsers](/docs/api-reference/browsers/browsers/listBrowsers)
+- [List scripts](/docs/api-reference/browsers/scripts/listBrowserScripts)
+- [List proxy countries](/docs/api-reference/browsers/browsers/listProxyCountries)
+</Accordion>
+<Accordion title="Endpoints that need `browser:use` (12)">
+- [Cancel the current cycle](/docs/api-reference/browsers/driving/cancelBrowserAgentCycle)
+- [Create a chat](/docs/api-reference/browsers/sessions/createBrowserChat)
+- [Save a script](/docs/api-reference/browsers/scripts/createBrowserScript)
+- [Delete a chat](/docs/api-reference/browsers/sessions/deleteBrowserChat)
+- [Navigate to a URL](/docs/api-reference/browsers/driving/navigateBrowserPage)
+- [Report usage](/docs/api-reference/browsers/machine/reportBrowserUsage)
+- [Restart the machine](/docs/api-reference/browsers/machine/restartBrowserMachine)
+- [Run a script](/docs/api-reference/browsers/scripts/runBrowserScript)
+- [Send a message to the agent](/docs/api-reference/browsers/driving/sendBrowserAgentMessage)
+- [Shut down the machine](/docs/api-reference/browsers/machine/shutdownBrowserMachine)
+- [Switch the current chat](/docs/api-reference/browsers/sessions/switchBrowserChat)
+- [Wake the machine](/docs/api-reference/browsers/machine/wakeBrowserMachine)
+</Accordion>
+<Accordion title="Endpoints that need `browser:manage` (27)">
+- [Grant access to a browser](/docs/api-reference/browsers/members/addBrowserMember)
+- [Add a field](/docs/api-reference/browsers/environment-secrets/addBrowserSecretField)
+- [Allocate data to a browser](/docs/api-reference/browsers/namespaces/allocateBrowserNamespace)
+- [Create a browser](/docs/api-reference/browsers/browsers/createBrowser)
+- [Create a secret](/docs/api-reference/browsers/environment-secrets/createBrowserSecret)
+- [Cycle the browser API key](/docs/api-reference/browsers/identity/cycleBrowserApiKey)
+- [Revoke allocated data](/docs/api-reference/browsers/namespaces/deallocateBrowserNamespace)
+- [Delete a browser](/docs/api-reference/browsers/browsers/deleteBrowser)
+- [Delete the credential](/docs/api-reference/browsers/identity/deleteBrowserApiKey)
+- [Delete a script](/docs/api-reference/browsers/scripts/deleteBrowserScript)
+- [Delete a secret](/docs/api-reference/browsers/environment-secrets/deleteBrowserSecret)
+- [Delete a field](/docs/api-reference/browsers/environment-secrets/deleteBrowserSecretField)
+- [Get a browser](/docs/api-reference/browsers/browsers/getBrowser)
+- [Get the model provider](/docs/api-reference/browsers/model-provider/getBrowserModelProvider)
+- [Get an allocation](/docs/api-reference/browsers/namespaces/getBrowserNamespace)
+- [List allocated data](/docs/api-reference/browsers/namespaces/listBrowserNamespaces)
+- [List fields](/docs/api-reference/browsers/environment-secrets/listBrowserSecretFields)
+- [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets)
+- [Read a field](/docs/api-reference/browsers/environment-secrets/readBrowserSecretField)
+- [Revoke access to a browser](/docs/api-reference/browsers/members/removeBrowserMember)
+- [Revoke the browser API key](/docs/api-reference/browsers/identity/revokeBrowserApiKey)
+- [Update a browser](/docs/api-reference/browsers/browsers/updateBrowser)
+- [Update compute configuration](/docs/api-reference/browsers/machine/updateBrowserComputeConfig)
+- [Set the model provider](/docs/api-reference/browsers/model-provider/updateBrowserModelProvider)
+- [Update proxy configuration](/docs/api-reference/browsers/browsers/updateBrowserProxyConfig)
+- [Update a script](/docs/api-reference/browsers/scripts/updateBrowserScript)
+- [Update a field](/docs/api-reference/browsers/environment-secrets/updateBrowserSecretField)
+</Accordion>
+</Accordions>
+
+## Calendar
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `calendar:read` | Read a calendar, its members and its bound accounts. | `calendar` |
+| `calendar:use` | Create and change events and tasks through a calendar. | `calendar` |
+| `calendar:manage` | Administer a calendar: bind accounts, manage members, booking links, delete it. | `calendar` |
+
+<Accordions>
+<Accordion title="Endpoints that need `calendar:read` (15)">
+- [Add a member](/docs/api-reference/calendars/members/addCalendarMember)
+- [Get a booking link](/docs/api-reference/calendars/booking-links/getBookingLink)
+- [Get a calendar](/docs/api-reference/calendars/calendars/getCalendar)
+- [Get display preferences](/docs/api-reference/calendars/preferences/getCalendarPreferences)
+- [List offices with scheduled work](/docs/api-reference/calendars/sources/listAvailableCronSources)
+- [List connectable calendar accounts](/docs/api-reference/calendars/sources/listAvailableSources)
+- [List connectable task accounts](/docs/api-reference/calendars/sources/listAvailableTaskSources)
+- [List booking links](/docs/api-reference/calendars/booking-links/listBookingLinks)
+- [List events](/docs/api-reference/calendars/events/listCalendarEvents)
+- [List members](/docs/api-reference/calendars/members/listCalendarMembers)
+- [List calendars](/docs/api-reference/calendars/calendars/listCalendars)
+- [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources)
+- [List tasks](/docs/api-reference/calendars/tasks/listCalendarTasks)
+- [List a workspace's calendars](/docs/api-reference/calendars/calendars/listWorkspaceCalendars)
+- [Set display preferences](/docs/api-reference/calendars/preferences/updateCalendarPreferences)
+</Accordion>
+<Accordion title="Endpoints that need `calendar:use` (6)">
+- [Create an event](/docs/api-reference/calendars/events/createCalendarEvent)
+- [Create a task](/docs/api-reference/calendars/tasks/createCalendarTask)
+- [Delete an event](/docs/api-reference/calendars/events/deleteCalendarEvent)
+- [Delete a task](/docs/api-reference/calendars/tasks/deleteCalendarTask)
+- [Update an event](/docs/api-reference/calendars/events/updateCalendarEvent)
+- [Update a task](/docs/api-reference/calendars/tasks/updateCalendarTask)
+</Accordion>
+<Accordion title="Endpoints that need `calendar:manage` (22)">
+- [Add a member](/docs/api-reference/calendars/members/addCalendarMember)
+- [Bind a source](/docs/api-reference/calendars/sources/bindCalendarSource)
+- [Show an office's scheduled work](/docs/api-reference/calendars/sources/bindCronSource)
+- [Create a booking link](/docs/api-reference/calendars/booking-links/createBookingLink)
+- [Create a calendar](/docs/api-reference/calendars/calendars/createCalendar)
+- [Delete a booking link](/docs/api-reference/calendars/booking-links/deleteBookingLink)
+- [Delete a calendar](/docs/api-reference/calendars/calendars/deleteCalendar)
+- [Mint a single-use link](/docs/api-reference/calendars/booking-links/generateSingleUseLink)
+- [Get a calendar](/docs/api-reference/calendars/calendars/getCalendar)
+- [Get display preferences](/docs/api-reference/calendars/preferences/getCalendarPreferences)
+- [List offices with scheduled work](/docs/api-reference/calendars/sources/listAvailableCronSources)
+- [List events](/docs/api-reference/calendars/events/listCalendarEvents)
+- [List members](/docs/api-reference/calendars/members/listCalendarMembers)
+- [List bound sources](/docs/api-reference/calendars/sources/listCalendarSources)
+- [Remove a member](/docs/api-reference/calendars/members/removeCalendarMember)
+- [Enable or disable a booking link](/docs/api-reference/calendars/booking-links/setBookingLinkEnabled)
+- [Sync now](/docs/api-reference/calendars/calendars/syncCalendar)
+- [Unbind a source](/docs/api-reference/calendars/sources/unbindCalendarSource)
+- [Stop showing an office's scheduled work](/docs/api-reference/calendars/sources/unbindCronSource)
+- [Update a booking link](/docs/api-reference/calendars/booking-links/updateBookingLink)
+- [Update a calendar](/docs/api-reference/calendars/calendars/updateCalendar)
+- [Set display preferences](/docs/api-reference/calendars/preferences/updateCalendarPreferences)
+</Accordion>
+</Accordions>
+
+## Device
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `device:use` | Send inference work to a machine you own. Deliberately one action: the substantive control is the ceiling on the device itself, which a compromised server cannot widen. | `workspace` |
+
+## Actions with no documented endpoint
+
+These are real and enforced, but no endpoint in this reference names them.
+Usually that means they gate a console-only surface. See
+[what is not in the reference](/docs/api-reference#what-this-reference-covers).
+
+- `tenant:read`
+- `console:read`
+- `console:manage`
+- `iam:manage`
+- `settings:read`
+- `settings:manage`
+- `users:manage`
+- `groupchat:read`
+- `groupchat:send`
+- `groupchat:manage`
+- `groupchat:read:all`
+- `phone:read`
+- `phone:call`
+- `phone:manage`
+- `email:manage`
+- `datasource:manage`
+- `profile:manage`
+- `subscription:read`
+- `subscription:manage`
+- `phoenix:read`
+- `phoenix:write`
+- `phoenix:manage`
+- `notification:read`
+- `notification:manage`
+- `surface:read`
+- `surface:edit`
+- `surface:manage`
+- `device:use`
+
+## Where to go next
+
+<Cards>
+  <Card title="Roles and policies" href="/docs/access-control/roles" description="Built-in roles, and forking one." />
+  <Card title="Granting access" href="/docs/access-control/assignments" description="Assignments, boundaries, and scope." />
+</Cards>
