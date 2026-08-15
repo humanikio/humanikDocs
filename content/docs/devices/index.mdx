@@ -72,6 +72,11 @@ server cannot name. **Upstream tools** are not gated by your ceiling because the
 never touch your machine — they run on HumanikOS under the permissions of whoever
 called them, and your device holds no credentials for them.
 
+That includes the [integrations](/docs/tools-and-secrets) you connect to an office. Their
+endpoints become tools the employee calls through its office, so an employee running on your
+machine reaches the same software as one running in the cloud. Nothing is installed here, and
+no key is copied to this machine.
+
 **The browser is the one that behaves differently**, and it has
 [its own page](/docs/devices/browser) for that reason.
 
