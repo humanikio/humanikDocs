@@ -68,12 +68,17 @@ The system will not do that.
 
 ## Reaching people
 
-Two outbound channels, both reaching a real person under your own identity.
+Three outbound channels, all reaching a real person under your own identity.
 
 **Text messages** go from a number allocated to that workspace. You can name
 which one, and anything outside the workspace's own numbers is refused. Left
 unspecified it uses the number that conversation is already on, or the
 workspace's only number, or asks you to choose.
+
+**Phone calls** are placed from a number assigned to that office. An AI employee
+can start a call, check whether it is still running, and end it. If an office has
+no number assigned, it cannot call at all, which is the simplest way to keep an
+employee off the phone.
 
 **Email** goes from an address your workspace holds. Who may send from which
 address depends on the sender: a person with broad permission can use any address
@@ -138,9 +143,12 @@ texts, send email **only from its own assigned addresses**, and manage deals.
   queue, and no confirmation on either channel. An employee that decides to send
   a text sends it, to a real person, immediately.
 
+  The same is true of calls. An employee that decides to call, calls.
+
   The control you have is permissions, not review. If an employee should not be
-  messaging people, do not grant it `phone:send` or the email actions. Withhold
-  the capability rather than expecting to be asked.
+  contacting people, do not grant it `phone:send`, `phone:call` or the email
+  actions. Withhold the capability rather than expecting to be asked. For calls
+  there is a second control: an office with no number assigned cannot place one.
 </Callout>
 
 That is the honest shape of it today. Instructions in a protocol are guidance,

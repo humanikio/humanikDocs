@@ -59,9 +59,15 @@ automatically when the office or browser is created.
 | `browserAgent` | The identity a cloud browser runs as |
 
 `officeAgent` covers what an AI employee does on your behalf: group chats,
-contacts and opportunities, calendars, outbound messages from its own assigned
-addresses, the data plane, and the app containers it builds and runs, including
-their environment variables. It is scoped to a single workspace.
+contacts and opportunities, calendars, outbound messages and text messages from
+its own assigned addresses and numbers, **placing and ending phone calls**, the
+data plane, and the app containers it builds and runs, including their
+environment variables. It is scoped to a single workspace.
+
+Phone calls are worth calling out, because it is the permission with the largest
+reach outside your workspace. An employee can place a call only from a number
+assigned to its office, and only while that office has one. If you do not want an
+employee dialling out, do not assign it a number.
 
 It deliberately stops short of destructive and administrative actions. It cannot
 delete a project or container, manage workspace settings, add or remove chat
