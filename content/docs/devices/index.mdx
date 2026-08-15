@@ -80,6 +80,51 @@ no key is copied to this machine.
 **The browser is the one that behaves differently**, and it has
 [its own page](/docs/devices/browser) for that reason.
 
+## One turn, two places
+
+The row above is easy to read past, so it is worth spelling out what it buys you. An
+employee running on your machine is not a cut down version of one running in the cloud. It
+does the local work locally and the credentialed work in the office, inside a single turn,
+without you wiring anything together.
+
+Say you have a Stripe integration on the office and the employee is running on your laptop:
+
+> *"Reconcile yesterday's payouts against the ledger in `~/finance/2026-08.csv` and write me
+> a summary."*
+
+1. It reads `~/finance/2026-08.csv` with `Read`. That file never leaves your machine, and no
+   copy of it is uploaded.
+2. It calls `stripe_list_payouts`. That call does not run here. It goes up to the office,
+   which holds the Stripe key, makes the request, and sends back only the response.
+3. It compares the two and writes the summary to a path you allowed.
+
+Steps 1 and 3 happen on your hardware under your ceiling. Step 2 happens on HumanikOS under
+the office's permissions. The employee does not distinguish between them, because from where
+it sits they are all just tools.
+
+### What this means in practice
+
+**Your integrations work here, unchanged.** Anything you connect to the office is available
+to an employee running on your machine. There is no separate device side integration to
+configure, and nothing to keep in sync.
+
+**Credentials stay in the office.** Your Stripe key, your CRM token and your internal API
+credentials are never written to this machine, never sent to it, and are not readable from it.
+The device receives responses, not keys. This holds even for a device you fully trust, which
+matters more when the device is a colleague's laptop than when it is your own.
+
+**Local files stay local.** The office never sees `~/finance/2026-08.csv`. It sees a request
+for a list of payouts, and answers it. What the employee does with the answer happens here.
+
+**Your ceiling still governs the local half.** Widening a device's tools does not widen what
+its office tools can do, and an office integration cannot reach back onto your machine.
+
+### When an integration tool is not there
+
+If the employee reports that a tool does not exist, the integration is the place to look, not
+the device. Check that the endpoint is declared and enabled on the integration, then restart
+the office so it picks up the change. Nothing about the device needs to change.
+
 ## Getting started
 
 ```bash
