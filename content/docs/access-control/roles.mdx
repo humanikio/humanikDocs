@@ -58,6 +58,15 @@ automatically when the office or browser is created.
 | `officeAgent` | The identity an AI employee's office runs as |
 | `browserAgent` | The identity a cloud browser runs as |
 
+`officeAgent` covers what an AI employee does on your behalf: group chats,
+contacts and opportunities, calendars, outbound messages from its own assigned
+addresses, the data plane, and the app containers it builds and runs — including
+their environment variables. It is scoped to a single workspace.
+
+It deliberately stops short of destructive and administrative actions. It cannot
+delete a project or container, manage workspace settings, add or remove chat
+members, or send from an address it was not assigned. Those stay with people.
+
 `browserAgent` is a good illustration of the model working. It is scoped to
 inference and the databases allocated to that browser, and it explicitly excludes
 chat, contacts, calendars, and office access. A browser that is compromised
