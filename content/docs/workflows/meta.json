@@ -1,4 +1,8 @@
 {
   "title": "Workflows",
-  "pages": ["index", "authoring"]
+  "pages": [
+    "index",
+    "steps",
+    "authoring"
+  ]
 }

@@ -1,0 +1,212 @@
+---
+title: The steps
+description: Every step a workflow can take, and what each one is for.
+---
+
+A workflow is built from steps. This page covers what each one does and when to
+reach for it.
+
+It deliberately does not list the settings each step accepts. Those come from the
+catalogue, which is generated from the running platform and is always current:
+[List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions)
+returns every step with its fields, their types, and which are required. Read
+this page to decide *which* step you want. Read the catalogue to fill it in.
+
+## Starting steps
+
+Every workflow declares exactly one, and it is what binds the graph to a real
+source of events.
+
+| Step | Starts a run when |
+| --- | --- |
+| **Data Source Trigger** | a record arrives at one of your data sources |
+| **Calendar Event Booked** | an event is newly booked on one of your calendars |
+
+A trigger that names no source binds to nothing rather than to everything, so a
+half configured trigger is inert instead of dangerous.
+
+## Messaging
+
+| Step | Does |
+| --- | --- |
+| **Send SMS** | text a contact from one of your workspace numbers |
+| **Send Email** | email a contact from one of your domain addresses |
+| **Notify User** | text a member of your team at the number in their settings |
+
+Notify User is the odd one of the three, and the distinction matters: it messages
+**your team**, not the contact the workflow is about. Use it for internal
+handoffs such as telling a rep that a lead came in.
+
+<Callout>
+  **Placeholders resolve against the recipient.** In Send SMS and Send Email you
+  can write `{{contact.first_name}}` without naming which contact, because these
+  steps know who they are sending to. On other steps that placeholder only
+  resolves once an earlier step has identified a contact.
+</Callout>
+
+## Contacts
+
+| Step | Does |
+| --- | --- |
+| **Create Contact** | create one, reusing an existing match on the same phone or email |
+| **Find Contact** | look one up. Creates nothing |
+| **Update Contact** | change fields on a contact that already exists |
+| **Add Tag** | apply tags, creating any that are new to the workspace |
+| **Remove Tag** | remove specific tags, or clear them all |
+| **Add Note** | put a timestamped note on the contact's timeline |
+
+**Find Contact splits the path.** It is the one lookup step with two exits,
+Found and Not found, so "we already know this person" and "this is new" become
+two branches you draw rather than a condition you write. It never creates or
+edits anything, so a miss costs nothing.
+
+<Callout>
+  **The current contact.** Once any step identifies a contact, every later step
+  can refer to it as `{{contact.*}}` without naming that step. The most recent
+  one wins. This is why a Find Contact or Create Contact near the top of a graph
+  makes everything after it simpler to write.
+</Callout>
+
+## Deals
+
+| Step | Does |
+| --- | --- |
+| **Create Opportunity** | open a deal in a pipeline stage |
+| **Find Opportunity** | look one up by id, or take the contact's most recent |
+| **Update Opportunity** | move stages, mark won or lost, change fields |
+| **Add Opportunity Note** | add a note to a deal |
+| **Update Opportunity Note** | rewrite an existing deal note |
+
+Find Opportunity splits the path the same way Find Contact does.
+
+## Asking an employee
+
+| Step | Does |
+| --- | --- |
+| **Prompt Office** | hand the work to an AI employee |
+
+This is the step that puts judgement inside an otherwise fixed sequence. The
+mechanical parts stay predictable and the decision happens exactly where you
+put it.
+
+<Callout type="warn">
+  **The handoff is one direction.** The workflow hands the work over and carries
+  straight on to the next step without waiting. The employee's reply lands in its
+  own conversation rather than coming back as a value later steps can read. Design
+  everything after this step so it does not depend on what the employee said.
+</Callout>
+
+## Controlling the flow
+
+These five decide what runs, and when.
+
+| Step | Does |
+| --- | --- |
+| **If / Else** | take one path or another based on the data |
+| **Random Split** | take one of up to five paths at random |
+| **Wait** | pause for a fixed length of time |
+| **Wait for Appointment** | pause until a set time relative to a booking |
+| **Drip** | let a few contacts through at a time |
+
+### If / Else against Random Split
+
+Both split the path. They are not alternatives to each other.
+
+**If / Else** decides using the data: the amount, the stage, a field on the
+contact. Give it the same input twice and it goes the same way twice.
+
+**Random Split** decides by chance. You set the share each path receives, up to
+five paths totalling one hundred percent, and each contact is assigned to one.
+A path can be set to zero percent, which is how you hold a group back while
+keeping it wired.
+
+Use Random Split for A/B tests, for trying two versions of a message against each
+other, or for spreading contacts evenly across paths.
+
+<Callout>
+  **A contact keeps the path it was given.** If the same contact comes back
+  through the same Random Split later, it goes down the same path as before
+  rather than being drawn again. Without that, someone entering twice would land
+  in both halves of your test and the result would mean nothing.
+</Callout>
+
+To branch on whether a contact exists, use Find Contact rather than either of
+these.
+
+### Wait against Drip
+
+Both pause the workflow, and confusing them is the easiest mistake to make here.
+
+**Wait is a delay.** Every contact pauses for the same length of time. Ten
+contacts arriving together all wait three days, then all continue together.
+
+**Drip is a rate limit.** Contacts queue and leave a few at a time. You set how
+many are released and how often. Ten contacts at two per hour means the first two
+leave immediately and the last two leave four hours later. How long any one
+contact waits depends on how many arrived before it.
+
+Reach for Drip when a burst would overwhelm something downstream: a bulk import
+that would otherwise send hundreds of messages at once, or an employee that
+cannot handle every request in the same minute.
+
+<Callout>
+  **Waiting is free.** Nothing runs while a workflow is paused, whether it is
+  waiting three minutes or three weeks, and nothing is consumed. There is no cost
+  pressure to compress a follow up.
+</Callout>
+
+Contacts leave a Drip in the order things actually happened, using the timestamp
+on the record that started each run where the source provides one, rather than
+the order the runs happened to be processed in.
+
+<Callout type="warn">
+  **Check the drain time before you save a Drip.** Releasing one contact per day
+  means a hundred waiting contacts take a hundred days to clear. The setting that
+  produces that is one dropdown away from a reasonable one. If you get it wrong,
+  changing the numbers afterwards does apply to everyone still queued, so it is
+  recoverable.
+</Callout>
+
+## Which steps identify a contact
+
+Worth knowing, because it decides where `{{contact.*}}` will resolve:
+
+Create Contact, Find Contact, Update Contact, Add Tag, and Remove Tag all
+identify the contact they acted on, and every step after them can use it. A
+trigger does not. A record arriving from a webhook carries whatever fields the
+source sends, which is not the same as a contact in your CRM, so a workflow that
+needs one has to Find or Create it first.
+
+## Which steps split the path
+
+**If / Else**, **Random Split**, **Find Contact**, and **Find Opportunity**. Each
+has named exits, and a line leaving one has to say which exit it comes from. Every
+other step has a single way out.
+
+An exit you leave unconnected simply ends that branch. That is allowed, and it is
+how you write "do nothing in this case".
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Authoring a workflow"
+    href="/docs/workflows/authoring"
+    description="Ordering, connections, fields, and referring to earlier steps."
+  />
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="When to draw the steps, and when to ask an employee."
+  />
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="What Prompt Office hands the work to."
+  />
+  <Card
+    title="Workflows API"
+    href="/docs/api-reference/workflows"
+    description="The catalogue endpoint, and the exact shape of a canvas."
+  />
+</Cards>
