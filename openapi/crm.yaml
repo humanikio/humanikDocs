@@ -137,6 +137,78 @@ components:
           type: string
       required: [id, displayName]
 
+    CustomFieldOption:
+      type: object
+      description: One choice on a `dropdown` or `multiselect` field.
+      properties:
+        label:
+          type: string
+          description: What a person sees.
+        value:
+          type: string
+          description: |
+            What is stored on the contact, and what you filter and import by.
+            Values are matched exactly, so an import carrying the label instead
+            of the value fails those rows.
+      required: [label, value]
+
+    CustomFieldDef:
+      type: object
+      description: A tenant defined field on a CRM object.
+      properties:
+        id:
+          type: string
+        objectType:
+          type: string
+          enum: [contact]
+          description: Which object the field hangs off. Only `contact` today.
+        key:
+          type: string
+          description: |
+            The machine name, snake_case. Unique per workspace and object type.
+
+            It does three jobs at once: it keys the value on the contact, it is
+            the merge token segment in `{{contact.<key>}}`, and it is what you
+            filter by. It cannot shadow a standard contact field, and it is
+            **immutable after creation** because stored values, saved merge
+            tokens, and automation node configs all reference it.
+          examples: [lead_source]
+        label:
+          type: string
+        type:
+          type: string
+          enum:
+            [text, textarea, number, monetary, date, dropdown, multiselect,
+             checkbox, phone, email, url]
+          description: |
+            **Immutable after creation.** There is no safe migration for values
+            already stored under a different type.
+        options:
+          type: array
+          description: Required for `dropdown` and `multiselect`, ignored otherwise.
+          items:
+            $ref: '#/components/schemas/CustomFieldOption'
+        required:
+          type: boolean
+          description: |
+            A hint for data entry surfaces. The API does not enforce it, so that
+            a partial update is never rejected because some unrelated required
+            field was absent from the payload.
+        placeholder:
+          type: string
+        description:
+          type: string
+        order:
+          type: integer
+          description: Display order, ascending. Defaults to the end of the list.
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        createdBy:
+          type: string
+      required: [id, objectType, key, label, type, order]
+
     Opportunity:
       type: object
       properties:
@@ -206,6 +278,18 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
 
+    NotFound:
+      description: |
+        The record does not exist in this workspace.
+
+        Note that the API derives this status from the service's error text
+        rather than from an explicit code, so a message containing "not found"
+        is what produces a 404 here. Every other failure is a 400.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
     ServerError:
       description: Server side failure. Safe to retry with backoff.
       content:
@@ -221,6 +305,12 @@ paths:
       operationId: listContacts
       description: |
         Lists contacts in the workspace. Requires `contact:read`.
+
+        Filters combine, so a status, an owner and a custom field all narrow the
+        same result set. The one exception is `tag` and `customFieldKey`, which
+        cannot be used together: each needs its own array membership clause and
+        the datastore allows one per query. Supplying both returns 400 rather
+        than quietly ignoring one.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
         - name: limit
@@ -228,6 +318,36 @@ paths:
           required: false
           schema:
             type: integer
+        - name: tag
+          in: query
+          required: false
+          description: Contacts carrying this tag. Cannot be combined with `customFieldKey`.
+          schema:
+            type: string
+        - name: customFieldKey
+          in: query
+          required: false
+          description: |
+            The `key` of the custom field to filter on. Must be sent together
+            with `customFieldValue`. Cannot be combined with `tag`.
+          schema:
+            type: string
+            examples: [plan_tier]
+        - name: customFieldValue
+          in: query
+          required: false
+          description: |
+            The value to match, compared exactly and in full. For a `dropdown` or
+            `multiselect` field this is the option's `value`, not its `label`;
+            for a `checkbox` it is `true` or `false`. A `multiselect` matches when
+            the value is any one of the contact's selections.
+
+            This is an equality filter and not a search: there is no partial
+            matching, and no greater than or less than comparison on number and
+            date fields.
+          schema:
+            type: string
+            examples: [enterprise]
       responses:
         '200':
           description: The workspace's contacts.
@@ -802,14 +922,77 @@ paths:
       summary: Import contacts
       operationId: importContacts
       description: |
-        Bulk import. Requires `contact:manage`.
+        Bulk import, up to 200 rows per call. Requires `contact:manage`.
 
-        Import does not deduplicate either. See the note on create.
+        Unlike create, import **does** deduplicate, but only by phone. A row
+        whose normalized phone already resolves to a contact is reported as
+        `skipped`, so re-sending the same batch creates no duplicates. Rows
+        without a phone cannot be deduplicated and always create a new contact.
+
+        Rows are processed independently: one bad row is reported in `errors`
+        and does not sink the batch. The `index` in each error is the row's
+        position within this request, so a client sending several batches has to
+        offset it to recover the original file row.
+
+        Custom fields import through `customFields`, validated against the
+        workspace's definitions exactly as a single create would be. A value that
+        fails validation, such as a `dropdown` value that is not one of its
+        options or a date that is not `YYYY-MM-DD`, fails that row rather than
+        importing blank.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contacts:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    properties:
+                      displayName: { type: string }
+                      firstName: { type: string }
+                      lastName: { type: string }
+                      email: { type: string }
+                      company: { type: string }
+                      title: { type: string }
+                      primaryPhone:
+                        type: string
+                        description: Normalized to E.164. A number that cannot be normalized fails the row.
+                      customFields:
+                        type: object
+                        additionalProperties: true
+                        description: Keyed by the field definition's `key`.
+              required: [contacts]
       responses:
         '200':
-          description: Import result.
+          description: |
+            Import result. Returns 200 even when individual rows failed: check
+            `failed` and `errors` rather than the status code.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  created: { type: integer }
+                  skipped:
+                    type: integer
+                    description: Rows whose phone already belonged to a contact.
+                  failed: { type: integer }
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                          description: Row position within THIS request.
+                        error: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -1093,33 +1276,118 @@ paths:
       tags: [Custom fields]
       summary: List custom field definitions
       operationId: listCustomFields
-      description: Requires `contact:read`.
+      description: |
+        Lists the workspace's field definitions for one object type, ordered by
+        `order` then label.
+
+        Requires `contact:read`, not the manage right. Anyone who can view a
+        contact needs these definitions to make sense of its values, so reading
+        the schema travels with reading the data.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+        - name: objectType
+          in: query
+          required: false
+          description: Defaults to `contact`, which is the only value today.
+          schema:
+            type: string
+            enum: [contact]
       responses:
         '200':
           description: The definitions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  fields:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomFieldDef'
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '400':
-          $ref: '#/components/responses/BadRequest'
+        '500': { $ref: '#/components/responses/ServerError' }
+
     post:
       tags: [Custom fields]
       summary: Create a custom field definition
       operationId: createCustomField
       description: |
-        Requires `custom-field:manage`, which is a different action from
-        `contact:manage`. Defining a field is schema work; filling one in is not.
+        Requires `customField:manage`, a different action from `contact:manage`.
+        Defining a field is schema work; filling one in is not.
+
+        `key` is derived from `label` when omitted ("Lead Source" becomes
+        `lead_source`). Choose it deliberately: `key` and `type` can never be
+        changed afterwards.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                objectType:
+                  type: string
+                  enum: [contact]
+                  default: contact
+                label:
+                  type: string
+                key:
+                  type: string
+                  description: |
+                    Optional. Derived from `label` when absent. snake_case,
+                    starting with a letter. Rejected when it collides with a
+                    standard contact field or with another field in this
+                    workspace.
+                type:
+                  type: string
+                  enum:
+                    [text, textarea, number, monetary, date, dropdown,
+                     multiselect, checkbox, phone, email, url]
+                options:
+                  type: array
+                  description: Required for `dropdown` and `multiselect`.
+                  items:
+                    $ref: '#/components/schemas/CustomFieldOption'
+                required:
+                  type: boolean
+                placeholder:
+                  type: string
+                description:
+                  type: string
+                order:
+                  type: integer
+              required: [label, type]
       responses:
         '201':
           description: Created.
-        '401': { $ref: '#/components/responses/Unauthorized' }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  field:
+                    $ref: '#/components/schemas/CustomFieldDef'
         '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+          description: |
+            Validation failed. Also returned when the key is already in use in
+            this workspace, or is reserved by a standard contact field.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /custom-fields/{fieldId}:
     parameters:
@@ -1133,38 +1401,122 @@ paths:
       tags: [Custom fields]
       summary: Get a custom field definition
       operationId: getCustomField
+      description: Requires `contact:read`.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
         '200':
           description: The definition.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  field:
+                    $ref: '#/components/schemas/CustomFieldDef'
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '400':
-          $ref: '#/components/responses/BadRequest'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
     patch:
       tags: [Custom fields]
       summary: Update a custom field definition
       operationId: updateCustomField
+      description: |
+        Requires `customField:manage`.
+
+        `key` and `type` are rejected if they differ from the current values.
+        Both anchor data that already exists: stored values are keyed by `key`,
+        merge tokens saved in templates and automations reference it, and a type
+        change has no safe migration for values already written. Everything else
+        on the definition can be edited freely.
+
+        Sending `placeholder` or `description` as an empty string removes it.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                options:
+                  type: array
+                  description: Applied only to `dropdown` and `multiselect` fields.
+                  items:
+                    $ref: '#/components/schemas/CustomFieldOption'
+                required:
+                  type: boolean
+                placeholder:
+                  type: string
+                description:
+                  type: string
+                order:
+                  type: integer
       responses:
         '200':
           description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  field:
+                    $ref: '#/components/schemas/CustomFieldDef'
+        '400':
+          description: |
+            Validation failed. Also returned when `key` or `type` differ from the
+            stored values, which is refused rather than migrated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '400':
-          $ref: '#/components/responses/BadRequest'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
     delete:
       tags: [Custom fields]
       summary: Delete a custom field definition
       operationId: deleteCustomField
+      description: |
+        Requires `customField:manage`.
+
+        The definition is removed immediately and the response returns as soon as
+        it is gone. The field's stored values are then cleared from every contact
+        that carried one, in the background. On a large workspace that clearing
+        continues for a few minutes after this call returns, so a contact read
+        immediately afterwards may still show the old value.
+
+        This is not reversible. Recreating a field with the same key gives you a
+        new, empty field.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
         '200':
           description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '400':
-          $ref: '#/components/responses/BadRequest'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
