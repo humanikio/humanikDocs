@@ -33,7 +33,9 @@ tags:
   - name: Versions
     description: Immutable snapshots, and the compiled form the runner executes.
   - name: Runs
-    description: Test firing a workflow, and reading what happened.
+    description: |
+      Test firing a workflow, reading what happened, and releasing a run that
+      is paused.
   - name: Collections
     description: |
       Flat folder names the workflow list groups by. Note the split: these
@@ -444,6 +446,64 @@ components:
             - type: integer
             - type: 'null'
           description: Epoch milliseconds. Null while the run is still going.
+        contactId:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: |
+            The CRM contact this run resolved to, if it resolved to one.
+
+            **Null is a normal answer, not a missing value.** A workflow run is
+            started by a record, not by a contact, so a run may reference a
+            person who is not in the CRM, or no person at all. The contact is
+            also set by whichever step resolves it, so it is null until the
+            first step has finished, and which step that is varies per
+            workflow. When it is null, fall back to `trigger.record`.
+        advancedBy:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: |
+            Set when someone released this run manually with
+            [Advance a run](/docs/api-reference/workflows/runs/advanceRun),
+            rather than the run resuming on its own. The value is the user id
+            that made the call.
+        advancedAtMs:
+          oneOf:
+            - type: integer
+            - type: 'null'
+          description: Epoch milliseconds of the manual release.
+        advancedFrom:
+          oneOf:
+            - type: object
+              properties:
+                nodeId: { type: string }
+                nodeType: { type: string }
+              description: The step the run was pushed past.
+            - type: 'null'
+
+    QueuePosition:
+      type: object
+      description: |
+        Where a run sits in a Drip queue at the moment it was asked.
+      properties:
+        position:
+          type: integer
+          description: 1 based, so the next run to be released is `1`.
+        total:
+          type: integer
+          description: Everything currently queued at that step, including this run.
+        sortKey:
+          type: integer
+          description: |
+            The release ordering key. Taken from a time field on the trigger
+            record when there is one, so a queue drains in the order the
+            underlying events happened rather than the order they arrived.
+        claimed:
+          type: boolean
+          description: |
+            True while this run is being released right now. The position is
+            already out of date when this is true.
 
     NodeDefinition:
       type: object
@@ -1109,6 +1169,182 @@ paths:
                   value:
                     success: false
                     error: Run not found
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/runs/{runId}/advance:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+      - name: runId
+        in: path
+        required: true
+        description: The waiting run to release.
+        schema:
+          type: string
+    post:
+      operationId: advanceRun
+      summary: Advance a run
+      tags: [Runs]
+      description: |
+        Push one waiting run past the step it is paused at, without waiting for
+        its timer or its turn in a queue.
+
+        **This moves one run and only one run.** For a Drip step it releases
+        that single run ahead of its turn and leaves the queue's own schedule
+        untouched. It is not a "send the whole batch now" call, and no other
+        run's place in the queue changes.
+
+        Send the step the run is actually paused at, which is the run's
+        `waitingNodeId`. Sending a different step returns `409` rather than
+        releasing the run, because the run would ignore the resume and
+        answering `200` would be false.
+
+        Timers and queues are retired differently behind this call, so a
+        released run never has a stale wake left behind to fire later.
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nodeId]
+              properties:
+                nodeId:
+                  type: string
+                  description: |
+                    The step the run is paused at. Read it from the run's
+                    `waitingNodeId`.
+      responses:
+        '200':
+          description: |
+            Released. A `warning` may be present when something non fatal was
+            noticed, such as the queued item having already been released by
+            the time the call reached it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  warning: { type: string }
+        '400':
+          description: |
+            `nodeId` missing, or the step is a kind that cannot be released
+            safely. Refusing is deliberate: releasing a run while leaving its
+            pending wake in place is worse than doing nothing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such run on this workflow.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: |
+            The run is not waiting, or is not waiting at the step you sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/runs/{runId}/queue-position:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+      - name: runId
+        in: path
+        required: true
+        description: The queued run to locate.
+        schema:
+          type: string
+    get:
+      operationId: getRunQueuePosition
+      summary: Get a run's place in a queue
+      tags: [Runs]
+      description: |
+        Where a run sits in the queue at a Drip step, so you can tell someone
+        "third of 1,204" instead of "it will happen eventually".
+
+        **This reports an order, it does not reserve one.** A queued run holds
+        no fixed place: the order is worked out each time the queue releases a
+        batch, which is what keeps two runs from ever claiming the same spot.
+        This call answers where the run would fall if the next batch went out
+        now. Reading it changes nothing.
+
+        Which step the run is paused at is taken from the run itself, not from
+        anything you send, so this can only ever report on the queue the run is
+        genuinely in.
+
+        Only Drip steps have a queue. A run paused on a timer returns `409`,
+        because there is no line to be in and inventing a number would be
+        worse than saying so.
+
+        To estimate when the run leaves, combine `position` with the Drip
+        step's own settings, which are recorded in that step's entry in
+        `nodeResults`: `ceil(position / batchSize)` gives the batch it is in,
+        and each batch is one `intervalSec` apart. Treat the result as an
+        estimate. Drip settings are read fresh on every release, so raising the
+        batch size moves everything still queued and invalidates any figure
+        worked out before the change.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: |
+            Either a position, or `gone: true` when the run left the queue
+            between you reading it and asking. `gone` is not an error. It means
+            the queue released the run, which is the normal outcome. Re read
+            the run to see where it went.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  position:
+                    $ref: '#/components/schemas/QueuePosition'
+                  gone:
+                    type: boolean
+                    description: The run is no longer queued at that step.
+              examples:
+                queued:
+                  summary: Third in line
+                  value:
+                    success: true
+                    position:
+                      position: 3
+                      total: 1204
+                      sortKey: 1755561120000
+                      claimed: false
+                released:
+                  summary: Already released
+                  value:
+                    success: true
+                    gone: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such run on this workflow.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: |
+            The run is not waiting, or is paused on a step that has no queue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500': { $ref: '#/components/responses/ServerError' }
 
   /workspaces/{workspaceId}/workflows/{workflowId}/test:

@@ -36,7 +36,7 @@ as a `403` it has to report, exactly as it would to a person.
 
 | Action | Covers |
 | --- | --- |
-| `contact:read` | Read contacts, notes, tags, the conversation |
+| `contact:read` | Read contacts, notes, tags, the conversation, and which workflows a contact is in |
 | `contact:tag` | Apply and remove tags, and nothing else |
 | `contact:manage` | Create, edit, archive, delete |
 | `opportunity:read` · `opportunity:manage` | Deals, pipelines, stages |
@@ -53,6 +53,52 @@ else, which is the right grant for an employee whose job is triage. See
 SMS, email, voice, and Telegram interleave in a single thread per contact, each
 message carrying a `source`. The identity survives a channel change, and the
 conversation does not fork when someone replies by a different route.
+
+## Reading many contacts at once
+
+Anything that stores a contact stores an id, not a name. Turning a list of ids
+back into people one call at a time works, but it costs a round trip each.
+[Get many contacts by id](/docs/api-reference/crm/contacts/getContactsByIds)
+does up to 200 in one request.
+
+```bash
+curl -X POST "$HOS_API/workspaces/ws_a1b2c3/contacts/batch" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "ids": ["con_7f3b2a", "con_9d4e1c"] }'
+```
+
+The response is a map keyed by id. **Ids that no longer exist are left out
+rather than returned empty**, so check for the key instead of assuming
+everything you asked for comes back. A contact deleted after something recorded
+its id is ordinary, and it is usually the reason for a gap.
+
+It is a POST because the input is a list, not because it changes anything. It
+needs `contact:read` and writes nothing.
+
+## What a contact is caught up in
+
+[List a contact's workflow runs](/docs/api-reference/crm/contacts/listContactRuns)
+gives you every workflow this person has been through or is currently in, newest
+first, across every workflow in the workspace.
+
+This is the call to reach for when someone asks why a customer received a
+message, or whether they are still queued for one. Each entry carries the run
+and the name of the workflow it belongs to, and a run still in progress names
+the step it is paused at in `waitingNodeId`. To find out how long that pause has
+left, see
+[the workflows reference](/docs/api-reference/workflows#why-a-run-is-paused-and-when-it-will-move).
+
+Re entry is just another run. Someone who enters the same workflow three times
+has three entries, so this doubles as their enrolment history.
+
+<Callout type="warn">
+  **Only runs created after 19 August 2026 are listed.** Finding runs by contact
+  relies on a field the workflow runner did not write before that date, and
+  older runs were not backfilled. Those runs still exist and still show their
+  contact when read directly. An empty response does not prove this contact has
+  never been in a workflow.
+</Callout>
 
 ## Four things that will bite you
 

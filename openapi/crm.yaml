@@ -496,6 +496,140 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /contacts/batch:
+    post:
+      tags: [Contacts]
+      summary: Get many contacts by id
+      operationId: getContactsByIds
+      description: |
+        Resolves up to 200 contact ids in a single call. Requires
+        `contact:read`.
+
+        Use this when you already hold a list of ids and need the people behind
+        them, for example when turning a list of workflow runs into a list of
+        names. Reading them one at a time works and costs the same in reads,
+        but it costs one round trip per contact.
+
+        This is a POST because the input is a list. A hundred ids in a query
+        string runs into URL length limits and writes every contact id you
+        touched into access logs. Nothing is changed by this call.
+
+        **Ids that no longer exist are left out of the response** rather than
+        returned as an error or as an empty entry. A contact deleted after
+        something recorded its id is normal, so check for the key rather than
+        assuming every id you sent comes back.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: string
+                  description: Contact ids. Duplicates and blanks are ignored.
+      responses:
+        '200':
+          description: |
+            A map keyed by contact id. Ids that were not found are absent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  contacts:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/Contact'
+        '400':
+          description: '`ids` is missing, not an array, or holds more than 200 entries.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                tooMany:
+                  value:
+                    success: false
+                    error: at most 200 ids per call
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /contacts/{contactId}/runs:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    get:
+      tags: [Contacts]
+      summary: List a contact's workflow runs
+      operationId: listContactRuns
+      description: |
+        Every workflow this contact has been through or is currently in, newest
+        first, across all workflows in the workspace. Requires `contact:read`.
+
+        This is the reverse of
+        [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns), which
+        starts from a workflow and tells you who is in it. Start here when you
+        know the person and need to find out what is happening to them.
+
+        Each entry carries the run and the name of the workflow it belongs to.
+        A run still in progress has `status: waiting` or `running`, and
+        `waitingNodeId` names the step it is paused at.
+
+        Re entry is just another run. A contact who enters the same workflow
+        three times has three entries here, so this doubles as their enrolment
+        history.
+
+        **Only runs created after 19 August 2026 appear here.** Finding runs by
+        contact relies on a field the workflow runner did not write before that
+        date, and older runs were not backfilled. Those runs are still readable
+        through
+        [Get a run](/docs/api-reference/workflows/runs/getWorkflowRun) and still
+        show their contact. They just cannot be found by starting from the
+        contact. An empty response therefore does not prove this contact has
+        never been in a workflow.
+
+        Capped at 50 runs.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  runs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        run:
+                          type: object
+                          description: |
+                            The run record. Same shape as
+                            [Get a run](/docs/api-reference/workflows/runs/getWorkflowRun).
+                          additionalProperties: true
+                        workflowName:
+                          oneOf:
+                            - type: string
+                            - type: 'null'
+                          description: |
+                            Null when the workflow has since been deleted. The
+                            run is kept either way, so history does not
+                            disappear when someone tidies up a workflow list.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /contacts/{contactId}:
     parameters:
       - $ref: '#/components/parameters/ContactId'

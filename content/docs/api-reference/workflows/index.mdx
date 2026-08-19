@@ -114,17 +114,123 @@ it.
   workflows become ungrouped rather than deleted.
 </Callout>
 
+## Tracking what is happening to one person
+
+A run is a record of one workflow doing something, and that something is
+usually happening to a person. Three calls make that side of it usable.
+
+### Which contact a run is about
+
+Every run carries `contactId`, and it is worth knowing when it gets set before
+you rely on it.
+
+**A run is started by a record, not by a contact.** A trigger fires on whatever
+came in, and the contact is worked out later by whichever step resolves one,
+such as a Find contact or Create contact step. That has two consequences:
+
+- `contactId` is null until the first step has finished, so a run that failed at
+  its trigger has no contact even when the incoming record plainly names
+  someone.
+- Some workflows never resolve a contact at all.
+
+Null is therefore a normal answer rather than a missing value. When it is null,
+fall back to `trigger.record`, which is the raw payload that started the run and
+usually carries an email or a phone number. A run showing a real email that
+never resolved to a contact is worth a second look, because it usually means a
+lookup step did not match.
+
+Going the other way, from a person to their workflows, use
+[List a contact's workflow runs](/docs/api-reference/crm/contacts/listContactRuns).
+Re entry is just another run, so that call doubles as an enrolment history.
+
+### Why a run is paused, and when it will move
+
+A run with `status: waiting` is paused at the step named by `waitingNodeId`, and
+there are two quite different reasons for it. Read that step's entry in
+`nodeResults` to tell them apart.
+
+| Paused on | Looks like | Moves when |
+| --- | --- | --- |
+| A Wait step | a timer | its time is up |
+| A Drip step | `outputs.queued: true` | its turn in the queue comes round |
+
+The difference matters. A timer will fire on its own and you can predict when. A
+Drip queue releases a fixed number of runs per interval, so a run can sit in one
+for a long time, and how long depends on how many are in front of it.
+
+For a queued run,
+[Get a run's place in a queue](/docs/api-reference/workflows/runs/getRunQueuePosition)
+answers that:
+
+```bash
+curl "$HOS_API/workspaces/ws_a1b2c3/workflows/wf_7Kd2mQ/runs/run_8Fs3Kd/queue-position" \
+  -H "Authorization: Bearer $HOS_API_KEY"
+```
+
+```json
+{ "success": true, "position": { "position": 3, "total": 1204, "claimed": false } }
+```
+
+The Drip step's own settings are in its `nodeResults` entry, so you can turn a
+position into a time: `ceil(position / batchSize)` is the batch it is in, and
+batches go out one `intervalSec` apart.
+
+<Callout type="warn">
+  **Treat that as an estimate.** Drip settings are read fresh every time the
+  queue releases a batch, so raising the batch size moves everything still
+  queued and invalidates any figure worked out before the change.
+</Callout>
+
+### Releasing one run early
+
+[Advance a run](/docs/api-reference/workflows/runs/advanceRun) pushes a single
+paused run past the step it is stuck on, whether that is a timer or a queue.
+
+```bash
+curl -X POST "$HOS_API/workspaces/ws_a1b2c3/workflows/wf_7Kd2mQ/runs/run_8Fs3Kd/advance" \
+  -H "Authorization: Bearer $HOS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "nodeId": "drip_1" }'
+```
+
+Send the run's own `waitingNodeId` as `nodeId`. Sending anything else returns
+`409` rather than releasing the run.
+
+<Callout type="warn">
+  **This is one run, not the batch.** Releasing a run from a Drip queue moves
+  that run only and leaves the queue's schedule untouched. Nobody else's place
+  changes. There is no call that empties a queue, and that is deliberate: a Drip
+  step exists to stop a large import firing everything at once, so a way to
+  release all of it in one go would undo the only thing the step is there for.
+</Callout>
+
+If a Drip step is simply too slow, change the step instead. Settings are re
+read on every release, so raising the batch size moves everyone still queued,
+which is both faster and safer than releasing runs one at a time.
+
 ## Permissions
 
 Two actions cover this surface, both scoped to the workspace in the path.
 
 | Action | Reaches |
 | --- | --- |
-| `workflow:read` | Workflows, versions, the compiled graph, runs, collections, node definitions |
-| `workflow:manage` | Creating, saving, deleting, test firing, and collection changes |
+| `workflow:read` | Workflows, versions, the compiled graph, runs, queue positions, collections, node definitions |
+| `workflow:manage` | Creating, saving, deleting, test firing, advancing a run, and collection changes |
 
 `workflow:manage` includes test firing, which starts real runs with real side
-effects. It is not a read-adjacent grant.
+effects. It is not a read-adjacent grant. It also covers advancing a run, which
+sends whatever the next step does, so a released run can put a message in front
+of a customer.
+
+Reading a queue position is `workflow:read`, because it reports an order rather
+than changing one.
+
+Names and contact details on a run are **not** covered by either action. Runs
+carry a `contactId` and nothing more, and resolving those ids needs
+`contact:read` through
+[Get many contacts by id](/docs/api-reference/crm/contacts/getContactsByIds).
+That split is intentional, so workflow access does not quietly become contact
+access.
 
 ## What is not here
 
