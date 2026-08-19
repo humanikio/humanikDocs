@@ -66,6 +66,38 @@ The system will not do that.
   system, is worth more here than it looks.
 </Callout>
 
+## Importing a list
+
+You can create contacts in bulk from a CSV. The file is parsed in your browser,
+mapped to contact fields, and sent up in batches, so a large list arrives as a
+series of small requests rather than one long upload.
+
+**Import deduplicates by phone number, and only by phone number.** A row whose
+number already belongs to a contact is reported as skipped rather than creating a
+second record, and repeats inside the same file are skipped too. Rows without a
+phone number cannot be checked against anything, so they always create.
+
+That makes re-importing the same file safe when your rows carry phone numbers,
+and duplicative when they do not.
+
+**Custom fields import alongside the standard ones.** Values are validated the
+same way a single edit is, so a dropdown value has to match one of that field's
+options exactly and a date has to be `YYYY-MM-DD`.
+
+<Callout type="warn">
+  **A value that fails validation fails its row.** The row is reported with the
+  reason and the rest of the file continues. Nothing is silently blanked, so a
+  count of imported rows that is lower than your file length means some rows were
+  refused, not that some values were dropped.
+</Callout>
+
+Each row is handled independently, so one malformed row never stops the import.
+Failures come back with the row's position in your file and what was wrong with
+it.
+
+**Importing does not run automations.** Contacts created this way do not trigger
+workflows, which is what makes it safe to load historical records.
+
 ## Reaching people
 
 Three outbound channels, all reaching a real person under your own identity.
@@ -164,7 +196,13 @@ attributed, and the contact never sees them.
 one contact is available for all of them.
 
 **Custom fields** are yours to define, typed, and available as placeholders in
-messages.
+messages. You can also filter the contact list by one: by an exact value, by
+whether a field has any value at all, or by whether it is empty.
+
+A field's key is fixed once it is created, and so is its type. Both are
+referenced by stored values and by any message template or automation that reads
+`{{contact.<key>}}`, so renaming one would break those references rather than
+follow them. The label, the options and the description stay editable.
 
 ## Deals
 

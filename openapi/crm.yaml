@@ -939,6 +939,10 @@ paths:
         fails validation, such as a `dropdown` value that is not one of its
         options or a date that is not `YYYY-MM-DD`, fails that row rather than
         importing blank.
+
+        Importing does not run automations. Contacts created this way do not
+        trigger workflows, which is what makes it safe for loading historical
+        records.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       requestBody:
