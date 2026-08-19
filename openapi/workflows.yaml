@@ -459,6 +459,14 @@ components:
             also set by whichever step resolves it, so it is null until the
             first step has finished, and which step that is varies per
             workflow. When it is null, fall back to `trigger.record`.
+
+            **A contact here is not always findable from the other direction.**
+            Runs created before 19 August 2026 report their contact on this
+            field but are not returned by
+            [List a contact's workflow runs](/docs/api-reference/crm/contacts/listContactRuns),
+            which relies on a field the workflow runner did not write before
+            that date. Reading a run tells you who it is about. Searching by
+            contact only reaches runs created since.
         advancedBy:
           oneOf:
             - type: string

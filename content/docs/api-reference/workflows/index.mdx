@@ -143,6 +143,16 @@ Going the other way, from a person to their workflows, use
 [List a contact's workflow runs](/docs/api-reference/crm/contacts/listContactRuns).
 Re entry is just another run, so that call doubles as an enrolment history.
 
+<Callout type="warn">
+  **The two directions do not cover the same runs.** A run created before 19
+  August 2026 reports its `contactId` when you read the run, but will not come
+  back when you search by that contact. Finding runs by contact relies on a
+  field the workflow runner did not write before that date, and older runs were
+  not backfilled. So a contact search returning nothing is not evidence the
+  person was never in a workflow, and a `contactId` you can see is not a
+  promise that searching for it will find this run.
+</Callout>
+
 ### Why a run is paused, and when it will move
 
 A run with `status: waiting` is paused at the step named by `waitingNodeId`, and
