@@ -18,9 +18,9 @@ declaration, so the two can never disagree.
 
 | Flavor | What it serves | Needs |
 | --- | --- | --- |
-| **A** — local model | Completions from Ollama or a compatible server | Ollama running |
-| **B** — Claude Code agent | An agent turn; its output *is* the reply | Claude Code, signed in |
-| **C** — OpenClaw harness | A full agent framework, sandboxed | Docker |
+| **A**, local model | Completions from Ollama or a compatible server | Ollama running |
+| **B**, Claude Code agent | An agent turn; its output *is* the reply | Claude Code, signed in |
+| **C**, OpenClaw harness | A full agent framework, sandboxed | Docker |
 
 Flavor B is the common one, and the rest of this section assumes it.
 
@@ -38,7 +38,7 @@ more.**
 
 That single sentence is the whole security model. The ceiling lives in a config
 file on your machine, written by you. HumanikOS never sends a tool list, a working
-directory, or a permission mode — it sends the conversation and what it wants
+directory, or a permission mode. It sends the conversation and what it wants
 done. If the control plane were compromised tomorrow, it still could not widen
 what any enrolled machine is permitted to do.
 
@@ -62,14 +62,14 @@ difference between a device that does what you meant and one that does more.
 
 | Surface | Runs where | Configured by | In the ceiling |
 | --- | --- | --- | --- |
-| **Built-in tools** — `Read`, `Bash`, `Write` | This machine, in a derived workspace directory | You | Yes |
-| **Inherited [MCP](https://modelcontextprotocol.io)** — your Gmail, Linear, Figma | Wherever that server points | You, on this machine | Yes |
-| **Upstream tools** — Nova's, an office's | On HumanikOS, under the caller's own permissions | The platform, per job | No, by design |
-| **[Browser](/docs/devices/browser)** — your real Chrome | In your browser, as you | You, with a separate key | Yes, **plus** its own key |
+| **Built-in tools**: `Read`, `Bash`, `Write` | This machine, in a derived workspace directory | You | Yes |
+| **Inherited [MCP](https://modelcontextprotocol.io)**: your Gmail, Linear, Figma | Wherever that server points | You, on this machine | Yes |
+| **Upstream tools**: Nova's, an office's | On HumanikOS, under the caller's own permissions | The platform, per job | No, by design |
+| **[Browser](/docs/devices/browser)**: your real Chrome | In your browser, as you | You, with a separate key | Yes, **plus** its own key |
 
 The first two are bounded by a workspace directory the daemon derives and the
 server cannot name. **Upstream tools** are not gated by your ceiling because they
-never touch your machine — they run on HumanikOS under the permissions of whoever
+never touch your machine. They run on HumanikOS under the permissions of whoever
 called them, and your device holds no credentials for them.
 
 That includes the [integrations](/docs/integrations) you connect to an office. Their
@@ -137,7 +137,7 @@ humanikd setup
 
 `humanikd setup` walks the whole thing: platform check, flavor choice, backend
 prerequisites, enrolment, config, and auto-start. It never installs anything on
-your behalf — it prints the command and waits.
+your behalf. It prints the command and waits.
 
 Then, any time:
 
@@ -156,5 +156,5 @@ humanikd service restart
 
 **Flavor B runs as *you*.** It installs a per-user service, not a system one,
 because it has to read the `claude` login from your own keychain. That also means
-the agent inherits your MCP connectors — which is usually the point, and
+the agent inherits your MCP connectors, which is usually the point, and
 occasionally a surprise.

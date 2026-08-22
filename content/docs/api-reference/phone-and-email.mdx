@@ -35,7 +35,7 @@ like any other capability.
 
 ## Phone numbers
 
-### Management — signed in user only
+### Management: signed in user only
 
 The entire `/twilio` surface requires a signed in user. An API key is rejected
 whatever permissions the service account holds.
@@ -55,7 +55,7 @@ whatever permissions the service account holds.
 Numbers are bought at workspace level, then allocated down. An office can hold
 several, with one marked primary.
 
-### Usage — an office's own key
+### Usage: an office's own key
 
 Once a number is allocated, the office sends from it through the CRM:
 
@@ -89,7 +89,7 @@ because both evaluate `phone:send`.
 
 ## Email addresses
 
-### Management — assigning an address to an office
+### Management: assigning an address to an office
 
 | Method | Path | Permission |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ share one address. Offices must belong to the workspace that owns the address.
   machine identities are governed exactly as human ones are.
 </Callout>
 
-### Usage — an office's own key
+### Usage: an office's own key
 
 | Method | Path | Permission |
 | --- | --- | --- |

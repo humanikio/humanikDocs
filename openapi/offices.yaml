@@ -1615,6 +1615,11 @@ paths:
       tags: [Allocations]
       summary: Get an allocated namespace
       operationId: getOfficeNamespace
+      description: |
+        Returns one namespace allocation. Requires `office:read`.
+
+        An allocation is what lets the employee reach the data. A skill that
+        describes a namespace it has not been allocated produces a `403`.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -1648,6 +1653,7 @@ paths:
       tags: [Allocations]
       summary: List allocated apps
       operationId: listOfficeApps
+      description: Lists the apps allocated to this office. Requires `office:read`. No pagination.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -1704,6 +1710,7 @@ paths:
       tags: [Allocations]
       summary: List allocated websites
       operationId: listOfficeWebsites
+      description: Lists the websites allocated to this office. Requires `office:read`. No pagination.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2802,6 +2809,7 @@ paths:
       tags: [Allocations]
       summary: Get an allocated app
       operationId: getOfficeApp
+      description: Returns one app allocation. Requires `office:read`.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2988,6 +2996,14 @@ paths:
                   type: string
                 specUrl:
                   type: string
+                tools:
+                  type: array
+                  description: |
+                    The endpoints to declare. Optional. Offices that instantiate
+                    this template inherit them verbatim, so declaring them here
+                    is how one definition reaches every office.
+                  items:
+                    $ref: '#/components/schemas/IntegrationTool'
                 changelog:
                   type: string
                   description: Notes for the first version.
@@ -3042,6 +3058,9 @@ paths:
       tags: [Tenant libraries]
       summary: Get an integration template
       operationId: getGlobalIntegration
+      description: |
+        Returns one template including its declared endpoints. Requires
+        `tenant:read` at `console`. No credential value is returned.
       parameters:
         - name: withHistory
           in: query
@@ -3285,6 +3304,7 @@ paths:
       tags: [Tenant libraries]
       summary: Get a website
       operationId: getTenantWebsite
+      description: Returns one tenant website. Requires `tenant:read` at `console`.
       responses:
         '200':
           description: The website.
@@ -3295,6 +3315,9 @@ paths:
       tags: [Tenant libraries]
       summary: Update a website
       operationId: updateTenantWebsite
+      description: |
+        Updates a tenant website. Requires `tenant:manage` at `console`. Only the
+        fields you send are changed.
       requestBody:
         required: true
         content:

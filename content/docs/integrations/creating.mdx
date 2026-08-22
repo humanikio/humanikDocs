@@ -7,7 +7,7 @@ description: Two ways to connect software to an employee, and when each one is t
 authentication scheme, a credential reference, and a list of endpoints that become tools.
 
 This page is about getting one made. There are three routes to the same object, and the choice
-comes down to one question: **do you already know the endpoints?**
+comes down to one question: **do you want named tools, or just a working connection?**
 
 ## The short answer
 
@@ -16,11 +16,26 @@ comes down to one question: **do you already know the endpoints?**
 | **You provide** | Base URL, auth type, every endpoint | The name of the software, and a credential | The same, as a prompt |
 | **Interface** | [`POST /offices/{officeId}/integrations`](/docs/api-reference/offices/integrations/createOfficeIntegration) | A conversation | [`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle) |
 | **Takes** | One call | A few minutes | A few minutes |
-| **Endpoints are** | Exactly what you declared | Researched from the live documentation | The same |
-| **Best when** | You have the API docs open | You want it working without reading them | You are provisioning offices programmatically |
+| **Endpoints are** | Exactly what you declared | Not declared. Reached by path | The same |
+| **Best when** | You have the API docs open | You want it connected without reading them | You are provisioning offices programmatically |
 
-Nova is the easier route and the one most people should use. Declaring it yourself is faster
-when you already have the specification.
+The two routes answer different questions. Nova is the fast way to get connected: it works out
+what the software is, what it needs to authenticate, and collects the credential safely.
+Declaring it yourself is the only way to get **named tools**.
+
+<Callout type="warn">
+  **Nova does not declare endpoints.** It creates the connection, not the endpoint list. An
+  integration Nova builds is reached with `hos_integration_request`, where the employee supplies
+  a path itself, so it is working from paths nobody confirmed. To give it named tools with
+  documented arguments, declare them yourself with
+  [`POST /offices/{officeId}/integrations`](/docs/api-reference/offices/integrations/createOfficeIntegration)
+  or add them later with a
+  [`PATCH`](/docs/api-reference/offices/integrations/updateOfficeIntegration).
+
+  You can do both: let Nova set up the connection and the credential, then PATCH the endpoints
+  onto it. Nova's verification runs on declared endpoints, so this is also what makes a
+  `verified` skill possible.
+</Callout>
 
 <Callout>
   **Nova is not console only.** The third column is the same workflow as the second, started
@@ -184,6 +199,10 @@ what was tried.
 </Callout>
 
 ### What verification cannot cover
+
+**It needs declared endpoints.** Verification researches the real contract for the endpoints an
+integration declares, then calls one. An integration with none has nothing to verify, so declare
+them first.
 
 It fires a real request, which makes it excellent for reads and unsuitable for writes.
 Confirming a "create invoice" endpoint would mean creating an invoice.
