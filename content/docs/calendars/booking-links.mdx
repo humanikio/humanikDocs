@@ -72,14 +72,39 @@ lot of guessing.
 
 | To block out | Use |
 | --- | --- |
-| A recurring day, or part of one | Working hours. A weekday you leave out has no availability at all |
-| One specific date | A date override, set to nothing |
+| A recurring day, or part of one | Weekly hours. A day switched off has no availability at all |
+| One specific date | A date exception, set to Closed |
 | Time you are genuinely busy | Nothing. Real events on the bound accounts already remove those slots |
 | Breathing room around each booking | A buffer before, after, or both |
-| Volume | A cap per day, or per slot |
+| Volume | A cap per day, or per time slot |
 
-A date override **replaces** that day's hours rather than adding to them, which
-is what makes an empty one mean closed.
+### Weekly hours
+
+Every day has its own switch and its own hours, so a shorter Friday needs no
+workaround. Switching a day on copies the hours you are already using, and you
+can change them from there.
+
+A day can hold **more than one stretch of time**. Add a second one to keep a
+lunch break bookable-around:
+
+```
+Mon   9:00am to 12:00pm     1:00pm to 5:00pm
+Tue   9:00am to 5:00pm
+Fri   9:00am to 1:00pm
+Sat   off
+```
+
+Two stretches on the same day must not overlap. Overlapping ones would offer the
+same start time twice on the booking page, so the console refuses to save them.
+
+### Date exceptions
+
+A date exception is a single date that ignores the weekly hours entirely. Set it
+to **Closed** for a holiday, or give it its own hours for a day you are working
+differently.
+
+An exception **replaces** that day's weekly hours rather than adding to them,
+which is what makes Closed mean closed even on a day you normally work.
 
 The part you do not configure is the useful part: **anything already in your
 calendar removes the slots it covers.** Blocking Thursday afternoon is a matter
