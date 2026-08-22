@@ -16,7 +16,7 @@ comes down to one question: **do you already know the endpoints?**
 | **You provide** | Base URL, auth type, every endpoint | The name of the software, and a credential | The same, as a prompt |
 | **Interface** | [`POST /offices/{officeId}/integrations`](/docs/api-reference/offices/integrations/createOfficeIntegration) | A conversation | [`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle) |
 | **Takes** | One call | A few minutes | A few minutes |
-| **Endpoints are** | Exactly what you declared | Researched, then confirmed against the live API | The same |
+| **Endpoints are** | Exactly what you declared | Researched from the live documentation | The same |
 | **Best when** | You have the API docs open | You want it working without reading them | You are provisioning offices programmatically |
 
 Nova is the easier route and the one most people should use. Declaring it yourself is faster
@@ -91,49 +91,97 @@ single highest value thing you can put in an integration.
 
 ## Having Nova build it
 
-Ask for the software by name, either in the console or by sending the same request to
-[`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle). Nova runs a three step
-workflow and you watch it happen:
+This is the route most people want. You describe the software, Nova does the research, and it
+stops to check with you at the two points where your judgement is needed.
+
+### What to say
+
+Plain language is enough. Nova recognises the intent from any of these:
+
+```
+Connect Stripe to this office.
+
+Set up an integration with SendGrid so this employee can send email.
+
+I want to connect our internal billing API at https://billing.acme.internal.
+```
+
+The last one takes a different path from the first two, and the difference is just whether Nova
+can find public documentation for the service.
+
+| | Recognised service | Your own API |
+| --- | --- | --- |
+| **Nova does** | Looks up the API and proposes the setup | Asks you for the base URL, auth type, and credential field names |
+| **You do** | Confirm, then supply the credential | Answer the questions, confirm, then supply the credential |
+
+<Callout>
+  **Nova does not guess your API.** For a service it cannot look up, it asks. If you are
+  connecting something internal, have the base URL and the authentication type ready and the
+  conversation is short.
+</Callout>
+
+### It stops twice, on purpose
+
+Nova does not run the whole thing and tell you afterwards. It pauses at two points and waits.
 
 <Steps>
 
 <Step>
-**Research.** Nova reads the live API documentation and extracts a contract: the endpoints,
-what a request body looks like, where the useful part of the response sits.
+**Confirm the setup.** Nova summarises what it is about to create: the service, the base URL,
+the authentication type, and what it will name things. Nothing is written until you accept.
 </Step>
 
 <Step>
-**Verify.** Nova fires a real authenticated request at the API and checks the response matches
-the contract it just proposed. This is the step that makes the difference. It is a genuine call
-with your genuine credential, so the answer is ground truth rather than a recollection.
-</Step>
-
-<Step>
-**Publish.** Only what passed gets written. The skill is stamped `verified` and locked, so a
-later routine sync cannot quietly replace it.
+**Supply the credential.** Nova sends you a secure form with the exact fields the service needs.
+The value goes straight into the vault. It never passes through the conversation.
 </Step>
 
 </Steps>
 
-Each step appears in the chat as it runs, with the request, the response status, and whether
-the assertion held. Nothing is published on a step that failed. Started from `/ai/run`, the same
+<Callout type="warn">
+  **Nova will never ask you to paste a key into the chat.** If anything appears to, that is
+  worth reporting. Credentials are collected through the form so they do not end up in a
+  transcript, in a message history, or in anything you later export.
+</Callout>
+
+After the second step Nova registers the integration, links the credential, and generates the
+skill. The employee can use it on its next boot.
+
+### Proving it works is a separate ask
+
+Setup gives you a working integration whose skill is written from the service's documentation.
+That skill is marked `generated`, meaning nobody has confirmed it against the live API.
+
+Nova can go further, and it is worth asking:
+
+```
+Verify the Stripe skill against the real API.
+```
+
+Nova then reads the live documentation for the exact contract, fires a real authenticated
+request, and checks the response contains what the contract promised. It publishes only if the
+call confirms it, and the skill becomes `verified` and locked, so a routine sync cannot replace
+it.
+
+Each step appears in the chat as it runs, with the request, the response status, and whether the
+assertion held. Nothing is published on a step that failed. Started from `/ai/run`, the same
 trace is written to the chat the response names, so a programmatic caller can read back exactly
 what was tried.
 
 <Callout>
-  **Your credential is never shown to the employee, or to you, in that trace.** Nova writes the
+  **Your credential is never shown, to you or to the employee, in that trace.** Nova writes the
   request with a placeholder. The value is substituted server side at the moment the call goes
   out, and any occurrence of it in the response is masked before the trace is rendered.
 </Callout>
 
-### What Nova cannot confirm
+### What verification cannot cover
 
-Verification fires a real request, which makes it excellent for reads and unsuitable for
-writes. Confirming a "create invoice" endpoint would mean creating an invoice.
+It fires a real request, which makes it excellent for reads and unsuitable for writes.
+Confirming a "create invoice" endpoint would mean creating an invoice.
 
-So an integration can end up part proven: its reads confirmed, its writes declared but
-untested. That is worth knowing when you read a skill, and it is the reason the verification
-stamp is worth trusting when it is there.
+So an integration can end up part proven: its reads confirmed, its writes documented but
+untested. That is worth knowing when you read a skill, and it is the reason the stamp is worth
+trusting where it appears.
 
 ## After it exists
 
