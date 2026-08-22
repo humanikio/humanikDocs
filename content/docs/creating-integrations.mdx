@@ -1,0 +1,165 @@
+---
+title: Creating an integration
+description: Two ways to connect software to an employee, and when each one is the right choice.
+---
+
+[Tools and secrets](/docs/tools-and-secrets) covers what an integration is: a host, an
+authentication scheme, a credential reference, and a list of endpoints that become tools.
+
+This page is about getting one made. There are three routes to the same object, and the choice
+comes down to one question: **do you already know the endpoints?**
+
+## The short answer
+
+| | Declare it yourself | Ask Nova in the console | Drive Nova from the API |
+| --- | --- | --- | --- |
+| **You provide** | Base URL, auth type, every endpoint | The name of the software, and a credential | The same, as a prompt |
+| **Interface** | [`POST /offices/{officeId}/integrations`](/docs/api-reference/offices/integrations/createOfficeIntegration) | A conversation | [`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle) |
+| **Takes** | One call | A few minutes | A few minutes |
+| **Endpoints are** | Exactly what you declared | Researched, then confirmed against the live API | The same |
+| **Best when** | You have the API docs open | You want it working without reading them | You are provisioning offices programmatically |
+
+Nova is the easier route and the one most people should use. Declaring it yourself is faster
+when you already have the specification.
+
+<Callout>
+  **Nova is not console only.** The third column is the same workflow as the second, started
+  with an API call instead of a message box. Nova acts as the caller who sent the prompt, under
+  that caller's roles, so it can create nothing you could not have created yourself. See
+  [How Nova is permissioned](/docs/api-reference/nova#how-nova-is-permissioned).
+</Callout>
+
+## Declaring it yourself
+
+Create the integration with its endpoints in place:
+
+```json
+{
+  "name": "Acme Billing",
+  "platform": "acme",
+  "connection": {
+    "baseUrl": "https://api.acme.com",
+    "auth": { "type": "bearer" }
+  },
+  "tools": [
+    {
+      "toolName": "acme_get_invoice",
+      "description": "Fetch one invoice by id",
+      "method": "GET",
+      "path": "/v1/invoices/{invoiceId}",
+      "enabled": true,
+      "parameters": {
+        "invoiceId": {
+          "type": "string",
+          "required": true,
+          "in": "path",
+          "description": "The invoice id"
+        }
+      }
+    }
+  ]
+}
+```
+
+Then point it at a credential with
+[`POST /offices/{officeId}/integrations/{integrationId}/secret-refs`](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef),
+and the employee can call `acme_get_invoice` by name on its next boot.
+
+Adding endpoints later is a
+[`PATCH`](/docs/api-reference/offices/integrations/updateOfficeIntegration) on the integration.
+The skill is rewritten from the updated record by
+[`POST .../sync-skill`](/docs/api-reference/offices/integrations/syncOfficeIntegrationSkill),
+and the employee picks the tools up on its next boot.
+
+<Callout type="warn">
+  **Every parameter needs an `in`.** It says where the value goes on the wire: `path`, `query`,
+  `header`, or `body`. A parameter without one is dropped when the request is built, and
+  nothing reports it. The call simply goes out missing that value.
+</Callout>
+
+### Endpoints are the part that matters
+
+An integration with no endpoints declared still works. It holds a credential and a host, and
+the employee can reach it by supplying a path itself.
+
+But nothing has told the employee what paths exist. Its skill is written from the integration
+record, so with no endpoints to describe, the best it can offer is a plausible guess at what an
+API of that kind usually looks like, marked as unconfirmed.
+
+Declaring endpoints is what turns that into named tools with documented arguments. It is the
+single highest value thing you can put in an integration.
+
+## Having Nova build it
+
+Ask for the software by name, either in the console or by sending the same request to
+[`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle). Nova runs a three step
+workflow and you watch it happen:
+
+<Steps>
+
+<Step>
+**Research.** Nova reads the live API documentation and extracts a contract: the endpoints,
+what a request body looks like, where the useful part of the response sits.
+</Step>
+
+<Step>
+**Verify.** Nova fires a real authenticated request at the API and checks the response matches
+the contract it just proposed. This is the step that makes the difference. It is a genuine call
+with your genuine credential, so the answer is ground truth rather than a recollection.
+</Step>
+
+<Step>
+**Publish.** Only what passed gets written. The skill is stamped `verified` and locked, so a
+later routine sync cannot quietly replace it.
+</Step>
+
+</Steps>
+
+Each step appears in the chat as it runs, with the request, the response status, and whether
+the assertion held. Nothing is published on a step that failed. Started from `/ai/run`, the same
+trace is written to the chat the response names, so a programmatic caller can read back exactly
+what was tried.
+
+<Callout>
+  **Your credential is never shown to the employee, or to you, in that trace.** Nova writes the
+  request with a placeholder. The value is substituted server side at the moment the call goes
+  out, and any occurrence of it in the response is masked before the trace is rendered.
+</Callout>
+
+### What Nova cannot confirm
+
+Verification fires a real request, which makes it excellent for reads and unsuitable for
+writes. Confirming a "create invoice" endpoint would mean creating an invoice.
+
+So an integration can end up part proven: its reads confirmed, its writes declared but
+untested. That is worth knowing when you read a skill, and it is the reason the verification
+stamp is worth trusting when it is there.
+
+## After it exists
+
+Every route ends in the same place. The integration syncs to a **skill**, the document the
+employee reads to know how to use the software. See
+[Skills and protocols](/docs/skills-and-protocols) for how skills reach an employee and what
+the verification stamp means.
+
+The rest of the surface is documented under
+[Integrations in the office reference](/docs/api-reference/offices/integrations/listOfficeIntegrations):
+reading and updating one, managing its secret references, and the template operations covered
+in [Tools and secrets](/docs/tools-and-secrets#templates-define-once-use-everywhere).
+
+## Where to go next
+
+<Cards>
+  <Card title="Tools and secrets" href="/docs/tools-and-secrets">
+    Where credentials live, and why an integration only points at one
+  </Card>
+  <Card title="Skills and protocols" href="/docs/skills-and-protocols">
+    The document an employee reads, and what makes it trustworthy
+  </Card>
+  <Card title="Integrations reference" href="/docs/api-reference/offices/integrations/listOfficeIntegrations">
+    Every operation on an integration, its parameters and its errors
+  </Card>
+  <Card title="Nova" href="/docs/api-reference/nova">
+    What Nova can operate, and the identity it acts under
+  </Card>
+</Cards>

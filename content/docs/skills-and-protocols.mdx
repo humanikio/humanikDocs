@@ -111,9 +111,11 @@ A routine sync cannot discard a proven procedure or a human edit.
 </Callout>
 
 <Callout type="warn">
-  **Locking protects against sync, not against you.** Calling `regenerate`
-  explicitly unlocks the skill first and then overwrites it. If you want to keep
-  a proven body, do not call regenerate on it.
+  **Regenerating replaces the body, and a `verified` stamp does not survive it.** Locking
+  protects a skill from routine sync, not from an explicit regenerate. A `manual` body keeps its
+  stamp and its wording is preserved, but a `verified` one drops to `generated`: the proof was
+  about the previous text, and it does not carry over to text that has just been rewritten.
+  Re-run verification to earn it back. A regenerate that fails changes nothing.
 </Callout>
 
 ## Protocols
