@@ -25,6 +25,44 @@ source of events.
 A trigger that names no source binds to nothing rather than to everything, so a
 half configured trigger is inert instead of dangerous.
 
+### Narrowing a calendar trigger
+
+By default every appointment on the chosen calendar starts the workflow,
+including one the host typed straight into Google or Outlook. Two settings
+narrow that.
+
+**Which bookings** scopes the trigger to a single [booking
+page](/docs/calendars/booking-links), so "someone booked a Discovery Call" and
+"someone booked a support slot" can run different workflows on one calendar. An
+appointment created outside a booking page has no page to match, so a scoped
+trigger skips it.
+
+Only reusable pages are offered here. A one-time link stops working after its
+single booking, so a workflow bound to one could run at most once and would then
+be quietly dead forever.
+
+**Event name contains** matches text in the appointment title instead, which is
+the one to reach for when the appointments come from somewhere other than a
+booking page. Set both and both must match.
+
+### What a booking hands the workflow
+
+Appointments booked through a booking page carry the booker's answers, so later
+steps can use them without asking again:
+
+- `{{trigger.bookerName}}`, `{{trigger.bookerEmail}}`, `{{trigger.bookerPhone}}`
+- `{{trigger.form.<question>}}` for anything else the page asks, custom
+  questions included. A page asking "What would you like to cover?" under the
+  key `notes` gives you `{{trigger.form.notes}}`
+- `{{trigger.bookingLinkName}}` for the page it came through
+
+These are the natural inputs to **Find Contact** and **If/Else**: look the
+person up by `{{trigger.bookerEmail}}`, then branch on an answer they gave.
+
+An appointment created directly in Google or Outlook has none of this, because
+nobody filled a form in. A custom question also resolves empty on a page that
+does not ask it, so branch on the answer rather than assuming it is there.
+
 ## Messaging
 
 | Step | Does |
