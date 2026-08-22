@@ -55,4 +55,5 @@ export const apis = [
   system('workflows', 'workflows.yaml'),
   system('nova', 'nova.yaml'),
   system('calendars', 'calendars.yaml'),
+  system('buckets', 'buckets.yaml'),
 ];

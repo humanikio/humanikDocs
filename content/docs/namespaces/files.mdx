@@ -1,0 +1,148 @@
+---
+title: Files
+description: Buckets, paths and folders, and finding a document by meaning.
+---
+
+A **bucket** is a named container for files inside a namespace. A **file** is one
+document in a bucket: its contents, and enough description for an employee to
+find it later without being told where it is.
+
+Buckets are the file side of a namespace, next to the tables. Both live in the
+same namespace and both are covered by the same grant. See
+[Namespaces](/docs/namespaces).
+
+## Every file has a path
+
+A path is the address of a file inside its bucket.
+
+```
+/contracts/2026/acme-msa.pdf
+/contracts/2026/globex-renewal.pdf
+/handbook/expenses.md
+```
+
+Two rules govern it:
+
+- **A path is unique within its bucket.** Two files in one bucket cannot share
+  a path. The same path in a different bucket is a different file.
+- **Case matters.** `/Contracts/acme.pdf` and `/contracts/acme.pdf` are two
+  different addresses.
+
+The path is how an employee acts on a specific file. It searches to find out
+which document it wants, then uses the path it was given to fetch that one.
+
+## Folders
+
+Folders are part of the path rather than separate things you have to set up. A
+file at `/contracts/2026/acme-msa.pdf` is in a folder called `2026`, inside one
+called `contracts`, and both of those appear as soon as the file does.
+
+You can also create an empty folder before there is anything in it, which is
+useful when you are laying out a structure you intend to fill. An empty folder
+stays until you delete it.
+
+### Moving and renaming is immediate
+
+Moving a file to another folder, or renaming a folder with a thousand files in
+it, takes the same time as renaming an empty one. Nothing is copied and nothing
+is re-uploaded.
+
+This is worth knowing because it is often the opposite of what people expect from
+file storage. You can reorganise a large bucket freely, at any time, without
+waiting and without paying for the reorganisation.
+
+<Callout type="warn">
+  **Deleting a folder deletes everything inside it.** Every file below that
+  folder is removed, at every depth. Nothing is moved up a level and nothing is
+  kept.
+</Callout>
+
+## Adding a file
+
+Files are uploaded through the platform. There is no direct upload to storage and
+no separate storage account to configure.
+
+| | |
+| --- | --- |
+| Maximum size | 50 MB per file |
+| Type checking | None. The type is recorded as sent |
+| Versioning | None. Uploading over a path replaces nothing, it needs a different path |
+
+Uploading returns as soon as the file is stored. Preparing it for search happens
+afterwards, which is why a file can be listed and downloaded before it becomes
+searchable.
+
+## Downloading a file
+
+Reading a file gives you a **download link that works for one hour**.
+
+<Callout type="warn">
+  **The link is the permission.** Anyone holding that link can download the file
+  until it expires, whether or not they have access to the namespace. It is not
+  cancelled by deleting the file or the bucket. Treat it the way you would treat
+  the file itself, and do not paste it anywhere you would not paste the document.
+</Callout>
+
+## Finding a document by meaning
+
+An employee can search a bucket by describing what it wants rather than naming
+the file. Asking for "the Acme renewal from last year" returns the document even
+when nobody remembers what it was called.
+
+This works because each file is described when it is uploaded, and the search
+matches against that description.
+
+### It has to be turned on for the namespace
+
+Search by meaning is a setting on the namespace. It is on by default.
+
+Two consequences that surprise people:
+
+- **A file can be ready and still not searchable.** Ready means the file is
+  stored and can be listed and downloaded. Whether it can be found by meaning is
+  a separate question.
+- **Turning the setting on is not retroactive.** Files uploaded while it was off
+  are not processed later. To make an older file searchable, upload it again.
+
+<Callout type="warn">
+  **Preparing files for search uses platform credit.** This happens on upload,
+  once per file. It is not covered by your own model key if you have supplied
+  one, and it is not counted against a budget. If you are loading a large number
+  of files and do not need to search them by meaning, turn the setting off for
+  that namespace first.
+</Callout>
+
+## Deleting
+
+Deleting a file removes it and its contents. Deleting a bucket removes every file
+in it. Deleting the namespace removes every bucket in it, and their files.
+
+None of these are reversible, and nothing is archived first.
+
+## What buckets do not do
+
+- **No per-bucket or per-file permissions.** The namespace is the unit of
+  access, so anyone who can read the namespace can read every bucket in it.
+- **No versioning.** A file has one current state and no history.
+- **No storage limit.** Nothing caps the number of buckets or files, or the total
+  size.
+- **No reprocessing.** A file that failed to prepare for search is not retried.
+  Upload it again.
+
+<Cards>
+  <Card
+    title="Files API"
+    href="/docs/api-reference/buckets"
+    description="Uploading, listing, moving and searching files over HTTP."
+  />
+  <Card
+    title="Namespaces"
+    href="/docs/namespaces"
+    description="What a namespace holds, and why it is the unit you grant access to."
+  />
+  <Card
+    title="Datasource actions"
+    href="/docs/access-control/actions#datasource"
+    description="The two permissions that cover buckets and files."
+  />
+</Cards>

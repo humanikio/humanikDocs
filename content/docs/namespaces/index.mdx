@@ -1,0 +1,113 @@
+---
+title: Namespaces
+description: Where your data lives, and the unit you grant access to.
+---
+
+A namespace holds the data one part of your business runs on. Orders in one,
+job sites in another, personnel in a third.
+
+It is two things at once, and the second one is the reason to think about it
+carefully. A namespace is where data lives, and it is also **the unit of
+access**. When you give an AI employee or a colleague access to data, you give
+it to a namespace.
+
+## What is inside one
+
+```
+   Workspace
+     └─ Namespace  "Orders"
+          ├─ Tables    rows you can query
+          ├─ Files     documents in buckets
+          └─ Sources   how new data arrives
+```
+
+**Tables** hold structured records. A table of orders has columns and rows, and
+an employee can query it directly.
+
+**Files** are documents. They live in buckets, which are the file side of the
+same namespace. See [Files](/docs/namespaces/files).
+
+**Sources** are how data gets in without anyone typing it. A source gives you a
+web address you hand to another system, and rows arrive when that system sends
+them.
+
+## Access is granted per namespace
+
+This is the part worth reading twice, because it decides how you should organise
+your data.
+
+An employee, a person, or an API key is granted `datasource:read` or
+`datasource:manage` **on a namespace**. There is no narrower grant. Everything in
+that namespace is included: every table, every bucket, every file.
+
+<Callout type="warn">
+  **There are no per-bucket or per-file permissions.** Access to a namespace is
+  access to all of it. If some documents should be visible to one employee and
+  not another, they belong in separate namespaces, not in separate buckets inside
+  one.
+</Callout>
+
+The two permissions and what they cover are listed under
+[Datasource actions](/docs/access-control/actions#datasource).
+
+### What that means in practice
+
+Organise namespaces around **who should see what**, not around what the data is
+about. A single namespace holding both the price list and the personnel files is
+one grant away from showing an employee the personnel files.
+
+| You want | Do this |
+| --- | --- |
+| Every employee reads the product catalogue | One namespace, granted widely |
+| Only the hiring office reads applications | A separate namespace, granted to that office |
+| An employee writes orders but only reads stock | Two namespaces, `manage` on one, `read` on the other |
+
+## How an employee uses it
+
+An employee does not receive database credentials, and never connects to
+anything directly. It asks the platform, the platform checks the grant, and the
+answer comes back.
+
+That holds for every route into the data. A question in chat, a step in a
+workflow, and a call from your own code all pass the same check. There is no
+path that skips it.
+
+## Deleting a namespace
+
+Deleting a namespace deletes what is in it. The tables are dropped, the buckets
+are removed, and the stored files are deleted with them.
+
+<Callout type="warn">
+  **This is not reversible and there is no export step.** Nothing is archived
+  first. Take a copy of anything you need before you delete.
+</Callout>
+
+## What a namespace does not do
+
+- **It does not give you database credentials.** Every read and write is
+  mediated by the platform.
+- **It does not check an arriving payload against your table.** A source can map
+  incoming field names onto your columns, but it does not reject a payload for
+  having the wrong shape.
+- **It does not remove duplicates.** If a system sends the same record twice, you
+  get two rows.
+- **It does not limit how much you store.** Nothing caps the number of tables,
+  buckets, or files in a namespace.
+
+<Cards>
+  <Card
+    title="Files"
+    href="/docs/namespaces/files"
+    description="Buckets, paths, folders, and finding a document by meaning."
+  />
+  <Card
+    title="Datasource actions"
+    href="/docs/access-control/actions#datasource"
+    description="The two permissions that govern everything in a namespace."
+  />
+  <Card
+    title="Files API"
+    href="/docs/api-reference/buckets"
+    description="The HTTP surface for buckets and the files in them."
+  />
+</Cards>

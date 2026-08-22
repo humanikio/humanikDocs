@@ -1,0 +1,130 @@
+---
+title: Files
+description: Buckets and the files inside them, addressed by path.
+---
+
+A bucket is a named container for files inside a namespace. Every file in it has
+a path, and the path is the address you act on.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [Namespaces](/docs/namespaces) covers what a namespace holds
+  and why it is the unit you grant access to, and [Files](/docs/namespaces/files)
+  covers the model: paths, folders, download links, and search by meaning. This
+  page describes the API surface.
+</Callout>
+
+## The namespace is the unit of access
+
+There are no per bucket or per file permissions. Two actions cover everything
+here, both evaluated on the namespace in the path:
+
+| Permission | Covers |
+| --- | --- |
+| `datasource:read` | Listing, reading, resolving a path, searching |
+| `datasource:manage` | Creating, uploading, moving, deleting |
+
+Anyone who can read the namespace can read every bucket in it. If some documents
+should be visible to one employee and not another, they belong in separate
+namespaces. See [Datasource actions](/docs/access-control/actions#datasource).
+
+**The namespace in the path scopes the row as well as the permission.** A bucket
+or file belonging to a different namespace is reported as not found, even inside
+the same tenant, and a missing row, another tenant's row and another namespace's
+row are deliberately indistinguishable.
+
+## The response says `asset`
+
+The path says `object`. The response body says `asset`.
+
+```
+GET  .../objects/{objectId}   ->  { success, asset, signedUrl }
+GET  .../objects              ->  { success, assets, total }
+```
+
+This is a partial rename that has not finished. Write clients against `asset`
+and `assets`.
+
+## Find by meaning, then act by path
+
+This is the pattern the whole surface is built around, and it is worth following
+rather than working around.
+
+<Steps>
+
+<Step>
+#### Search for what you want
+
+```bash
+curl -X POST "$HOS_API/namespaces/ns_orders/buckets/$BUCKET/objects/search" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "query": "the Acme renewal from last year" }'
+```
+
+Every hit carries a `path`. Check `searchable` before reading `matches`: when
+the namespace has file search turned off the call returns `200` with
+`searchable: false` and an empty list, which is not an error.
+</Step>
+
+<Step>
+#### Use the path you were given
+
+```bash
+curl -X POST "$HOS_API/namespaces/ns_orders/buckets/$BUCKET/objects/resolve" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "path": "/contracts/2026/acme-msa.pdf" }'
+```
+
+Use a path a call returned, not one you composed. Paths are case sensitive, and
+if the exact match misses, a corrected match is reported through
+`matchedInsensitively` and `object.path` is then the real one.
+</Step>
+
+</Steps>
+
+## Browsing by folder
+
+Folders are segments of a path, not separate resources. Send `delimiter=/` to
+walk one level at a time.
+
+```bash
+curl "$HOS_API/namespaces/ns_orders/buckets/$BUCKET/objects?workspaceId=ws_a1b2c3&delimiter=/&prefix=/contracts/" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+`assets` holds the files directly in `prefix`, and `delimitedPrefixes` holds the
+folders below it. Call again with one of those as the new `prefix` to go deeper.
+Omit the delimiter for a flat listing of everything underneath.
+
+`folderCounts` gives the number of files below each folder at any depth, which is
+what you want before telling someone how much a delete would remove.
+
+## Three things that surprise people
+
+**A download link is a capability.** [Get a file](/docs/api-reference/buckets/files/getObject)
+returns a link valid for one hour, and anyone holding it can fetch the file
+whether or not they have access to the namespace. Deleting the file does not
+cancel it.
+
+**A `200` does not guarantee a link.** If issuing it fails, the read still
+returns `200` with the metadata and no `signedUrl`. Check for the field.
+
+**`ready` does not mean searchable.** It means the file is stored, listable and
+downloadable. A file uploaded while the namespace had file search turned off is
+`ready` and unfindable, and turning the setting on later does not go back and
+prepare it.
+
+## What is not here
+
+**Deleting a folder** removes every file under it and is not exposed to the API.
+It is a console action, behind a confirmation naming the count.
+
+**Reading a file's text** rather than downloading it is available to an AI
+employee through its own tools, not over HTTP.
+
+**Uploads are capped at 50 MB** and a larger file is rejected before the request
+reaches the handler, so it returns a plain `500` rather than the usual envelope.
+Check the size before sending.

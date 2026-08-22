@@ -1,0 +1,1095 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Files
+  version: v1
+  summary: Buckets and the files inside them, addressed by path.
+  description: |
+    A bucket is a named container for files inside a namespace. It is the file
+    side of a namespace, next to the tables, and both are covered by the same
+    grant.
+
+    **Every file has a path.** `/contracts/2026/acme-msa.pdf` is an address:
+    unique within its bucket, case sensitive, and stable until you move it.
+    Folders are segments of that path rather than separate resources, so a
+    folder appears as soon as a file is in one. An empty folder can also be
+    created ahead of time and stays until it is deleted.
+
+    **The path is metadata over an immutable storage key**, which is why moving
+    or renaming is a single operation regardless of size. Nothing is copied.
+
+    **The namespace is the unit of access.** There are no per bucket or per file
+    permissions. Anyone who can read the namespace can read every bucket in it,
+    and the namespace in the path both selects the permission you need and
+    scopes the row you get back.
+
+    ## The response says `asset`
+
+    The path says `object` and the response body says `asset`. This is a partial
+    rename that has not finished. Write clients against `asset` and `assets`.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Buckets
+    description: Create, read, update, and delete a bucket.
+  - name: Files
+    description: Uploading, listing, reading, and deleting the files in a bucket.
+  - name: Paths
+    description: Resolving a path to a file, and moving a file to a new one.
+  - name: Folders
+    description: Creating a folder before there is anything in it.
+  - name: Search
+    description: Finding a file by describing it rather than naming it.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: A service account API key, sent whole as a bearer token.
+
+  parameters:
+    NamespaceId:
+      name: namespaceId
+      in: path
+      required: true
+      description: |
+        The namespace the bucket lives in. From `GET /namespaces`.
+
+        This selects the permission the caller needs **and** scopes the row that
+        comes back. A bucket or file that belongs to a different namespace is
+        reported as not found, even within the same tenant.
+      schema:
+        type: string
+        examples: [ns_orders]
+
+    BucketId:
+      name: bucketId
+      in: path
+      required: true
+      description: 'The bucket. From [List buckets](/docs/api-reference/buckets/buckets/listBuckets).'
+      schema:
+        type: string
+        format: uuid
+
+    ObjectId:
+      name: objectId
+      in: path
+      required: true
+      description: |
+        The file. From [List files](/docs/api-reference/buckets/files/listObjects)
+        or [Resolve a path](/docs/api-reference/buckets/paths/resolveObject).
+
+        Ids are not stable addresses for a file across time. Prefer the `path`
+        when you are storing a reference to something.
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Error:
+      type: object
+      description: '`error` is a human readable string, not a stable machine code.'
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+        message:
+          type: string
+      required: [success, error]
+
+    Forbidden:
+      type: object
+      description: The permission gate refused, and the message says which action and scope it evaluated.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          const: Forbidden
+        message:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+      required: [success, error]
+
+    Bucket:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+        namespaceId:
+          type: string
+        name:
+          type: string
+          description: Unique within the namespace.
+        description:
+          type: [string, 'null']
+        createdBy:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, namespaceId]
+
+    Asset:
+      type: object
+      description: One file. Called an object in the path and an asset in the body.
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+        namespaceId:
+          type: string
+        bucketId:
+          type: string
+          format: uuid
+        path:
+          type: string
+          description: |
+            The file's address within its bucket, for example
+            `/contracts/2026/acme-msa.pdf`. Unique per bucket and case
+            sensitive. Use this value verbatim rather than composing one.
+          examples: ['/contracts/2026/acme-msa.pdf']
+        name:
+          type: string
+          description: The filename. Derived from the last segment of `path`, not stored separately.
+        mimeType:
+          type: string
+          description: Taken from the upload and stored as sent. The bytes are not inspected.
+        sizeBytes:
+          type: integer
+        storagePath:
+          type: string
+          description: Where the bytes live. An internal key, not something to call.
+        status:
+          type: string
+          enum: [processing, ready, failed]
+          description: |
+            `ready` means the file is stored, listable and downloadable. It does
+            **not** mean the file is searchable: see
+            [Search files](/docs/api-reference/buckets/search/searchObjects).
+        shortDescription:
+          type: [string, 'null']
+          description: Written when the file was prepared for search. Null when it was not.
+        longDescription:
+          type: [string, 'null']
+          description: The text that search matches against.
+        extractedText:
+          type: [string, 'null']
+        embedding:
+          type: [array, 'null']
+          items:
+            type: number
+          description: Present on single reads. Large, and rarely useful to a caller.
+        createdBy:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, path, name, bucketId, status]
+
+    AssetMatch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        path:
+          type: string
+          description: Use this value in other calls. It is the point of searching.
+        name:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        bucketId:
+          type: string
+          format: uuid
+        shortDescription:
+          type: [string, 'null']
+        longDescription:
+          type: [string, 'null']
+        similarity:
+          type: number
+          description: Cosine similarity against the query. Higher is closer.
+        createdAt:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: The request is malformed or a required field is missing.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: The caller lacks the required action on this namespace.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Forbidden'
+
+    NotFound:
+      description: |
+        No such row, or it belongs to another tenant or another namespace. The
+        three are deliberately indistinguishable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ServerError:
+      description: Server side failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /namespaces/{namespaceId}/buckets:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+
+    get:
+      tags: [Buckets]
+      summary: List buckets
+      operationId: listBuckets
+      description: |
+        Lists the buckets in a namespace. Requires `datasource:read`.
+
+        Returns every bucket matching the filters. `limit` and `offset` are
+        accepted but there is no default page size and no cursor, so a caller
+        that does not pass them receives the whole collection.
+
+        `workspaceId` is required and is a filter, not the gate. Authorization
+        resolves the workspace from the namespace and ignores this value.
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: 'The workspace the namespace lives in. From `GET /workspaces`. Omitting it returns `400`.'
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The namespace's buckets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  buckets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bucket'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [Buckets]
+      summary: Create a bucket
+      operationId: createBucket
+      description: |
+        Creates a bucket in a namespace. Requires `datasource:manage`.
+
+        `name` must be unique within the namespace. A repeat returns `400`.
+
+        `workspaceId` is checked against the namespace's real workspace and the
+        call is refused if they disagree, so a bucket cannot be filed into a
+        workspace its namespace does not belong to.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceId, name]
+              properties:
+                workspaceId:
+                  type: string
+                  description: 'The workspace the namespace lives in. From `GET /workspaces`. Must match the namespace, or the call is refused.'
+                name:
+                  type: string
+                  description: Unique within the namespace. Cannot be blank.
+                  examples: [contracts]
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  bucket:
+                    $ref: '#/components/schemas/Bucket'
+        '400':
+          description: |
+            A missing field, a blank name, a duplicate name in this namespace, or
+            a `workspaceId` that does not match the namespace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    get:
+      tags: [Buckets]
+      summary: Get a bucket
+      operationId: getBucket
+      description: Reads one bucket. Requires `datasource:read`.
+      responses:
+        '200':
+          description: The bucket.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  bucket:
+                    $ref: '#/components/schemas/Bucket'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      tags: [Buckets]
+      summary: Update a bucket
+      operationId: updateBucket
+      description: |
+        Renames a bucket or changes its description. Requires
+        `datasource:manage`.
+
+        Both fields are optional and only what is sent is changed. Renaming does
+        not move any file: paths are addresses within the bucket and are
+        unaffected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Must still be unique within the namespace, and cannot be blank.
+                description:
+                  type: string
+      responses:
+        '200':
+          description: The updated bucket.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  bucket:
+                    $ref: '#/components/schemas/Bucket'
+        '400':
+          description: A blank name, a duplicate name, or no such bucket.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      tags: [Buckets]
+      summary: Delete a bucket
+      operationId: deleteBucket
+      description: |
+        Deletes a bucket and **every file in it**. Requires
+        `datasource:manage`.
+
+        This is not reversible and nothing is archived first. A second call
+        returns `404`.
+
+        The stored bytes are removed first and the rows second. If the byte
+        removal fails the call reports the failure and the bucket survives, so a
+        retry is safe.
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    get:
+      tags: [Files]
+      summary: List files
+      operationId: listObjects
+      description: |
+        Lists the files in a bucket. Requires `datasource:read`.
+
+        **Pass `delimiter=/` to browse one folder at a time.** With it, `assets`
+        holds the files directly in `prefix` and `delimitedPrefixes` holds the
+        folders below it, each with a trailing slash. Call again with one of
+        those as the new `prefix` to go deeper. Without a delimiter the listing
+        is flat and fully recursive.
+
+        `search` matches anywhere in the path, so it finds a file by its folder
+        as well as by its name. It is a literal match, not a search by meaning:
+        for that see
+        [Search files](/docs/api-reference/buckets/search/searchObjects).
+
+        `total` counts every file matching the filters, ignoring `limit` and
+        `offset`.
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: 'The workspace the namespace lives in. From `GET /workspaces`. Filters the listing; it is not the gate.'
+          schema:
+            type: string
+        - name: prefix
+          in: query
+          required: false
+          description: |
+            The folder to list, for example `/contracts/2026/`. Defaults to the
+            bucket root. Use a value returned in `delimitedPrefixes` rather than
+            one you composed.
+          schema:
+            type: string
+            examples: ['/contracts/2026/']
+        - name: delimiter
+          in: query
+          required: false
+          description: Send `/` to group by folder. Omit for a flat, fully recursive listing.
+          schema:
+            type: string
+            enum: ['/']
+        - name: search
+          in: query
+          required: false
+          description: Literal match anywhere in the path.
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: An unrecognised value matches nothing rather than returning an error.
+          schema:
+            type: string
+            enum: [processing, ready, failed]
+        - name: mimeCategory
+          in: query
+          required: false
+          description: '`all` and any unrecognised value are both no-ops.'
+          schema:
+            type: string
+            enum: [image, document, spreadsheet, all]
+        - name: sortBy
+          in: query
+          required: false
+          description: An unrecognised value returns `400` carrying the database error.
+          schema:
+            type: string
+            enum: [created_at, name, size_bytes]
+            default: created_at
+        - name: sortOrder
+          in: query
+          required: false
+          description: Anything other than `asc` is treated as `desc`.
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: limit
+          in: query
+          required: false
+          description: Defaults to 50. There is no upper bound.
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Files, and folders when a delimiter was sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  assets:
+                    type: array
+                    description: The files. Not `objects`.
+                    items:
+                      $ref: '#/components/schemas/Asset'
+                  delimitedPrefixes:
+                    type: array
+                    description: |
+                      Subfolders of `prefix`, each with a trailing slash. Present
+                      only when `delimiter=/` was sent.
+                    items:
+                      type: string
+                      examples: ['/contracts/2026/']
+                  folderCounts:
+                    type: object
+                    description: |
+                      Files below each folder, at any depth, keyed by the same
+                      strings as `delimitedPrefixes`. Useful for saying how much
+                      a delete would remove.
+                    additionalProperties:
+                      type: integer
+                  total:
+                    type: integer
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/upload:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    post:
+      tags: [Files]
+      summary: Upload a file
+      operationId: uploadObject
+      description: |
+        Uploads a file into a bucket. Requires `datasource:manage`. This is the
+        one operation here that takes `multipart/form-data`.
+
+        **Maximum 50 MB.** A larger file is rejected before the handler runs, so
+        the reply is a plain `500` rather than the usual JSON envelope. Check
+        the size yourself rather than relying on the error.
+
+        **Not idempotent.** Every call creates a new file. Uploading the same
+        name twice to the same path is refused as a duplicate; uploading to a
+        different path creates a second file.
+
+        The response returns with `status: "processing"`. Preparing the file for
+        search happens afterwards and is not waited on, so the file is
+        immediately listable and downloadable but not yet searchable.
+
+        **This spends platform credit** when the namespace has file search
+        enabled, once per file, and it is not covered by your own model key. If
+        you are loading many files and do not need to search them by meaning,
+        turn the setting off for the namespace first.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    The file. Its filename and content type are stored as sent;
+                    the bytes are not inspected to confirm the type.
+                workspaceId:
+                  type: string
+                  description: |
+                    The workspace the namespace lives in. From `GET /workspaces`.
+                    Falls back to the caller's currently selected workspace, and
+                    returns `400` only when neither is present.
+
+                    It is stored on the file as sent and is not checked against
+                    the namespace. A value that does not match the namespace's
+                    workspace produces a file that exists but never appears in a
+                    listing.
+                path:
+                  type: string
+                  description: |
+                    Where to put it in the bucket. A value ending in `/` means
+                    that folder, keeping the uploaded filename. Anything else is
+                    the full path including the filename. Omit for the bucket
+                    root under the uploaded filename.
+                  examples: ['/contracts/2026/']
+      responses:
+        '201':
+          description: Stored. Preparation for search has not finished.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+        '400':
+          description: |
+            A missing field, no file part, a path already taken in this bucket,
+            or the storage write failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500':
+          description: |
+            An unhandled failure, **or** a file over 50 MB. The size case is
+            rejected before the handler runs and is not wrapped in the usual
+            envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - $ref: '#/components/parameters/ObjectId'
+
+    get:
+      tags: [Files]
+      summary: Get a file
+      operationId: getObject
+      description: |
+        Reads one file's metadata and issues a download link. Requires
+        `datasource:read`.
+
+        **The download link is the permission.** It is valid for one hour and
+        anyone holding it can fetch the file, whether or not they have access to
+        the namespace. Deleting the file or the bucket does not cancel it.
+        Treat the link the way you would treat the file.
+
+        **A `200` does not guarantee a link.** If issuing it fails the call still
+        returns `200` with the metadata and no `signedUrl`. Check for the field
+        rather than assuming it.
+
+        Every call issues a fresh link, so this is not idempotent in effect even
+        though it changes nothing.
+      responses:
+        '200':
+          description: The file. `signedUrl` may be absent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+                  signedUrl:
+                    type: string
+                    description: Valid for one hour. Absent if it could not be issued.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      tags: [Files]
+      summary: Delete a file
+      operationId: deleteObject
+      description: |
+        Deletes one file. Requires `datasource:manage`.
+
+        Not reversible, and a second call returns `404`. Any download link
+        already issued for this file keeps working until it expires.
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/resolve:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    post:
+      tags: [Paths]
+      summary: Resolve a path
+      operationId: resolveObject
+      description: |
+        Finds the file at an exact path. Requires `datasource:read`.
+
+        This is a `POST` because a path holds slashes and may run to 1024 bytes,
+        which a query string handles badly. It reads and changes nothing.
+
+        **Use a path you were given, not one you composed.** Searching returns a
+        path on every hit, which makes search the discovery step and this the
+        action step.
+
+        Paths are case sensitive. If the exact match misses, a case insensitive
+        match is tried, and `matchedInsensitively` says so. When that happens the
+        returned `object.path` is the real path and is what you should use from
+        then on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  description: The full path within the bucket, starting with `/`.
+                  examples: ['/contracts/2026/acme-msa.pdf']
+      responses:
+        '200':
+          description: The file at that path.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  object:
+                    $ref: '#/components/schemas/Asset'
+                  matchedInsensitively:
+                    type: boolean
+                    description: True when the exact path missed and casing was corrected.
+        '400':
+          description: The path is missing or could not be parsed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}/path:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - $ref: '#/components/parameters/ObjectId'
+
+    patch:
+      tags: [Paths]
+      summary: Move or rename a file
+      operationId: moveObject
+      description: |
+        Gives a file a new path. Requires `datasource:manage`.
+
+        **Nothing is copied.** The path is metadata over the stored bytes, so a
+        move is a single update and takes the same time whatever the file
+        weighs. Any download link already issued keeps working.
+
+        A `toPath` ending in `/` means move into that folder and keep the
+        filename. Anything else is the full new path, which is how a rename is
+        expressed. Moving a file to its current path succeeds and changes
+        nothing.
+
+        Folders are path segments, so moving a file into a folder that does not
+        exist yet creates it, and moving the last file out of a folder removes
+        it unless it was created as an empty folder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toPath]
+              properties:
+                toPath:
+                  type: string
+                  description: |
+                    Ending in `/`, the destination folder with the filename
+                    kept. Otherwise the full new path.
+                  examples: ['/contracts/archive/']
+      responses:
+        '200':
+          description: Moved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  object:
+                    $ref: '#/components/schemas/Asset'
+                  fromPath:
+                    type: string
+                    description: The path before the move, so a caller can report or undo it.
+        '400':
+          description: The destination is missing or could not be parsed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: A file already exists at the destination. Retry with a different path.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/folders:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    post:
+      tags: [Folders]
+      summary: Create a folder
+      operationId: createFolder
+      description: |
+        Creates an empty folder. Requires `datasource:manage`.
+
+        Folders are segments of a file's path, so one appears on its own as soon
+        as a file is in it. This exists for the other case: laying out a
+        structure before there is anything to put in it. The folder stays until
+        it is deleted.
+
+        Nesting works in one call. Creating `/a/b/c/` makes all three visible,
+        and the intermediate folders need no call of their own.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, workspaceId]
+              properties:
+                path:
+                  type: string
+                  description: The folder path. A trailing slash is optional.
+                  examples: ['/contracts/2026/']
+                workspaceId:
+                  type: string
+                  description: 'The workspace the namespace lives in. From `GET /workspaces`.'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  folder:
+                    $ref: '#/components/schemas/Asset'
+        '400':
+          description: The path is missing or could not be parsed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: A folder already exists at that path. Retry with a different name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/search:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    post:
+      tags: [Search]
+      summary: Search files
+      operationId: searchObjects
+      description: |
+        Finds files by describing them rather than naming them. Requires
+        `datasource:read`.
+
+        Matching is against the description written when each file was uploaded,
+        not against the file's own text. Every hit carries a `path`, which makes
+        this the discovery step for
+        [Resolve a path](/docs/api-reference/buckets/paths/resolveObject).
+
+        **Only files that finished preparing are candidates.** A file with
+        `status: "ready"` but no description was uploaded while the namespace had
+        file search turned off, and turning it on afterwards does not go back and
+        prepare it. Upload it again to make it findable.
+
+        **When the namespace has file search turned off** the call still returns
+        `200`, with `searchable: false`, a `reason`, a sentence of `remedy`
+        prose, and an empty `matches`. It is not an error, and no query is
+        embedded, so nothing is spent. Check `searchable` before reading
+        `matches`.
+
+        **This spends platform credit** on each call that actually searches, and
+        it is not covered by your own model key.
+
+        `matchLimit` and `similarityThreshold` are clamped rather than rejected,
+        and a non-numeric value falls back to the default.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                  description: What you are looking for, in plain language. Cannot be blank.
+                  examples: ['the Acme renewal from last year']
+                matchLimit:
+                  type: integer
+                  description: Clamped to 1 to 100.
+                  default: 10
+                similarityThreshold:
+                  type: number
+                  description: Clamped to 0 to 1. Higher returns fewer, closer matches.
+                  default: 0.3
+      responses:
+        '200':
+          description: |
+            Matches, or an explanation of why nothing could match. Check
+            `searchable` first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  searchable:
+                    type: boolean
+                    description: False when the namespace has file search turned off.
+                  matches:
+                    type: array
+                    description: Ranked by similarity, closest first. Empty when not searchable.
+                    items:
+                      $ref: '#/components/schemas/AssetMatch'
+                  reason:
+                    type: string
+                    description: Present when `searchable` is false.
+                    examples: [object_embeddings_disabled]
+                  remedy:
+                    type: string
+                    description: Present when `searchable` is false. One sentence on how to fix it.
+        '400':
+          description: The query is missing or blank, or the search could not run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
