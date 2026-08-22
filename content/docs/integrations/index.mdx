@@ -1,5 +1,5 @@
 ---
-title: Tools and secrets
+title: Integrations and secrets
 description: Connecting software an employee can use, and where its credentials live.
 ---
 
@@ -83,8 +83,19 @@ in anything you later export.
   [Using your office's integrations from here](/docs/devices#using-your-offices-integrations-from-here) for a worked example.
 </Callout>
 
-An integration with no endpoints declared exposes no tools. It can still hold credentials for
-software the employee uses another way, but there is nothing to call until endpoints are added.
+An integration with no endpoints declared exposes no **named** tools, and it is still callable.
+The employee reaches it with `hos_integration_request`, naming the integration and supplying a
+path. The office resolves the host, attaches the credential and signs the request.
+
+<Callout>
+  **The host is not a parameter.** An employee can only reach software you already connected. It
+  cannot be talked into sending your credential somewhere else, because it never names a
+  destination: it names one of your connections.
+</Callout>
+
+Declare endpoints anyway where you can. A named tool carries its own parameter schema, so the
+employee is not guessing at the shape of a call. `hos_integration_request` is the floor, not the
+replacement. Both paths are covered in [Integration skills](/docs/integrations/skills).
 
 ## Two permissions, not one
 
@@ -134,6 +145,16 @@ anything.
 ## Where to go next
 
 <Cards>
+  <Card
+    title="Creating an integration"
+    href="/docs/integrations/creating"
+    description="Declare the endpoints yourself, or have Nova research and prove them."
+  />
+  <Card
+    title="Integration skills"
+    href="/docs/integrations/skills"
+    description="The document generated from a connection, and the two ways an employee calls one."
+  />
   <Card
     title="Integrations API"
     href="/docs/api-reference/offices/integrations/listOfficeIntegrations"

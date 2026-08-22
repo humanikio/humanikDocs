@@ -31,6 +31,10 @@ const withMDX = createMDX();
  * offices pages when the OpenAPI spec landed.
  */
 const movedPages = [
+  // Integrations became a folder: the two standalone pages moved under it and a
+  // third joined them. Both old addresses stay live.
+  ['/docs/tools-and-secrets', '/docs/integrations'],
+  ['/docs/creating-integrations', '/docs/integrations/creating'],
   [
     '/docs/api-reference/tenant-libraries',
     '/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations',

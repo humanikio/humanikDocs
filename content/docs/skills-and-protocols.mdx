@@ -89,34 +89,45 @@ Skills come from three places, recorded on each one as `source`:
 | `custom` | You wrote it |
 | `system` | The platform provides it |
 
-### Where the body came from matters
+### A skill is instructions, not a connection
 
-Separately from `source`, every skill records `contentSource`, which is about the
-**body** rather than the origin:
+A skill is a document. It carries no credential, no host, and no ability to call
+anything on its own.
 
-| `contentSource` | Means | Protected from sync |
+What an employee can actually reach comes from an **integration**: a host, an
+authentication scheme, and a reference to a credential in a vault. Connecting one
+generates a skill from it, so the two arrive together and are easy to treat as
+one thing.
+
+| | Skill | Integration |
 | --- | --- | --- |
-| `generated` | Derived from documentation, unconfirmed | No |
-| `manual` | Written or edited by a person | Yes |
-| `verified` | Proven against the live API | Yes |
+| Is | A document | A connection |
+| Holds | Instructions | A host, an auth scheme, a credential reference |
+| Changing it | Changes what the employee tries | Changes what the employee can reach |
+| Read | By the employee, when a task matches | By the office, on every call |
 
-When an integration syncs, it skips skills whose body is `manual` or `verified`.
-A routine sync cannot discard a proven procedure or a human edit.
+Editing a skill to describe an endpoint does not make that endpoint reachable,
+and deleting a skill does not revoke a credential.
+
+Skills generated from an integration have rules of their own: how the body is
+written, what it may not contain, and what a lock or a verification stamp means.
+Those live in [Integration skills](/docs/integrations/skills).
+
+### Skills are attached per office
+
+A skill belongs to one office, and an office is one employee. Two offices can
+hold the same skill, and changing it in one does not change it in the other.
+
+The employee reads its skills when it boots, so a new skill, or an edit to an
+existing one, takes effect on the next start.
 
 <Callout type="warn">
-  **Editing a skill's body marks it `manual` automatically.** Sending `content`
-  without setting `contentSource` stamps it, on the reasoning that a human edit
-  is human authorship. That is usually what you want. It is a surprise if you did
-  not expect it.
+  **This is the same restart rule that applies to protocols and secrets.** If you
+  change a skill and behaviour does not change, the office has not restarted.
 </Callout>
 
-<Callout type="warn">
-  **Regenerating replaces the body, and a `verified` stamp does not survive it.** Locking
-  protects a skill from routine sync, not from an explicit regenerate. A `manual` body keeps its
-  stamp and its wording is preserved, but a `verified` one drops to `generated`: the proof was
-  about the previous text, and it does not carry over to text that has just been rewritten.
-  Re-run verification to earn it back. A regenerate that fails changes nothing.
-</Callout>
+See [What is attached to an office](/docs/offices-and-employees#what-is-attached-to-an-office)
+for everything else that hangs off an office and how each one gets there.
 
 ## Protocols
 
@@ -166,8 +177,13 @@ overstates what an employee may do produces a `403`, not a breach.
 
 <Cards>
   <Card
-    title="Tools and secrets"
-    href="/docs/tools-and-secrets"
+    title="Integration skills"
+    href="/docs/integrations/skills"
+    description="The document generated from a connection, and what its stamps mean."
+  />
+  <Card
+    title="Integrations and secrets"
+    href="/docs/integrations"
     description="Connecting software, and where credentials live."
   />
   <Card

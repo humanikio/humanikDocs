@@ -24,16 +24,27 @@ tags:
   - name: Offices
     description: Create, read, update, and delete an office.
   - name: Integrations
-    description: The tools an employee can use, and the secrets behind them.
+    description: |
+      The software an employee can use, and the secrets behind it. An integration
+      is a host, an auth scheme and a credential reference. Each endpoint it
+      declares becomes a tool the employee calls by name; one that declares none
+      is still reachable through `hos_integration_request`. The office attaches
+      the credential, so no key enters the conversation. See
+      [Integrations and secrets](/docs/integrations).
   - name: Skills
     description: |
       What an employee can do. Skills follow the open
       [Agent Skills](https://agentskills.io/) layout: a directory per skill, a
       `SKILL.md` with YAML frontmatter, and a markdown body. See
       [Skills and protocols](/docs/skills-and-protocols) for what we share with
-      the specification and what is ours.
+      the specification and what is ours, and
+      [Integration skills](/docs/integrations/skills) for the ones generated from
+      a connection.
   - name: Protocols
-    description: What an employee must always do.
+    description: |
+      What an employee must always do. Where a skill is a capability it reaches
+      for, a protocol applies to everything it does. Loaded at boot, so a change
+      needs a restart.
   - name: Allocations
     description: The data, sites, apps, and browsers an office may reach.
   - name: Identity
@@ -140,6 +151,75 @@ components:
           examples: [ws_a1b2c3]
       required: [id, name]
 
+    ToolParameter:
+      type: object
+      description: |
+        One argument on a declared endpoint. The key in the `parameters` map is
+        the parameter's name.
+      properties:
+        type:
+          type: string
+          description: JSON type of the value, for example `string` or `integer`.
+          examples: [string]
+        required:
+          type: boolean
+          default: false
+        description:
+          type: string
+          description: What the value is. The employee reads this to fill it in.
+        in:
+          type: string
+          enum: [path, query, header, body]
+          description: |
+            **Where the value goes on the wire.** Required. A parameter without
+            it is rejected with a 400, because a parameter that reached storage
+            without one would be dropped when the request was built: the call
+            would go out missing that value and nothing would report it.
+      required: [type, in]
+
+    IntegrationTool:
+      type: object
+      description: |
+        A declared endpoint. Each one becomes a tool the employee can call by
+        name, carrying its own parameter schema. An integration with none is
+        still reachable through `hos_integration_request`, but the employee is
+        working from paths nobody confirmed. See
+        [Integration skills](/docs/integrations/skills).
+      properties:
+        toolName:
+          type: string
+          description: |
+            What the employee calls. Unique within the integration: a duplicate
+            is rejected rather than shadowing its twin.
+          examples: [acme_get_invoice]
+        description:
+          type: string
+          description: |
+            What the endpoint does. This is what the employee decides with, so
+            say when to use it, not just what it is.
+          examples: [Fetch one invoice by id]
+        method:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+        path:
+          type: string
+          description: |
+            A path, not a URL. The host comes from `baseUrl`. Placeholders in
+            braces are filled from parameters declared `in: path`.
+          examples: ['/v1/invoices/{invoiceId}']
+        parameters:
+          type: object
+          description: Keyed by parameter name.
+          additionalProperties:
+            $ref: '#/components/schemas/ToolParameter'
+        enabled:
+          type: boolean
+          default: true
+          description: |
+            Defaults to true. Only an enabled endpoint becomes a callable tool,
+            and `enabledToolCount` on the integration counts these.
+      required: [toolName, description, method, path]
+
     Integration:
       type: object
       properties:
@@ -160,8 +240,12 @@ components:
             requires `credentials` on create.
         tools:
           type: array
+          description: The declared endpoints, each a callable tool.
           items:
-            type: object
+            $ref: '#/components/schemas/IntegrationTool'
+        enabledToolCount:
+          type: integer
+          description: 'How many of `tools` have `enabled` set true.'
       required: [id, name, baseUrl, authType]
 
     Skill:
@@ -753,6 +837,13 @@ paths:
         Rows are augmented with template status where an integration came from
         the tenant library, so an instantiated template can be told apart from a
         locally created one. No pagination.
+
+        The response also carries `gatewayRestartNeeded`, which reports whether
+        integration changes are waiting on a restart. Integration tools and
+        credentials are loaded when the office boots, so a new integration, a
+        changed endpoint or a rotated secret does not reach a running employee
+        until it restarts. Apply them with
+        [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine).
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -770,6 +861,16 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Integration'
+                  gatewayRestartNeeded:
+                    type: boolean
+                    description: |
+                      True when changes are recorded that the running employee has
+                      not loaded. False means what you are reading is in force.
+                  pendingIntegrationChanges:
+                    type: array
+                    description: The changes waiting on a restart.
+                    items:
+                      type: object
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -797,6 +898,24 @@ paths:
         written into the office vault as a secret group and the integration is
         linked to that group by reference. Credentials are stored, not echoed:
         no read endpoint returns a secret value.
+
+        ## Declaring endpoints
+
+        `tools` is optional and is the highest value thing in the body. Each
+        entry becomes a tool the employee calls by name, carrying its own
+        parameter schema. Leave it out and the integration still works: the
+        employee reaches the host through `hos_integration_request`, supplying a
+        path itself, which means working from paths nobody confirmed.
+
+        **Every parameter needs an `in`.** It says where the value goes on the
+        wire. A parameter without one is rejected with a 400 rather than stored,
+        because a stored one would be dropped when the request was built and
+        nothing would report it.
+
+        Declared endpoints are validated before any vault work, so a bad entry
+        cannot leave a half-made integration behind. On success the integration's
+        skill is regenerated automatically, so a declared endpoint reaches the
+        employee's document without a second call.
 
         ### An authenticated integration
 
@@ -863,6 +982,25 @@ paths:
                     the software. When present it is used alongside `docsUrl` to
                     generate a more accurate skill, since a machine readable
                     contract beats prose.
+                tools:
+                  type: array
+                  description: |
+                    The endpoints to declare. Optional. Each becomes a named tool
+                    the employee can call.
+                  items:
+                    $ref: '#/components/schemas/IntegrationTool'
+                  examples:
+                    - - toolName: acme_get_invoice
+                        description: Fetch one invoice by id
+                        method: GET
+                        path: /v1/invoices/{invoiceId}
+                        enabled: true
+                        parameters:
+                          invoiceId:
+                            type: string
+                            required: true
+                            in: path
+                            description: The invoice id
               required: [name, baseUrl, authType]
       responses:
         '201':
@@ -927,7 +1065,18 @@ paths:
       tags: [Skills]
       summary: List skills
       operationId: listOfficeSkills
-      description: Lists every skill in the office. Requires `office:read`. No pagination.
+      description: |
+        Lists every skill in the office. Requires `office:read`. No pagination.
+
+        Skills are read onto the office machine when it boots, so a new skill, or
+        an edit to an existing one, does not reach a running employee until it
+        restarts. Apply changes with
+        [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine).
+
+        Read `contentSource` on each row before editing one. `manual` and
+        `verified` bodies are locked against automatic overwrite by integration
+        sync, and a `verified` body is a procedure that was proven against the
+        live API.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -1076,6 +1225,11 @@ paths:
       tags: [Skills]
       summary: Get a skill
       operationId: getOfficeSkill
+      description: |
+        Returns one skill including its `content` body. Requires `office:read`.
+
+        The skill ID is its `name`. Check `contentSource` before editing: sending
+        `content` back stamps the skill `manual` unless you say otherwise.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -1172,6 +1326,13 @@ paths:
       tags: [Skills]
       summary: Delete a skill
       operationId: deleteOfficeSkill
+      description: |
+        Removes the skill from the office. Requires `office:manage`.
+
+        Deleting a skill removes instructions, not access. A skill generated from
+        an integration will be written again by the next sync, and deleting it
+        never revokes a credential: remove the integration or its secret
+        reference for that.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2096,7 +2257,12 @@ paths:
       tags: [Integrations]
       summary: Get an integration
       operationId: getOfficeIntegration
-      description: Requires `office:read`.
+      description: |
+        Requires `office:read`.
+
+        Returns the connection and its declared endpoints. **No credential value
+        is returned**, here or anywhere else on this surface: `tools` and the
+        secret references are pointers, and the values live in a vault.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2124,8 +2290,17 @@ paths:
       description: |
         Requires `office:manage`.
 
-        Only `name` and `baseUrl` are updatable. Changing authentication means
-        managing the integration's secret references, not patching it here.
+        `name`, `baseUrl` and `tools` are updatable. Changing authentication means
+        managing the integration's secret references, not patching it here, and
+        `status` is system managed.
+
+        **`tools` replaces the whole array rather than merging into it.** Send the
+        full set you want. Endpoints are declared as a set, so a merge would leave
+        no way to remove one. Omit the field to leave the existing endpoints alone.
+
+        The same `in` rule applies as on create: a parameter without one is
+        rejected with a 400. Updating the endpoints regenerates the integration's
+        skill, and the office picks the change up on its next boot.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       requestBody:
@@ -2139,6 +2314,11 @@ paths:
                   type: string
                 baseUrl:
                   type: string
+                tools:
+                  type: array
+                  description: Replaces every declared endpoint. Omit to leave them unchanged.
+                  items:
+                    $ref: '#/components/schemas/IntegrationTool'
       responses:
         '200':
           description: The updated integration.
@@ -2522,6 +2702,12 @@ paths:
       tags: [Protocols]
       summary: Get a protocol
       operationId: getOfficeProtocol
+      description: |
+        Returns one protocol including its rule text. Requires `office:read`.
+
+        What you read here is not necessarily what is in force. Use
+        [List protocols](/docs/api-reference/offices/protocols/listOfficeProtocols)
+        for `gatewayRestartNeeded`.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2587,6 +2773,11 @@ paths:
       tags: [Protocols]
       summary: Delete a protocol
       operationId: deleteOfficeProtocol
+      description: |
+        Removes the rule. Requires `office:manage`.
+
+        Takes effect at the next office boot, so a running employee keeps
+        following a deleted protocol until it restarts.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2890,8 +3081,12 @@ paths:
                   type: string
                 tools:
                   type: array
+                  description: |
+                    Replaces the template's declared endpoints. See
+                    [Create an integration](/docs/api-reference/offices/integrations/createOfficeIntegration)
+                    for the same field on an office.
                   items:
-                    type: object
+                    $ref: '#/components/schemas/IntegrationTool'
                 websiteMetadata:
                   type: object
                 changelog:

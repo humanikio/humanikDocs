@@ -1,0 +1,183 @@
+---
+title: Skills
+description: The document generated from an integration, and what makes it worth trusting.
+---
+
+Connecting software gives an employee two separate things.
+
+The **integration** is the connection: a host, an authentication scheme, and a
+reference to a credential. It is what the office uses to actually make a call.
+
+The **skill** is a Markdown document describing that software, generated from the
+integration record. It is what the employee reads to know the connection exists
+and what to do with it.
+
+<Callout>
+  **This page is about skills that come from an integration.** For what a skill
+  is in general, how it reaches the employee, and how it differs from a protocol,
+  see [Skills and protocols](/docs/skills-and-protocols).
+</Callout>
+
+## How the document gets written
+
+Two steps, both automatic.
+
+<Steps>
+
+<Step>
+**Sync.** The integration is linked to a skill document. The link is a stable
+back reference, so the same integration always updates the same skill rather than
+creating a second one.
+</Step>
+
+<Step>
+**Compile.** A model reads the integration record and writes the body: what the
+software is, what each declared endpoint does, and what arguments it takes.
+</Step>
+
+</Steps>
+
+The record is the input. Everything the document says about your software is
+derived from what the integration declares, which is why
+[declaring endpoints](/docs/integrations/creating#endpoints-are-the-part-that-matters)
+is the highest value thing you can do to a connection.
+
+## A generated skill contains no credentials and no commands
+
+Read one and you will notice two absences. Both are deliberate.
+
+**There is no authentication section.** The employee never authenticates. The
+office attaches the key and signs the request, so a document telling the employee
+how to build an auth header would be describing work it does not do.
+
+**There are no shell commands.** No `curl`, no `fetch`, no scripts. An employee
+calls an integration as a tool, and an employee running on
+[a machine you own](/docs/devices) has no shell in the office at all. A document
+full of commands works in one place and fails in the other.
+
+<Callout type="warn">
+  **An older skill may still carry both.** Generated documents used to include an
+  authentication section and command examples. If you are reading one that does,
+  it was written under the previous behaviour. Regenerating it produces the
+  current shape.
+</Callout>
+
+## The two ways an employee calls an integration
+
+### A named tool, when the integration declares one
+
+Every enabled endpoint on an integration becomes a tool the employee can call by
+name. The tool carries its own parameter schema, so the employee is working from
+a documented contract rather than a guess.
+
+**Prefer this wherever you can.** It is the difference between an employee that
+knows an endpoint takes `invoiceId` in the path and one that is inferring it.
+
+### `hos_integration_request`, for everything else
+
+An integration with no endpoints declared is still fully callable. The employee
+names the integration and supplies a path, and the office does the rest:
+
+```
+hos_integration_request({
+  integration: "Acme Billing",
+  method: "GET",
+  path: "/v1/invoices/inv_7Kd2mQ",
+  query: { expand: "customer" }
+})
+```
+
+The office resolves the host, attaches the credential, signs the request and
+sends it. The key never enters the conversation.
+
+<Callout>
+  **The host is not a parameter.** An employee can only reach software you already
+  connected. It cannot be talked into sending your credential somewhere else,
+  because it never names a destination: it names one of your connections. The
+  worst case is misuse of an API you chose to connect.
+</Callout>
+
+Two properties worth knowing:
+
+**Query parameters go in `query`, not inside `path`.** For an integration that
+signs its requests, the query string is part of what gets signed, so a parameter
+smuggled into the path is not covered by the signature.
+
+**A name that is not connected is an error, not a guess.** If the employee asks
+for an integration this office does not have, the error lists the ones it does.
+
+This works identically on a machine you own. The call is made by the office, so
+no credential is copied to the device. See
+[Using your office's integrations from here](/docs/devices#using-your-offices-integrations-from-here).
+
+## Where the body came from matters
+
+Every skill records a `contentSource`, which is about the **body** rather than
+the origin:
+
+| `contentSource` | Means | Protected from sync |
+| --- | --- | --- |
+| `generated` | Derived from documentation, unconfirmed | No |
+| `manual` | Written or edited by a person | Yes |
+| `verified` | Proven against the live API | Yes |
+
+When an integration syncs, it skips skills whose body is `manual` or `verified`.
+A routine sync cannot discard a proven procedure or a human edit.
+
+<Callout type="warn">
+  **Editing a skill's body marks it `manual` automatically.** Sending `content`
+  without setting `contentSource` stamps it, on the reasoning that a human edit
+  is human authorship. That is usually what you want. It is a surprise if you did
+  not expect it.
+</Callout>
+
+<Callout type="warn">
+  **Regenerating replaces the body, and a `verified` stamp does not survive it.**
+  Locking protects a skill from routine sync, not from an explicit regenerate. A
+  `manual` body keeps its stamp and its wording is preserved, but a `verified` one
+  drops to `generated`: the proof was about the previous text, and it does not
+  carry over to text that has just been rewritten. Re-run verification to earn it
+  back. A regenerate that fails changes nothing.
+</Callout>
+
+Only one route produces `verified`, and it is worth asking for. See
+[Proving it works is a separate ask](/docs/integrations/creating#proving-it-works-is-a-separate-ask).
+
+## When a skill and a connection disagree
+
+They fail differently, and the difference tells you where to look.
+
+| Symptom | Where the problem is |
+| --- | --- |
+| The employee calls an endpoint that does not exist | The skill. Its body describes something the API does not have |
+| The employee calls the right endpoint and gets a `401` | The connection. The stored credential is rejected |
+| The employee does not try at all | The skill. Its description did not match the task |
+| The employee reports the integration is not connected | The connection. It is not attached to this office |
+
+Editing a skill to describe an endpoint does not make that endpoint reachable,
+and deleting a skill does not revoke a credential.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Skills and protocols"
+    href="/docs/skills-and-protocols"
+    description="What a skill is in general, and the rule that is not a skill at all."
+  />
+  <Card
+    title="Creating an integration"
+    href="/docs/integrations/creating"
+    description="Declaring endpoints yourself, or having Nova research and prove them."
+  />
+  <Card
+    title="Integrations and secrets"
+    href="/docs/integrations"
+    description="Where credentials live, and why an integration only points at one."
+  />
+  <Card
+    title="Skills API"
+    href="/docs/api-reference/offices/skills/listOfficeSkills"
+    description="Create, update, regenerate, and the locking rules."
+  />
+</Cards>

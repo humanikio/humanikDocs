@@ -3,7 +3,7 @@ title: Creating an integration
 description: Two ways to connect software to an employee, and when each one is the right choice.
 ---
 
-[Tools and secrets](/docs/tools-and-secrets) covers what an integration is: a host, an
+[Integrations and secrets](/docs/integrations) covers what an integration is: a host, an
 authentication scheme, a credential reference, and a list of endpoints that become tools.
 
 This page is about getting one made. There are three routes to the same object, and the choice
@@ -36,11 +36,9 @@ Create the integration with its endpoints in place:
 ```json
 {
   "name": "Acme Billing",
-  "platform": "acme",
-  "connection": {
-    "baseUrl": "https://api.acme.com",
-    "auth": { "type": "bearer" }
-  },
+  "baseUrl": "https://api.acme.com",
+  "authType": "bearer",
+  "credentials": { "API_KEY": "sk_live_..." },
   "tools": [
     {
       "toolName": "acme_get_invoice",
@@ -61,26 +59,37 @@ Create the integration with its endpoints in place:
 }
 ```
 
-Then point it at a credential with
-[`POST /offices/{officeId}/integrations/{integrationId}/secret-refs`](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef),
-and the employee can call `acme_get_invoice` by name on its next boot.
+`credentials` is required unless `authType` is `none`. The values go straight into the office
+vault as a secret group and the integration is linked to it by reference, so one call sets up
+the connection, the credential and the endpoints together. The employee can call
+`acme_get_invoice` by name on its next boot.
 
-Adding endpoints later is a
+To point an integration at a credential that already exists instead, use
+[`POST /offices/{officeId}/integrations/{integrationId}/secret-refs`](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef).
+
+Adding or changing endpoints later is a
 [`PATCH`](/docs/api-reference/offices/integrations/updateOfficeIntegration) on the integration.
-The skill is rewritten from the updated record by
-[`POST .../sync-skill`](/docs/api-reference/offices/integrations/syncOfficeIntegrationSkill),
-and the employee picks the tools up on its next boot.
+The skill is rewritten from the updated record automatically, and the employee picks the tools
+up on its next boot.
+
+<Callout type="warn">
+  **`tools` replaces the whole array. It does not merge.** Send the full set you want, because
+  endpoints are declared as a set and a merge would leave no way to remove one. Omit the field
+  to leave the existing endpoints alone.
+</Callout>
 
 <Callout type="warn">
   **Every parameter needs an `in`.** It says where the value goes on the wire: `path`, `query`,
-  `header`, or `body`. A parameter without one is dropped when the request is built, and
-  nothing reports it. The call simply goes out missing that value.
+  `header`, or `body`. A parameter without one is rejected with a `400` naming the field, rather
+  than stored. A stored one would be dropped when the request was built: the call would go out
+  missing that value and nothing would report it.
 </Callout>
 
 ### Endpoints are the part that matters
 
 An integration with no endpoints declared still works. It holds a credential and a host, and
-the employee can reach it by supplying a path itself.
+the employee reaches it with `hos_integration_request`, supplying a path itself. See
+[Integration skills](/docs/integrations/skills#the-two-ways-an-employee-calls-an-integration).
 
 But nothing has told the employee what paths exist. Its skill is written from the integration
 record, so with no endpoints to describe, the best it can offer is a plausible guess at what an
@@ -193,15 +202,15 @@ the verification stamp means.
 The rest of the surface is documented under
 [Integrations in the office reference](/docs/api-reference/offices/integrations/listOfficeIntegrations):
 reading and updating one, managing its secret references, and the template operations covered
-in [Tools and secrets](/docs/tools-and-secrets#templates-define-once-use-everywhere).
+in [Integrations and secrets](/docs/integrations#templates-define-once-use-everywhere).
 
 ## Where to go next
 
 <Cards>
-  <Card title="Tools and secrets" href="/docs/tools-and-secrets">
+  <Card title="Integrations and secrets" href="/docs/integrations">
     Where credentials live, and why an integration only points at one
   </Card>
-  <Card title="Skills and protocols" href="/docs/skills-and-protocols">
+  <Card title="Integration skills" href="/docs/integrations/skills">
     The document an employee reads, and what makes it trustworthy
   </Card>
   <Card title="Integrations reference" href="/docs/api-reference/offices/integrations/listOfficeIntegrations">
