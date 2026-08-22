@@ -69,41 +69,11 @@ A booking link is a page someone outside your account opens to pick a slot. What
 they book becomes an event on your calendar and can start an
 [automation](/docs/workflows).
 
-You can hand out a reusable page, or mint a one-time link for a specific person.
-A one-time link is a snapshot: it copies the settings as they are when you create
-it, so later changes do not reach links already sent.
-
-<Callout type="warn">
-  **A link's address must be unique across the whole platform**, not just your
-  account. A name someone else has taken is refused even though it is not taken
-  by you. Prefer something specific to something generic.
-</Callout>
-
-### Deciding when people can book
-
-Availability comes from five things, and knowing which one to reach for saves a
-lot of guessing:
-
-| To block out | Use |
-| --- | --- |
-| A recurring day, or part of one | Working hours. A weekday you leave out has no availability at all |
-| One specific date | A date override, set to nothing |
-| Time you are genuinely busy | Nothing. Real events on the bound accounts already remove those slots |
-| Breathing room around each booking | A buffer before, after, or both |
-| Volume | A cap per day, or per slot |
-
-A date override **replaces** that day's hours rather than adding to them, which
-is what makes an empty one mean closed.
-
-The part you do not configure is the useful part: **anything already in your
-calendar removes the slots it covers.** Blocking Thursday afternoon is a matter
-of putting something in your own calendar.
-
-<Callout type="warn">
-  **A day with a cap cannot be rescheduled within itself.** A booking being moved
-  still counts toward the day it is leaving, so once the cap is reached, moving
-  it to a later slot the same day is refused. Moving it to another day works.
-</Callout>
+You can hand out a reusable page, mint a one-time link for a specific person, or
+place the page on your own website. See
+[Booking links](/docs/calendars/booking-links) for how availability is decided,
+and [Embedding a booking page](/docs/calendars/embedding) for putting it on your
+site.
 
 ## Writes go to a real account
 
@@ -127,6 +97,16 @@ Two consequences worth planning for:
 
 <Cards>
   <Card
+    title="Booking links"
+    href="/docs/calendars/booking-links"
+    description="A public page where someone picks a slot on your calendar."
+  />
+  <Card
+    title="Embedding a booking page"
+    href="/docs/calendars/embedding"
+    description="Put the page on your own site, inline or as a popup."
+  />
+  <Card
     title="Calendars API"
     href="/docs/api-reference/calendars"
     description="Calendars, members, accounts, events, tasks and booking links."
@@ -135,10 +115,5 @@ Two consequences worth planning for:
     title="Workflows"
     href="/docs/workflows"
     description="A booking can start a deterministic sequence."
-  />
-  <Card
-    title="Offices and employees"
-    href="/docs/offices-and-employees"
-    description="What joins the member list alongside your colleagues."
   />
 </Cards>

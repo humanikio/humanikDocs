@@ -1,0 +1,198 @@
+---
+title: Booking links
+description: A public page where someone outside your account picks a slot on your calendar.
+---
+
+A **booking link** is a page you share. Someone opens it, sees the times you are
+actually free, and picks one. What they book becomes a real event on a real
+account, and it can start an [automation](/docs/workflows).
+
+Nothing about the page is a copy of your calendar. Availability is worked out
+from the accounts bound to the calendar at the moment the visitor looks, so a
+meeting you accepted a minute ago has already removed its slot.
+
+## Where to find them
+
+Booking links belong to a calendar, so they are managed on that calendar.
+
+<Steps>
+
+<Step>
+**Open the calendar.** Assets, then Calendars, then the calendar you want.
+</Step>
+
+<Step>
+**Go to Manage, then the Booking links tab.** This tab needs the manage
+permission on the calendar.
+</Step>
+
+<Step>
+**Create one with New.** You need at least one connected account bound under
+Sources first. A booking link has to have somewhere to write the appointment,
+and a calendar with nothing bound has nowhere.
+</Step>
+
+</Steps>
+
+Anyone who can read the calendar also sees the links on the workspace calendar
+page, where they can copy a link or take an embed snippet but not change
+anything.
+
+## Two kinds of link
+
+Both are the same thing configured differently.
+
+| | Reusable | One-time |
+| --- | --- | --- |
+| Who it is for | Anybody. Put it in a signature, on a site, in a campaign | One named person |
+| How many bookings | As many as your caps allow | One, then it stops working |
+| Its address | The name you choose | A long unguessable string |
+| Where it comes from | You create it | You mint it from a reusable link |
+
+A one-time link is a **snapshot**. It copies the settings as they stand the
+moment you create it, so editing the original afterwards does not reach links you
+have already sent. That is the point of it, and it is also the thing that
+surprises people: fixing a typo on the reusable page does not fix the invitation
+already sitting in someone's inbox.
+
+<Callout type="warn">
+  **A link's address must be unique across the whole platform**, not just your
+  account. An address someone else has taken is refused even though it is not
+  taken by you. Prefer something specific to something generic.
+</Callout>
+
+Changing the address of a link you have already shared breaks every copy of it
+that is out there. The console keeps the field locked behind a deliberate
+"Change URL" step for that reason.
+
+## Deciding when people can book
+
+Availability comes from five things, and knowing which one to reach for saves a
+lot of guessing.
+
+| To block out | Use |
+| --- | --- |
+| A recurring day, or part of one | Working hours. A weekday you leave out has no availability at all |
+| One specific date | A date override, set to nothing |
+| Time you are genuinely busy | Nothing. Real events on the bound accounts already remove those slots |
+| Breathing room around each booking | A buffer before, after, or both |
+| Volume | A cap per day, or per slot |
+
+A date override **replaces** that day's hours rather than adding to them, which
+is what makes an empty one mean closed.
+
+The part you do not configure is the useful part: **anything already in your
+calendar removes the slots it covers.** Blocking Thursday afternoon is a matter
+of putting something in your own calendar.
+
+An event marked free, rather than busy, does not remove anything. That is
+deliberate, so a day held open with a placeholder still takes bookings.
+
+<Callout type="warn">
+  **A day with a cap cannot be rescheduled within itself.** A booking being moved
+  still counts toward the day it is leaving, so once the cap is reached, moving
+  it to a later slot the same day is refused. Moving it to another day works.
+</Callout>
+
+## What the booker sees afterwards
+
+Under **After booking** you choose one of two things.
+
+| | What happens |
+| --- | --- |
+| **Show a message** | The page confirms the booking and shows your text. The default reads "Your booking is confirmed." |
+| **Send them to a page** | The browser goes to a URL you give, so you can use your own thank-you page and count the conversion there |
+
+A redirect needs a full address starting with `http://` or `https://`.
+
+<Callout>
+  **A redirect behaves correctly inside an embed.** The page around the widget
+  navigates, not just the widget, so the visitor does not end up looking at your
+  thank-you page in a small box. This needs the embed script rather than a plain
+  frame. See [Embedding a booking page](/docs/calendars/embedding).
+</Callout>
+
+Either way the booker also gets a link of their own for rescheduling and
+cancelling.
+
+## Rescheduling and cancelling
+
+The link the booker keeps is the only handle they need, and it stays live after
+the booking is made. They can move the appointment to another open slot, or
+cancel it, without an account and without contacting you.
+
+Their page reads the **real event**, not a stored copy of it. If you drag the
+appointment to a different time in Google or Outlook, that is the time they see.
+
+## Turning one off, and deleting it
+
+**Turning a link off** stops it taking new bookings and leaves everything already
+booked alone. This is usually what you want.
+
+**Deleting a link** removes the link, its public address, and any one-time links
+minted from it. Appointments already on the calendar are never touched: two
+people agreed to that meeting, and tidying up a link is not a reason for it to
+vanish.
+
+<Callout>
+  **Deleting a link that has bookings ahead of it is refused, and tells you how
+  many.** That is a check, not a failure. You can delete it anyway, but the
+  people who booked lose their reschedule and cancel link, so cancelling those
+  bookings first is usually kinder.
+</Callout>
+
+## Doing this from the API
+
+Every booking link operation is available programmatically, so you can create a
+page per campaign, per territory, or per new hire without opening the console.
+
+| To | Use |
+| --- | --- |
+| See what exists | [List booking links](/docs/api-reference/calendars/booking-links/listBookingLinks) |
+| Make one | [Create a booking link](/docs/api-reference/calendars/booking-links/createBookingLink) |
+| Read one back | [Get a booking link](/docs/api-reference/calendars/booking-links/getBookingLink) |
+| Change its settings | [Update a booking link](/docs/api-reference/calendars/booking-links/updateBookingLink) |
+| Stop or restart it | [Enable or disable a booking link](/docs/api-reference/calendars/booking-links/setBookingLinkEnabled) |
+| Mint one for a named person | [Mint a single-use link](/docs/api-reference/calendars/booking-links/generateSingleUseLink) |
+| Remove it | [Delete a booking link](/docs/api-reference/calendars/booking-links/deleteBookingLink) |
+
+Each of these takes the ID of the calendar the link belongs to. Get it from
+[List calendars](/docs/api-reference/calendars/calendars/listCalendars).
+
+The page a booker's browser calls is documented too, under the **Public booking**
+tag. You only need it if you are building your own booking interface rather than
+sharing or embedding ours.
+
+| To | Use |
+| --- | --- |
+| Read a page's public settings | [Read a public booking page](/docs/api-reference/calendars/public-booking/getPublicBookingLink) |
+| Get open times | [List open slots](/docs/api-reference/calendars/public-booking/listPublicBookingSlots) |
+| Book one | [Book a slot](/docs/api-reference/calendars/public-booking/bookSlot) |
+| Look up a booking | [Read a booking](/docs/api-reference/calendars/public-booking/getBookingByToken) |
+| Move it | [Move a booking](/docs/api-reference/calendars/public-booking/rescheduleBooking) |
+| Cancel it | [Cancel a booking](/docs/api-reference/calendars/public-booking/cancelBooking) |
+
+<Callout type="warn">
+  **Those six take no key at all.** The slug, or the booker's own manage token, is
+  the access. Treat a reusable slug as public, because it is.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Embedding a booking page"
+    href="/docs/calendars/embedding"
+    description="Put the page on your own site, inline or as a popup."
+  />
+  <Card
+    title="Booking links API"
+    href="/docs/api-reference/calendars"
+    description="Create, update, disable and delete links programmatically."
+  />
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="A booking can start a deterministic sequence."
+  />
+</Cards>

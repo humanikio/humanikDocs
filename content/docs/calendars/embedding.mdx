@@ -1,0 +1,195 @@
+---
+title: Embedding a booking page
+description: Put a booking page on your own website, as an inline panel, a popup, or a floating button.
+---
+
+A [booking link](/docs/calendars/booking-links) is a page you can share as a URL.
+It is also a page you can place inside your own site, so somebody books a time
+without ever leaving it.
+
+Nothing changes about the booking itself. The same availability, the same
+questions, the same appointment on the same account. What changes is where the
+visitor is standing when they do it.
+
+## Getting the code
+
+<Steps>
+
+<Step>
+**Open the calendar and go to Booking links.** Assets, then Calendars, then the
+calendar, then Manage, then the Booking links tab.
+</Step>
+
+<Step>
+**Choose Share and embed on the link you want.** It is the icon next to Copy on
+each row. The same button is on the workspace calendar page, so somebody with
+read access can take a snippet without being able to change the link.
+</Step>
+
+<Step>
+**Pick a placement, set the options, and copy the code.** The preview underneath
+is the real page at the real address, so what you see is what your visitors get.
+</Step>
+
+</Steps>
+
+## Three ways to place it
+
+| | What the visitor sees | Reach for it when |
+| --- | --- | --- |
+| **Inline** | The booking page sitting in your layout | Booking is the point of the page. A contact page, a pricing page, a landing page |
+| **Popup** | Your own button, which opens the page over the site | You already have a call to action and want it to do this |
+| **Floating** | A small button in the corner of every page | You want booking available everywhere without designing it in |
+
+## The code
+
+One script tag per page, wherever you like. Then one snippet per placement.
+
+**Inline.** The container is where the page appears.
+
+```html
+<script src="https://app.humanik.io/embed.js" async></script>
+
+<div class="humanik-booking"
+     data-slug="intro-call"
+     data-height="700"
+     style="min-width:320px"></div>
+```
+
+**Popup.** Put the attribute on anything clickable you already have.
+
+```html
+<script src="https://app.humanik.io/embed.js" async></script>
+
+<button type="button" data-humanik-popup="intro-call">Book a time</button>
+```
+
+**Floating button.**
+
+```html
+<script src="https://app.humanik.io/embed.js" async></script>
+
+<div class="humanik-booking" data-mode="badge"
+     data-slug="intro-call"
+     data-text="Book a time"></div>
+```
+
+`data-slug` is the last part of the link's address. A link at
+`app.humanik.io/book/intro-call` has a slug of `intro-call`. The Share and embed
+window fills it in for you.
+
+## Options
+
+Set these on the same element. Everything is optional except the slug.
+
+| Attribute | Does |
+| --- | --- |
+| `data-slug` | Which booking page to show. Required |
+| `data-theme` | `light`, `dark`, or `auto` to follow the visitor's own setting. Defaults to light |
+| `data-accent` | A six digit colour, without the `#`, for buttons and highlights |
+| `data-height` | Starting height in pixels for an inline embed. It adjusts itself after that |
+| `data-hide-details` | `true` drops the summary panel on the left. Useful when the page around it already says what the meeting is |
+| `data-text` | The label on a floating button |
+| `data-color` | The colour of a floating button |
+| `data-prefill-<question>` | Fills a booking question in advance. See below |
+| `data-resize` | `false` turns off automatic height. Rarely wanted |
+
+## Filling in what you already know
+
+If your site knows who the visitor is, do not make them type it again. Name any
+booking question and give it a value.
+
+```html
+<div class="humanik-booking"
+     data-slug="intro-call"
+     data-prefill-name="Ada Lovelace"
+     data-prefill-email="ada@example.com"></div>
+```
+
+The part after `data-prefill-` is the question's key, so custom questions work
+the same way as the built in ones. A value for a question the link does not ask
+is ignored rather than added.
+
+The same thing works on a plain shared link, as a query string:
+
+```
+https://app.humanik.io/book/intro-call?name=Ada%20Lovelace&email=ada@example.com
+```
+
+Campaign parameters such as `utm_source` on the page around the embed are carried
+through to the booking automatically. You do not need to copy them onto the
+snippet.
+
+## Knowing when somebody books
+
+The embed announces what is happening on the page around it, so you can count a
+booking as a conversion without asking us for anything.
+
+```html
+<script>
+  window.addEventListener('humanik:booking', function (e) {
+    if (e.detail.event === 'booked') {
+      // e.detail.payload = { slug, startMs, endMs }
+    }
+  })
+</script>
+```
+
+| Event | When |
+| --- | --- |
+| `ready` | The widget has loaded and resolved the link |
+| `time_selected` | A visitor picked a time but has not submitted yet |
+| `booked` | The appointment was created. This is the conversion |
+| `redirect` | The link is set to send bookers to a page, and that is about to happen |
+
+The booker's answers, their email address, and their reschedule link are
+deliberately **not** in any of these. Your site gets the fact of a booking and
+its time, which is what a conversion needs, and nothing about the person.
+
+## Without the script
+
+A plain frame works and takes real bookings.
+
+```html
+<iframe src="https://app.humanik.io/book/intro-call?embed=1"
+        width="100%" height="700" frameborder="0" title="Booking"></iframe>
+```
+
+It gives up three things, and they are worth knowing before you choose it:
+
+- **It cannot resize itself.** You pick a height and live with it, including the
+  scrollbar inside the frame when the content is taller.
+- **It cannot tell your page anything.** No booking event, so no conversion
+  tracking.
+- **A redirect after booking happens inside the frame.** Your thank-you page
+  appears in the box rather than replacing the page.
+
+Use it when adding a script is genuinely not possible. Otherwise the script is
+the same amount of typing and does more.
+
+## What you cannot embed
+
+**One-time links.** A one-time link stops working after a single booking, so
+putting one on a public page means the first visitor consumes it and everybody
+after them sees an error. The console only offers Share and embed on reusable
+links for this reason. Send one-time links directly to the person they are for.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Booking links"
+    href="/docs/calendars/booking-links"
+    description="Availability, caps, and what happens after somebody books."
+  />
+  <Card
+    title="Booking links API"
+    href="/docs/api-reference/calendars"
+    description="Create and manage the links you embed."
+  />
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="A booking can start a deterministic sequence."
+  />
+</Cards>

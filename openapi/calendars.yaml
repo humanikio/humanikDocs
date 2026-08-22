@@ -45,6 +45,10 @@ tags:
     description: Per-caller display settings.
   - name: Booking links
     description: Shareable pages that let someone else pick a slot.
+  - name: Public booking
+    description: |
+      What a booker's browser calls. No key, no account: the slug or the manage
+      token is the access.
 
 components:
   securitySchemes:
@@ -67,6 +71,33 @@ components:
       schema:
         type: string
         examples: [cal_7Kd2mQ]
+    BookingSlug:
+      name: slug
+      in: path
+      required: true
+      description: |
+        The last part of the link's public address. A link shared as
+        `/book/intro-call` has a slug of `intro-call`. It is returned by
+        [List booking links](/docs/api-reference/calendars/booking-links/listBookingLinks)
+        and by
+        [Create a booking link](/docs/api-reference/calendars/booking-links/createBookingLink),
+        and a one-time link's slug is returned by
+        [Mint a single-use link](/docs/api-reference/calendars/booking-links/generateSingleUseLink).
+      schema:
+        type: string
+        examples: [intro-call]
+    ManageToken:
+      name: token
+      in: path
+      required: true
+      description: |
+        The handle the booker received in the response to
+        [Book a slot](/docs/api-reference/calendars/public-booking/bookSlot). It is
+        the only way back to a booking, it is not derivable from anything else,
+        and it is never returned by any authenticated endpoint.
+      schema:
+        type: string
+        examples: [kR8vQ2m9exampleToken-xyz]
 
   responses:
     BadRequest:
@@ -96,6 +127,33 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     ServerError:
       description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    LinkNotFound:
+      description: No link with this address, or no booking with this token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    LinkUnavailable:
+      description: |
+        The link exists but cannot be used: it was turned off, it expired, a
+        one-time link has already been booked, or its calendar was deleted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ProviderWriteFailed:
+      description: |
+        The calendar provider refused the write, so nothing was created, moved or
+        cancelled. Safe to retry.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: |
+        Rate limited. Two limits apply to these routes and either can fire: one
+        per caller address, and one per link so a single page cannot be flooded
+        from many addresses. `Retry-After` carries the wait in seconds.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1704,6 +1762,12 @@ paths:
                   description: |
                     What the booker sees after booking. Defaults to a message
                     reading "Your booking is confirmed."
+
+                    A `redirect` sends the browser to `value`, which must be a
+                    full `http://` or `https://` address. Where the booking page
+                    is embedded in a site with the embed script, the page around
+                    the widget navigates rather than the widget itself. See
+                    [Embedding a booking page](/docs/calendars/embedding).
                   properties:
                     type:
                       type: string
@@ -1977,3 +2041,412 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
+
+  # ── Public booking ─────────────────────────────────────────────────────────
+  # No auth on any of these: `security: []` overrides the document default.
+  # The slug or the manage token IS the credential.
+
+  /public/booking/{slug}:
+    parameters:
+      - $ref: '#/components/parameters/BookingSlug'
+    get:
+      operationId: getPublicBookingLink
+      summary: Read a public booking page
+      tags: [Public booking]
+      security: []
+      description: |
+        The settings a booking page needs in order to render: its name, how long
+        the meeting runs, the timezone its hours are written in, and the
+        questions it asks.
+
+        **No key.** Anyone holding the address can call this, which is the point
+        of a booking page. Reusable slugs are readable and guessable by design;
+        one-time slugs are 144 bits of randomness.
+
+        **Deliberately partial.** Availability rules, caps and the destination
+        account are never returned. A caller learns what to show a booker and
+        nothing about how the calendar behind it is configured.
+      responses:
+        '200':
+          description: The page's public settings.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  link:
+                    type: object
+                    properties:
+                      slug: { type: string, examples: [intro-call] }
+                      type:
+                        type: string
+                        enum: [event-type, single-use]
+                        description: A reusable page, or a one-time link that stops working after one booking.
+                      name: { type: string, examples: [Intro call] }
+                      description: { type: string }
+                      host:
+                        type: string
+                        description: A free text label for who the meeting is with. Not an identifier.
+                      durationMin: { type: integer, examples: [30] }
+                      timezone:
+                        type: string
+                        description: |
+                          IANA zone the host's working hours are written in. Slot
+                          times are absolute, so this is for display only.
+                        examples: [America/Toronto]
+                      conference:
+                        type: string
+                        enum: [meet, teams, none]
+                      form:
+                        type: object
+                        description: The questions to ask. `name` and `email` are always present.
+        '404': { $ref: '#/components/responses/LinkNotFound' }
+        '410': { $ref: '#/components/responses/LinkUnavailable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: bookSlot
+      summary: Book a slot
+      tags: [Public booking]
+      security: []
+      description: |
+        Creates the appointment on the provider account behind the link, invites
+        the booker, and returns the handle they use to change it later.
+
+        **The time is re-checked live, not against the listing.** Slot listings
+        come from a cache that a cron keeps fresh. This call reads the provider
+        directly and re-runs the same availability rules, so a time that filled
+        between listing and booking is refused with `409` rather than
+        double-booked. Send a `startMs` exactly as returned by
+        [List open slots](/docs/api-reference/calendars/public-booking/listPublicBookingSlots);
+        a time that is merely inside working hours is not enough.
+
+        **A one-time link is consumed here**, atomically and just before the
+        provider write. Two people racing the same one-time link produce exactly
+        one booking; the loser gets `410`. If the provider write then fails, the
+        link is released rather than burnt.
+
+        **Only `email` is validated.** Questions the link marks as required are
+        enforced by the booking page, not by this endpoint, so a direct caller
+        can omit them.
+
+        **Keep `manageToken`.** It is the only way back to this booking, and it
+        is not recoverable from any other endpoint. Rarely, the appointment is
+        created but its record is not: the response is still `201`, the booking
+        is real, and `manageToken` is **absent** with a confirmation message
+        telling the booker to contact the host instead. Treat a missing token as
+        "booked, not changeable here" rather than as a failure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startMs:
+                  type: integer
+                  description: |
+                    Start of the chosen slot, epoch milliseconds, exactly as
+                    returned by the slots endpoint.
+                  examples: [1785500000000]
+                form:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Answers keyed by question key. `email` is required. `name` is
+                    asked by every page and used to title the appointment.
+                  examples:
+                    - name: Ada Lovelace
+                      email: ada@example.com
+                tz:
+                  type: string
+                  description: |
+                    The booker's own timezone. Recorded for display only and
+                    ignored when computing the appointment.
+                  examples: [Europe/London]
+              required: [startMs, form]
+            examples:
+              standard:
+                summary: Book a listed slot
+                value:
+                  startMs: 1785500000000
+                  form:
+                    name: Ada Lovelace
+                    email: ada@example.com
+                  tz: Europe/London
+      responses:
+        '201':
+          description: Booked. The appointment exists on the provider.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  sourceEventId:
+                    type: string
+                    description: The event's identifier at the provider.
+                  startMs: { type: integer }
+                  endMs: { type: integer }
+                  manageToken:
+                    type: string
+                    description: |
+                      Handle for changing this booking. Absent in the rare case
+                      described above. Store it: nothing else returns it.
+                  confirmation:
+                    type: object
+                    description: |
+                      What to show the booker. `redirect` means send them to
+                      `value` instead of rendering a message.
+                    properties:
+                      type: { type: string, enum: [message, redirect] }
+                      value: { type: string }
+        '400':
+          description: '`startMs` is missing or not a number, or `email` is absent.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/LinkNotFound' }
+        '409':
+          description: |
+            That time is no longer available. Re-fetch the slots and offer the
+            booker a different one.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '410': { $ref: '#/components/responses/LinkUnavailable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500':
+          description: The calendar has no destination account bound.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/ProviderWriteFailed' }
+        '503':
+          description: |
+            A one-time link could not be reserved because another request holds
+            it. Safe to retry once.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /public/booking/{slug}/slots:
+    parameters:
+      - $ref: '#/components/parameters/BookingSlug'
+    get:
+      operationId: listPublicBookingSlots
+      summary: List open slots
+      tags: [Public booking]
+      security: []
+      description: |
+        Open start times in a window, with everything already committed on the
+        bound accounts removed.
+
+        **Times are absolute instants.** Localise them for display and send them
+        back unchanged. Re-deriving a start time from a wall clock is how a
+        booking lands an hour out across a daylight-saving boundary.
+
+        **Served from cache.** A cron keeps it fresh, so a listing can be a few
+        minutes stale. That is deliberate: listing is cheap and frequent, and
+        [Book a slot](/docs/api-reference/calendars/public-booking/bookSlot)
+        pays for a live provider read instead.
+
+        An event marked free rather than busy does not remove a slot, so a day
+        held open with a placeholder still takes bookings.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start of the window, epoch milliseconds.
+          schema: { type: integer, examples: [1785000000000] }
+        - name: to
+          in: query
+          required: true
+          description: |
+            End of the window, epoch milliseconds. Must be after `from`, and the
+            window must be 62 days or less.
+          schema: { type: integer, examples: [1787592000000] }
+      responses:
+        '200':
+          description: Open slots, ascending. An empty array means nothing is free in the window.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        startMs: { type: integer, examples: [1785500000000] }
+                        endMs: { type: integer, examples: [1785501800000] }
+        '400':
+          description: '`from` or `to` is missing or not a number, `to` is not after `from`, or the window is longer than 62 days.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/LinkNotFound' }
+        '410': { $ref: '#/components/responses/LinkUnavailable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /public/booking/manage/{token}:
+    parameters:
+      - $ref: '#/components/parameters/ManageToken'
+    get:
+      operationId: getBookingByToken
+      summary: Read a booking
+      tags: [Public booking]
+      security: []
+      description: |
+        What the booker sees on their own page: when the appointment is, whether
+        it still stands, and whether they may still change it.
+
+        **Times come from the real event, not from a stored copy.** If the host
+        drags the appointment to a different time in Google or Outlook, that is
+        the time returned here.
+
+        Use `slug` to fetch fresh slots when offering a reschedule.
+      responses:
+        '200':
+          description: The booking.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  booking:
+                    type: object
+                    properties:
+                      name: { type: string, examples: [Intro call] }
+                      slug:
+                        type: string
+                        description: The link this was booked through, for fetching slots to reschedule into.
+                      startMs: { type: integer }
+                      endMs: { type: integer }
+                      durationMin: { type: integer }
+                      timezone: { type: string }
+                      status:
+                        type: string
+                        enum: [confirmed, cancelled, rescheduled]
+                      canReschedule:
+                        type: boolean
+                        description: False once the booking is cancelled, in the past, or its link has been deleted.
+                      canCancel:
+                        type: boolean
+                        description: False once the booking is cancelled or in the past.
+        '404': { $ref: '#/components/responses/LinkNotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /public/booking/manage/{token}/reschedule:
+    parameters:
+      - $ref: '#/components/parameters/ManageToken'
+    post:
+      operationId: rescheduleBooking
+      summary: Move a booking
+      tags: [Public booking]
+      security: []
+      description: |
+        Moves the appointment to another open time and notifies everyone on it.
+
+        The new time goes through the same live check as a first booking, so it
+        must be a real opening at the moment of the call.
+
+        **A day with a cap cannot be rescheduled within itself.** A booking being
+        moved still counts toward the day it is leaving, so once that day's cap
+        is reached, moving to a later slot on the same day is refused. Another
+        day works.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startMs:
+                  type: integer
+                  description: |
+                    The new start, epoch milliseconds, from
+                    [List open slots](/docs/api-reference/calendars/public-booking/listPublicBookingSlots)
+                    for this booking's `slug`.
+                  examples: [1785600000000]
+              required: [startMs]
+      responses:
+        '200':
+          description: Moved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  startMs: { type: integer }
+                  endMs: { type: integer }
+        '400':
+          description: '`startMs` is missing or not a number.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: No booking with this token, or the link it was booked through no longer exists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: |
+            Either the booking is cancelled or already in the past, or the
+            requested time is not available.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500':
+          description: The booking has no recorded destination account, so it cannot be moved here.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/ProviderWriteFailed' }
+
+  /public/booking/manage/{token}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ManageToken'
+    post:
+      operationId: cancelBooking
+      summary: Cancel a booking
+      tags: [Public booking]
+      security: []
+      description: |
+        Deletes the appointment at the provider and notifies everyone on it.
+
+        Cancelling frees the slot for somebody else and releases it from the
+        link's daily and per-slot caps.
+
+        No body. The token is the whole request.
+      responses:
+        '200':
+          description: Cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '404': { $ref: '#/components/responses/LinkNotFound' }
+        '409':
+          description: The booking is already cancelled, or it is in the past.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500':
+          description: The booking has no recorded destination account, so it cannot be cancelled here.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/ProviderWriteFailed' }

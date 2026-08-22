@@ -11,8 +11,10 @@ drifts.
 
 <Callout>
   **New to this?** [Calendars and booking](/docs/calendars) covers how one
-  calendar spans several accounts, why membership rather than workspace grants
-  access, and how booking links work. This page describes the API surface.
+  calendar spans several accounts and why membership rather than workspace
+  grants access. [Booking links](/docs/calendars/booking-links) and
+  [Embedding a booking page](/docs/calendars/embedding) cover the public side.
+  This page describes the API surface.
 </Callout>
 
 ## Getting one working
@@ -105,6 +107,24 @@ consequences worth planning for:
 A booking link is a page someone outside your account opens to pick a slot.
 Bookings land on this calendar and can start an automation.
 
+Two tags cover this, and they are two different audiences.
+
+| Tag | Who calls it | Auth |
+| --- | --- | --- |
+| **Booking links** | You, or your backend, creating and managing pages | A service account key |
+| **Public booking** | A booker's browser, reading times and booking one | None |
+
+[Booking links](/docs/calendars/booking-links) explains what the pages are for,
+and [Embedding a booking page](/docs/calendars/embedding) covers placing one on a
+customer's own site.
+
+<Callout type="warn">
+  **The Public booking operations take no key.** They are the one unauthenticated
+  surface in this reference: the slug, or the booker's manage token, is the
+  access. Do not send a service account key to them, and do not treat a slug as a
+  secret. A reusable slug is meant to be shared and is guessable by design.
+</Callout>
+
 ### Blocking time out
 
 Availability is computed from five things, and understanding which one to reach
@@ -132,6 +152,10 @@ is a matter of putting something in your own calendar.
   another day works.
 </Callout>
 
+**A `redirect` confirmation navigates the embedding page**, not the widget, when
+the page is placed with the embed script. A plain frame cannot do this. See
+[Embedding a booking page](/docs/calendars/embedding).
+
 Two more behaviours to know:
 
 <Callout type="warn">
@@ -149,9 +173,6 @@ Two more behaviours to know:
 
 ## What is not here
 
-**The public booking page endpoints.** The routes a booker's browser calls are
-not documented yet.
-
 **Provider setup.** Connecting a Google or Outlook account is a console flow.
 This reference starts once an account exists.
 
@@ -161,6 +182,16 @@ caller-facing.
 ## Where to go next
 
 <Cards>
+  <Card
+    title="Booking links"
+    href="/docs/calendars/booking-links"
+    description="Availability, one-time links, and what happens after a booking."
+  />
+  <Card
+    title="Embedding a booking page"
+    href="/docs/calendars/embedding"
+    description="Put the page on a customer's own site."
+  />
   <Card
     title="Workflows"
     href="/docs/workflows"

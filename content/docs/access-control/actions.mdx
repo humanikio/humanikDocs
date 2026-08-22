@@ -27,7 +27,11 @@ granted at the workspace above it to cover every office in it.
 | `tenant:manage` | Administer the account: stored credentials, workspace assignment, the shared template library. The highest grant on the platform, and no built-in role carries it. | `console` |
 
 <Accordions>
-<Accordion title="Endpoints that need `tenant:manage` (9)">
+<Accordion title="Endpoints that need `tenant:read` (2)">
+- [Get an integration template](/docs/api-reference/offices/tenant-libraries/getGlobalIntegration)
+- [Get a website](/docs/api-reference/offices/tenant-libraries/getTenantWebsite)
+</Accordion>
+<Accordion title="Endpoints that need `tenant:manage` (10)">
 - [Add a template secret reference](/docs/api-reference/offices/tenant-libraries/addGlobalIntegrationSecretRef)
 - [Create an integration template](/docs/api-reference/offices/tenant-libraries/createGlobalIntegration)
 - [Delete an integration template](/docs/api-reference/offices/tenant-libraries/deleteGlobalIntegration)
@@ -37,6 +41,7 @@ granted at the workspace above it to cover every office in it.
 - [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites)
 - [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
 - [Update an integration template](/docs/api-reference/offices/tenant-libraries/updateGlobalIntegration)
+- [Update a website](/docs/api-reference/offices/tenant-libraries/updateTenantWebsite)
 </Accordion>
 </Accordions>
 
@@ -148,12 +153,17 @@ granted at the workspace above it to cover every office in it.
 | `office:manage` | Administer an office: its integrations, scheduled work, configuration, and the office itself. | `office` |
 
 <Accordions>
-<Accordion title="Endpoints that need `office:read` (15)">
+<Accordion title="Endpoints that need `office:read` (21)">
 - [Get an office](/docs/api-reference/offices/offices/getOffice)
+- [Get an allocated app](/docs/api-reference/offices/allocations/getOfficeApp)
 - [Get office cloud config](/docs/api-reference/offices/offices/getOfficeCloudConfig)
 - [Get the office's identity](/docs/api-reference/offices/identity/getOfficeIam)
 - [Get an integration](/docs/api-reference/offices/integrations/getOfficeIntegration)
+- [Get an allocated namespace](/docs/api-reference/offices/allocations/getOfficeNamespace)
+- [Get a protocol](/docs/api-reference/offices/protocols/getOfficeProtocol)
+- [Get a skill](/docs/api-reference/offices/skills/getOfficeSkill)
 - [List office API keys](/docs/api-reference/offices/identity/listOfficeApiKeys)
+- [List allocated apps](/docs/api-reference/offices/allocations/listOfficeApps)
 - [List allocated browsers](/docs/api-reference/offices/allocations/listOfficeBrowsers)
 - [List inherited tenant secrets](/docs/api-reference/offices/integrations/listOfficeInheritedTenantSecrets)
 - [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations)
@@ -163,6 +173,7 @@ granted at the workspace above it to cover every office in it.
 - [Find offices using an app](/docs/api-reference/offices/allocations/listOfficesByApp)
 - [Find offices using a namespace](/docs/api-reference/offices/allocations/listOfficesByNamespace)
 - [List skills](/docs/api-reference/offices/skills/listOfficeSkills)
+- [List allocated websites](/docs/api-reference/offices/allocations/listOfficeWebsites)
 - [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
 </Accordion>
 <Accordion title="Endpoints that need `office:use` (3)">
@@ -170,7 +181,7 @@ granted at the workspace above it to cover every office in it.
 - [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine)
 - [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine)
 </Accordion>
-<Accordion title="Endpoints that need `office:manage` (30)">
+<Accordion title="Endpoints that need `office:manage` (32)">
 - [Add a secret reference](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef)
 - [Allocate an app](/docs/api-reference/offices/allocations/allocateOfficeApp)
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
@@ -187,6 +198,8 @@ granted at the workspace above it to cover every office in it.
 - [Delete an office](/docs/api-reference/offices/offices/deleteOffice)
 - [Delete the office API key](/docs/api-reference/offices/identity/deleteOfficeApiKey)
 - [Delete an integration](/docs/api-reference/offices/integrations/deleteOfficeIntegration)
+- [Delete a protocol](/docs/api-reference/offices/protocols/deleteOfficeProtocol)
+- [Delete a skill](/docs/api-reference/offices/skills/deleteOfficeSkill)
 - [Get an office's model provider](/docs/api-reference/offices/model-provider/getOfficeModelProvider)
 - [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
 - [Provision a missing office API key](/docs/api-reference/offices/identity/provisionOfficeApiKey)
@@ -283,10 +296,13 @@ granted at the workspace above it to cover every office in it.
 | `contact:manage` | Create, update, archive, import and delete contacts, and curate the tag registry. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `contact:read` (7)">
+<Accordion title="Endpoints that need `contact:read` (10)">
 - [Find a contact by phone](/docs/api-reference/crm/contacts/findContactByPhone)
 - [Get a contact](/docs/api-reference/crm/contacts/getContact)
+- [Get many contacts by id](/docs/api-reference/crm/contacts/getContactsByIds)
+- [Get a custom field definition](/docs/api-reference/crm/custom-fields/getCustomField)
 - [List notes](/docs/api-reference/crm/notes/listContactNotes)
+- [List a contact's workflow runs](/docs/api-reference/crm/contacts/listContactRuns)
 - [List contacts](/docs/api-reference/crm/contacts/listContacts)
 - [List custom field definitions](/docs/api-reference/crm/custom-fields/listCustomFields)
 - [List the tag registry](/docs/api-reference/crm/tags/listTags)
@@ -383,8 +399,23 @@ granted at the workspace above it to cover every office in it.
 | `datasource:manage` | Create and change data namespaces, sources and subscriptions. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `datasource:read` (1)">
+<Accordion title="Endpoints that need `datasource:read` (7)">
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
+- [Get a bucket](/docs/api-reference/buckets/buckets/getBucket)
+- [Get a file](/docs/api-reference/buckets/files/getObject)
+- [List buckets](/docs/api-reference/buckets/buckets/listBuckets)
+- [List files](/docs/api-reference/buckets/files/listObjects)
+- [Resolve a path](/docs/api-reference/buckets/paths/resolveObject)
+- [Search files](/docs/api-reference/buckets/search/searchObjects)
+</Accordion>
+<Accordion title="Endpoints that need `datasource:manage` (7)">
+- [Create a bucket](/docs/api-reference/buckets/buckets/createBucket)
+- [Create a folder](/docs/api-reference/buckets/folders/createFolder)
+- [Delete a bucket](/docs/api-reference/buckets/buckets/deleteBucket)
+- [Delete a file](/docs/api-reference/buckets/files/deleteObject)
+- [Move or rename a file](/docs/api-reference/buckets/paths/moveObject)
+- [Update a bucket](/docs/api-reference/buckets/buckets/updateBucket)
+- [Upload a file](/docs/api-reference/buckets/files/uploadObject)
 </Accordion>
 </Accordions>
 
@@ -396,8 +427,9 @@ granted at the workspace above it to cover every office in it.
 | `workflow:manage` | Create, save, delete and test-fire automations. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `workflow:read` (10)">
+<Accordion title="Endpoints that need `workflow:read` (11)">
 - [Get a node definition](/docs/api-reference/workflows/node-definitions/getNodeDefinition)
+- [Get a run's place in a queue](/docs/api-reference/workflows/runs/getRunQueuePosition)
 - [Get a workflow](/docs/api-reference/workflows/workflows/getWorkflow)
 - [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
 - [Get a run](/docs/api-reference/workflows/runs/getWorkflowRun)
@@ -408,8 +440,9 @@ granted at the workspace above it to cover every office in it.
 - [List workflows](/docs/api-reference/workflows/workflows/listWorkflows)
 - [List versions](/docs/api-reference/workflows/versions/listWorkflowVersions)
 </Accordion>
-<Accordion title="Endpoints that need `workflow:manage` (6)">
+<Accordion title="Endpoints that need `workflow:manage` (7)">
 - [Register a collection name](/docs/api-reference/workflows/collections/addWorkflowCollection)
+- [Advance a run](/docs/api-reference/workflows/runs/advanceRun)
 - [Create a workflow](/docs/api-reference/workflows/workflows/createWorkflow)
 - [Delete a workflow](/docs/api-reference/workflows/workflows/deleteWorkflow)
 - [Delete a collection](/docs/api-reference/workflows/collections/removeWorkflowCollection)
@@ -671,7 +704,6 @@ These are real and enforced, but no endpoint in this reference names them.
 Usually that means they gate a console-only surface. See
 [what is not in the reference](/docs/api-reference#what-this-reference-covers).
 
-- `tenant:read`
 - `console:read`
 - `console:manage`
 - `iam:manage`
@@ -686,7 +718,6 @@ Usually that means they gate a console-only surface. See
 - `phone:call`
 - `phone:manage`
 - `email:manage`
-- `datasource:manage`
 - `profile:manage`
 - `subscription:read`
 - `subscription:manage`
