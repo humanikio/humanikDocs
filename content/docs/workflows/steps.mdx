@@ -139,6 +139,64 @@ Contact for anything new.
 Find Opportunity always splits the path, with Found and Not found exits. Unlike
 Find Contact it has no setting to turn that off.
 
+## Working with your data
+
+| Step | Does |
+| --- | --- |
+| **Run SQL** | query or change a database namespace, and use the result in later steps |
+
+This is the step for a question the other steps cannot answer. A lookup in a
+table you built yourself, a total across rows, a write into your own schema. It
+runs against one namespace that you pick on the step, and it can only reach
+tables in that namespace.
+
+It splits the path when you turn on **Split the path on whether anything came
+back**, giving you Rows and No rows exits. Left off, it has one way out and you
+read the row count downstream instead.
+
+### Values go in a separate field
+
+The statement is fixed text. Anything that changes per run goes in the step's
+**Values** field, as a JSON object, and the statement reads it back from a
+relation called `input`:
+
+```
+Values:  { "email": "{{trigger.email}}" }
+
+SELECT id, plan FROM customers
+WHERE email = (SELECT payload->>'email' FROM input)
+LIMIT 1
+```
+
+<Callout type="warn">
+  **A `{{ }}` reference pasted into the statement itself is refused.** It would
+  put whatever a webhook sent into the middle of your SQL, where a stray quote
+  changes what the statement means. The Values field passes the same information
+  in as a value, which cannot happen. The step will not save with a reference in
+  the statement, and the editor will not let you apply one.
+</Callout>
+
+### Test it before it counts
+
+The statement has to run once, successfully, before the step will accept it. The
+test executes against your real data and then undoes itself, so a wrong column
+name fails while you are looking at it rather than on the first live record.
+
+Change a character afterwards and the step asks you to run it again. That is on
+purpose: the thing that was proven is the exact text, not the general idea.
+
+### What you can and cannot run
+
+SELECT, INSERT and UPDATE. An UPDATE has to have a WHERE clause.
+
+DELETE, DROP and TRUNCATE are refused here for the same reason they are refused
+everywhere in the product. CREATE and ALTER are refused in this step
+specifically: a table has to be created in the console so the namespace knows
+about it, and one made here would be invisible to the table list.
+
+A write returns nothing unless you add `RETURNING`. Without it you get a count
+of rows changed and nothing else.
+
 ## Asking an employee
 
 | Step | Does |
@@ -240,9 +298,10 @@ needs one has to Find or Create it first.
 ## Which steps split the path
 
 **If / Else**, **Random Split** and **Find Opportunity** always do. **Find
-Contact** does only while its split is turned on, and **Find Contact (Split)**,
-the older step, always does. Each has named exits, and a line leaving one has to
-say which exit it comes from. Every other step has a single way out.
+Contact** and **Run SQL** do only while their split is turned on, and **Find
+Contact (Split)**, the older step, always does. Each has named exits, and a line
+leaving one has to say which exit it comes from. Every other step has a single
+way out.
 
 An exit you leave unconnected simply ends that branch. That is allowed, and it is
 how you write "do nothing in this case".
