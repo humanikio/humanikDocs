@@ -24,7 +24,7 @@ what the API expects, and what this page describes.
 
 You only ever write the first. Saving produces the second automatically, and
 that is the moment a workflow can be checked for problems. A graph that will not
-run is still saved, so reading back the runnable form is how you find out.
+run is still saved, and the save tells you so.
 
 ## Ordering
 
@@ -83,8 +83,10 @@ what it accepts, see [The steps](/docs/workflows/steps).
 
 Two things to know before writing them by hand.
 
-**Required fields are not enforced when you save.** A step missing a required
-setting is stored. You find out when the workflow runs and that step fails.
+**Required fields are reported, not enforced.** A step missing a required
+setting is still stored, so you can put down a half drawn workflow. The save
+tells you about it in its `validation`, naming the step and the field, and the
+workflow will not fire until you fix it.
 
 **Some fields must match something real.** A field that offers a list of choices
 is usually reading them live from elsewhere in the platform: your pipelines,
@@ -150,9 +152,11 @@ Contacts are looked up. Every picker value is validated against the real list.
 A workflow that references a pipeline you do not have cannot be saved, because
 the check runs on the way in rather than as advice afterwards.
 
-That closes the gap this page has been describing. Writing a graph by hand, a
-plausible but wrong value saves cleanly and fails at run time. Nova is held to a
-stricter standard than the API is.
+That closes the gap this page has been describing. The API tells you about a
+plausible but wrong value; Nova cannot get past it. Both run the same check, and
+the difference is what they do with the answer: a save reports and stores
+anyway, because you have to be able to leave a graph half drawn. Nova has no
+half drawn state, so for it the check is a wall.
 
 <Callout type="warn">
   **Nova acts with your permissions, never its own.** It has no identity of its
@@ -166,10 +170,19 @@ stricter standard than the API is.
 
 ## Checking your work
 
-After any save, read back the runnable form with
-[Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr).
-It reports whether the graph is sound and, when it is not, what is wrong with
-it. Nothing else tells you.
+**Every save answers this for you.** Read `validation` on the response: `valid`
+says whether the workflow will run, and each entry under `errors` names the step
+it is about, so you can go straight to it.
+
+To check before committing to a save, send the graph to
+[Check a canvas](/docs/api-reference/workflows/workflows/validateWorkflow),
+which writes nothing. Set `checkOptions` when you want it to confirm that the
+offices, numbers, tags and sources your steps name really exist; it is left off
+by default because that costs a lookup per kind of list.
+
+[Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
+is still there when you want to read the runnable form itself, rather than a
+verdict on it.
 
 Then test it with
 [Test fire a workflow](/docs/api-reference/workflows/runs/testWorkflow), keeping

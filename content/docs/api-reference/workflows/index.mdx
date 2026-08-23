@@ -33,11 +33,15 @@ Two consequences catch people out:
 </Callout>
 
 <Callout type="warn">
-  **An invalid graph saves without error.** The compile result is recorded
-  rather than returned. Call
-  [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
-  after any canvas save and check `valid`.
+  **An invalid graph still saves.** Saving reports what is wrong instead of
+  refusing, so read `validation` on the response and check `valid` before
+  assuming the workflow will run. A graph that did not compile is stored and
+  simply never fires.
 </Callout>
+
+To check a graph **before** saving it, send it to
+[Check a canvas](/docs/api-reference/workflows/workflows/validateWorkflow). It
+runs the same check and writes nothing.
 
 ## Building one
 
@@ -59,9 +63,8 @@ takes a name and returns an empty workflow.
 <Step>
 **Save the graph.**
 [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow) with
-a `canvas`. Then check
-[the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr) to
-confirm it compiled.
+a `canvas`. Read `validation` on the response to confirm it will run, and to see
+which step is at fault when it will not.
 </Step>
 
 <Step>

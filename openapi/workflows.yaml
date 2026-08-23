@@ -513,6 +513,99 @@ components:
             True while this run is being released right now. The position is
             already out of date when this is true.
 
+    LintIssue:
+      type: object
+      description: One thing wrong with a canvas.
+      properties:
+        tier:
+          type: integer
+          enum: [0, 1, 2, 3, 4]
+          description: |
+            Which pass found it, cheapest first: `0` the shape of the graph,
+            `1` the values in a step, `2` the graph's semantics, `3` whether a
+            `{{ }}` reference points at anything, `4` the compile itself.
+        severity:
+          type: string
+          enum: [error, warning]
+          description: |
+            An error stops the workflow running. A warning does not, and usually
+            means it will run but not as intended, such as a branch exit with
+            nothing wired to it.
+        code:
+          type: string
+          description: |
+            A stable machine code. Branch on this rather than on `message`.
+          examples: [bad-source-handle]
+        message:
+          type: string
+          description: A human readable explanation.
+        nodeId:
+          type: string
+          description: |
+            The step at fault. **Absent when the problem is about the graph
+            rather than one step**, such as a workflow with no trigger or with
+            two. Tiers 0 to 3 always name a step; tier 4 names one only when the
+            compile error was about a specific step.
+        field:
+          type: string
+          description: The step's `configFields[].key` at fault, when the problem is one field.
+      required: [tier, severity, code, message]
+
+    BadOptionValue:
+      type: object
+      description: |
+        A literal value on a picker field that does not exist. It compiles and
+        then fails when the step runs, so it is reported as an error.
+      properties:
+        nodeId: { type: string }
+        field: { type: string }
+        value:
+          type: string
+          description: The value that was set.
+        source:
+          type: string
+          description: |
+            What it was checked against, phrased to read after "is not in".
+          examples: ['the allowed values for Status (open, won, lost)']
+      required: [nodeId, field, value, source]
+
+    CanvasValidation:
+      type: object
+      description: |
+        What is wrong with a canvas. Reporting only: nothing here blocks a save,
+        and a workflow whose `valid` is false is stored exactly as sent. It
+        simply will not fire, because firing needs `status: active` **and** a
+        graph that compiled.
+      properties:
+        valid:
+          type: boolean
+          description: No errors and no bad option values. Warnings do not affect it.
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/LintIssue' }
+          description: Problems that stop the workflow running.
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/LintIssue' }
+          description: Problems that do not stop it running.
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/LintIssue' }
+          description: Errors and warnings together, in the order they were found.
+        badOptionValues:
+          type: array
+          items: { $ref: '#/components/schemas/BadOptionValue' }
+        optionsChecked:
+          type: boolean
+          description: |
+            Whether picker values were checked against what actually exists.
+
+            **An empty `badOptionValues` with this `false` means "not checked",
+            not "all clean".** Checking costs one read per kind of picker in
+            play, so it is done on a save and skipped by default on
+            [Check a canvas](/docs/api-reference/workflows/workflows/validateWorkflow).
+      required: [valid, errors, warnings, issues, badOptionValues, optionsChecked]
+
     NodeDefinition:
       type: object
       description: A node the catalogue offers.
@@ -925,7 +1018,9 @@ paths:
                   collection: null
       responses:
         '200':
-          description: Updated. The full workflow is returned as stored.
+          description: |
+            Updated. The full workflow is returned as stored, and when a canvas
+            was sent, what is wrong with it.
           content:
             application/json:
               schema:
@@ -934,6 +1029,16 @@ paths:
                   success: { type: boolean, const: true }
                   workflow:
                     $ref: '#/components/schemas/Workflow'
+                  validation:
+                    allOf:
+                      - $ref: '#/components/schemas/CanvasValidation'
+                    description: |
+                      Present only when the request included a `canvas`.
+
+                      **The save still succeeded.** This reports what is wrong
+                      rather than refusing, because you have to be able to store
+                      a half built graph, and an invalid one cannot fire anyway.
+                      Read `valid` to know whether it will run.
         '400':
           description: No updatable field was sent.
           content:
@@ -987,6 +1092,141 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/workflows/{workflowId}/validate:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+
+    post:
+      operationId: validateWorkflow
+      summary: Check a canvas
+      tags: [Workflows]
+      description: |
+        Find out what is wrong with a graph **without saving it**.
+
+        The canvas goes in the body rather than being read from the workflow,
+        because the point is to check work that has not been saved. The
+        workflow in the path is only the thing being checked against; nothing
+        about it is read or written.
+
+        This is the same check
+        [Update a workflow](/docs/api-reference/workflows/workflows/updateWorkflow)
+        runs, so you never have to save something to find out whether it would
+        run. It covers the compile as well: there is no need to follow it with
+        [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr).
+
+        **Errors that name a step carry its `nodeId`**, so you can point at the
+        step rather than making someone hunt for it. A problem about the graph
+        as a whole, such as having no trigger or two, names no step.
+
+        **Permission:** `workflow:read` @ `workspace/{workspaceId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [canvas]
+              properties:
+                canvas:
+                  $ref: '#/components/schemas/Canvas'
+                checkOptions:
+                  type: boolean
+                  default: false
+                  description: |
+                    Also check that every value chosen from a list really
+                    exists: the offices, phone numbers, tags, data sources and
+                    team members a step names.
+
+                    **Off by default here**, which is the opposite of a save.
+                    It costs one read per kind of list in play, which is worth
+                    it once on a save and wasteful on every keystroke while
+                    someone is still typing. Turn it on when you want the
+                    complete answer.
+            examples:
+              quick:
+                summary: The graph only, while someone is still editing
+                value:
+                  canvas:
+                    viewport: { x: 0, y: 0, zoom: 1 }
+                    nodes:
+                      - id: n_trigger
+                        type: registryNode
+                        position: { x: 0, y: 0 }
+                        data:
+                          nodeDefId: dataSourceTrigger
+                          label: New record
+                          category: trigger
+                          config:
+                            dataSourceId: ds_leads
+                            event: record.created
+                    edges: []
+              full:
+                summary: Everything, including the values each step names
+                value:
+                  checkOptions: true
+                  canvas:
+                    viewport: { x: 0, y: 0, zoom: 1 }
+                    nodes: []
+                    edges: []
+      responses:
+        '200':
+          description: |
+            Checked. A canvas with problems is still a `200`: this reports, it
+            does not refuse.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  validation:
+                    $ref: '#/components/schemas/CanvasValidation'
+              examples:
+                clean:
+                  summary: Nothing wrong with the graph
+                  value:
+                    success: true
+                    validation:
+                      valid: true
+                      errors: []
+                      warnings: []
+                      issues: []
+                      badOptionValues: []
+                      optionsChecked: false
+                broken:
+                  summary: A step is missing something it needs
+                  value:
+                    success: true
+                    validation:
+                      valid: false
+                      errors:
+                        - tier: 4
+                          severity: error
+                          code: compile
+                          message: 'Node "Send SMS": "To" is required'
+                          nodeId: n_sms
+                          field: to
+                      warnings: []
+                      issues:
+                        - tier: 4
+                          severity: error
+                          code: compile
+                          message: 'Node "Send SMS": "To" is required'
+                          nodeId: n_sms
+                          field: to
+                      badOptionValues: []
+                      optionsChecked: false
+        '400':
+          description: No `canvas` was sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
 
   /workspaces/{workspaceId}/workflows/{workflowId}/versions:
