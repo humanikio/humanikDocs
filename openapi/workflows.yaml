@@ -535,10 +535,33 @@ components:
         accentColor: { type: string }
         enabled:
           type: boolean
-          description: False means announced but not yet available.
+          description: |
+            False means announced but not yet available. It does not mark a node
+            as retired: see `deprecated`.
+        deprecated:
+          type: boolean
+          description: |
+            True when a newer node supersedes this one. It is still placeable
+            and still executes, because a node's `id` is its `type` in the
+            compiled graph and removing one would break every saved canvas
+            using it. Treat it as "do not reach for this in something new",
+            and read the node's `description` for the replacement to use
+            instead. Absent means not deprecated.
         isSpecialCase:
           type: boolean
           description: True when the node needs bespoke configuration UI, in which case `configFields` is ignored.
+        resolvesContactTokens:
+          type: boolean
+          description: |
+            True when this node resolves `{{contact.*}}` against the recipient
+            at send time, so the token works even when no earlier step has
+            identified a contact. Send SMS and Send Email carry it.
+        customFieldsObject:
+          type: string
+          enum: [contact]
+          description: |
+            Present when the node accepts your workspace's custom fields as
+            extra config, keyed `customFields.<key>`.
         configFields:
           type: array
           description: The fields this node accepts, and what belongs in `data.config` on a canvas node.
@@ -586,11 +609,43 @@ components:
           description: |
             Named branch outlets, present only on branch nodes. Each `key` is a
             valid `sourceHandle` on an edge leaving this node.
+
+            **This is not always the fixed set.** When either field below is
+            present, this list is a starting point and the node's own `config`
+            decides its real outlets. An edge naming an outlet the node does not
+            currently have fails to compile even though the name appears here.
           items:
             type: object
             properties:
               key: { type: string }
               label: { type: string }
+        conditionalOutputHandles:
+          type: object
+          description: |
+            Present when the node has its outlets only while a boolean config
+            field is on. With that field off the node does not branch at all and
+            leaves by its single default outlet, so an edge carrying a
+            `sourceHandle` fails to compile. Find Contact works this way through
+            its `splitOnResult` field.
+          properties:
+            whenField:
+              type: string
+              description: The boolean `configFields[].key` that turns the outlets on.
+              examples: [splitOnResult]
+        dynamicOutputHandles:
+          type: object
+          description: |
+            Present when the node's outlets come from one of its own config
+            fields rather than from `outputHandles`, which is then only the
+            placement default. Random Split works this way, taking two to five
+            outlets from the paths you define. Each path's `key` is minted once
+            and is the `sourceHandle` to use, so renaming a path does not change
+            it.
+          properties:
+            fromField:
+              type: string
+              description: The `configFields[].key` holding the list the outlets come from.
+              examples: [paths]
 
 paths:
   /workspaces/{workspaceId}/workflows:

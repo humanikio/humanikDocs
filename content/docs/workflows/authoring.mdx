@@ -51,14 +51,22 @@ A line runs from one step to the next. Most steps have a single way out, and a
 line from them just means "then do this".
 
 Some steps have **named exits**. An if-else step has one for the true case and
-one for the false case, and the step that checks for a contact has one for found
-and one for not found. A line leaving a step like that has to say which exit it
-leaves from.
+one for the false case, and the step that looks a contact up can have one for
+found and one for not found. A line leaving a step like that has to say which
+exit it leaves from.
 
 The name you use must match one the step declares. You can read the available
 exits on a step's entry in the catalogue, through
 [List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions).
 A line naming an exit the step does not have will stop the graph building.
+
+**Some exits depend on the step's own settings**, so the catalogue entry alone
+is not the whole answer. A step carrying `conditionalOutputHandles` has its
+exits only while the named setting is on, and one carrying
+`dynamicOutputHandles` takes them from a list you fill in rather than from the
+entry. In both cases the entry's `outputHandles` is the starting point, not the
+fixed set, and an edge naming an exit the step does not currently have will stop
+the graph building even though the name appears in the catalogue.
 
 ```
                     ┌─── true ──▶  send a message

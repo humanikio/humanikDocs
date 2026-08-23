@@ -93,10 +93,31 @@ handoffs such as telling a rep that a lead came in.
 | **Remove Tag** | remove specific tags, or clear them all |
 | **Add Note** | put a timestamped note on the contact's timeline |
 
-**Find Contact splits the path.** It is the one lookup step with two exits,
-Found and Not found, so "we already know this person" and "this is new" become
-two branches you draw rather than a condition you write. It never creates or
-edits anything, so a miss costs nothing.
+**Find Contact never creates or edits anything**, so a miss costs nothing. It
+tries the contact id, then the phone, then the email, and stops at the first
+one that matches.
+
+By default it carries on in a single line whether or not it found anyone, and
+you read the result downstream as `{{found}}`. That suits the common case,
+which is "attach the contact if we have one", and it keeps a graph that only
+needed a lookup from growing a fork it never uses.
+
+Turn on **Split the path on the result** when you genuinely want two paths.
+The step then grows Found and Not found exits, and "we already know this
+person" and "this is new" become branches you draw rather than a condition you
+write.
+
+<Callout type="warn">
+  **The exits only exist while that setting is on.** Turning it off removes
+  them, and any lines already wired to Found or Not found are dropped with
+  them. Turn it on before you draw those lines.
+</Callout>
+
+You may also see **Find Contact (Split)** in the step library, sitting at the
+end of the Contacts group in grey. It is the older version of this step, from
+before the setting above existed, and it always branches. It still runs, so
+workflows built on it keep working and nothing needs migrating. Reach for Find
+Contact for anything new.
 
 <Callout>
   **The current contact.** Once any step identifies a contact, every later step
@@ -115,7 +136,8 @@ edits anything, so a miss costs nothing.
 | **Add Opportunity Note** | add a note to a deal |
 | **Update Opportunity Note** | rewrite an existing deal note |
 
-Find Opportunity splits the path the same way Find Contact does.
+Find Opportunity always splits the path, with Found and Not found exits. Unlike
+Find Contact it has no setting to turn that off.
 
 ## Asking an employee
 
@@ -168,8 +190,8 @@ other, or for spreading contacts evenly across paths.
   in both halves of your test and the result would mean nothing.
 </Callout>
 
-To branch on whether a contact exists, use Find Contact rather than either of
-these.
+To branch on whether a contact exists, use Find Contact with its split turned
+on, rather than either of these.
 
 ### Wait against Drip
 
@@ -217,9 +239,10 @@ needs one has to Find or Create it first.
 
 ## Which steps split the path
 
-**If / Else**, **Random Split**, **Find Contact**, and **Find Opportunity**. Each
-has named exits, and a line leaving one has to say which exit it comes from. Every
-other step has a single way out.
+**If / Else**, **Random Split** and **Find Opportunity** always do. **Find
+Contact** does only while its split is turned on, and **Find Contact (Split)**,
+the older step, always does. Each has named exits, and a line leaving one has to
+say which exit it comes from. Every other step has a single way out.
 
 An exit you leave unconnected simply ends that branch. That is allowed, and it is
 how you write "do nothing in this case".
