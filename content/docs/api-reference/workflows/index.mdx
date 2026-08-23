@@ -206,6 +206,13 @@ curl -X POST "$HOS_API/workspaces/ws_a1b2c3/workflows/wf_7Kd2mQ/runs/run_8Fs3Kd/
 Send the run's own `waitingNodeId` as `nodeId`. Sending anything else returns
 `409` rather than releasing the run.
 
+A step you have **deleted** cannot be released either. The step is resolved from
+the workflow's current graph, so a run paused at a step you have since removed
+answers `409` until that step is back in a saved version. This is the same
+current-graph rule that lets a paused run pick up an edit, and it is worth
+knowing before deleting a step that has runs sitting on it: nothing is watching
+for them, and they have no route out while it is gone.
+
 <Callout type="warn">
   **This is one run, not the batch.** Releasing a run from a Drip queue moves
   that run only and leaves the queue's schedule untouched. Nobody else's place

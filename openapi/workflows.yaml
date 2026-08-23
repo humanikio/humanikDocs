@@ -1210,6 +1210,12 @@ paths:
         Timers and queues are retired differently behind this call, so a
         released run never has a stale wake left behind to fire later.
 
+        **A step you have deleted cannot be released.** The step is resolved
+        from the workflow's current graph, so a run paused at a step that is no
+        longer on the canvas answers `409` until that step is back in a saved
+        version. This follows from runs executing the current graph rather than
+        the one they started on.
+
         **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
       requestBody:
         required: true
@@ -1256,7 +1262,17 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: |
-            The run is not waiting, or is not waiting at the step you sent.
+            The run is not waiting, it is not waiting at the step you sent, or
+            that step is no longer in the workflow's current graph.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: |
+            The release did not complete. The run stays paused, so the call is
+            safe to retry, and retrying is also the way back if whatever was
+            holding the run could not be put back.
           content:
             application/json:
               schema:
