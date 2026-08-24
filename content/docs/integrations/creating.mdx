@@ -135,13 +135,30 @@ can find public documentation for the service.
 
 | | Recognised service | Your own API |
 | --- | --- | --- |
-| **Nova does** | Looks up the API and proposes the setup | Asks you for the base URL, auth type, and credential field names |
-| **You do** | Confirm, then supply the credential | Answer the questions, confirm, then supply the credential |
+| **Nova does** | Looks up the API and proposes the setup | Reads the specification you give it, or asks for the base URL, auth type, and credential field names |
+| **You do** | Confirm, then supply the credential | Paste the specification if you have one, confirm, then supply the credential |
 
 <Callout>
-  **Nova does not guess your API.** For a service it cannot look up, it asks. If you are
-  connecting something internal, have the base URL and the authentication type ready and the
-  conversation is short.
+  **Paste the specification if you have one.** An OpenAPI document, an API reference, or written
+  endpoint documentation, straight into the conversation. Nova reads what you paste and it
+  outranks both its own knowledge and anything it finds by searching.
+
+  This matters most for the software the research is worst at: anything internal, first party, or
+  newly built, where there is nothing public to look up. Without a specification Nova is working
+  from general knowledge of APIs of that kind, which is a reasonable starting point for a
+  well known service and a guess for yours.
+</Callout>
+
+<Callout type="warn">
+  **A request that signs itself needs the specification.** Some APIs, internal ones especially, do
+  not send a fixed credential on each call. They sign the request: a signature computed over the
+  method, the path and the body, sent as a header alongside a timestamp.
+
+  Nova will only choose that authentication type when a specification you supplied describes it.
+  It will never infer one, however strongly the API looks like it signs, because a signing scheme
+  guessed wrong produces a connection that registers cleanly and then fails every single call
+  with an authentication error that does not say why. So if your API signs its requests, paste
+  the document that says so.
 </Callout>
 
 ### It stops twice, on purpose
@@ -170,6 +187,14 @@ The value goes straight into the vault. It never passes through the conversation
 
 After the second step Nova registers the integration, links the credential, and generates the
 skill. The employee can use it on its next boot.
+
+<Callout>
+  **Registration confirms the credential is really there.** Every secret group named at
+  registration is looked up in the office vault before anything is written. If one is missing,
+  the integration is not created and the error says which name failed and to collect it first.
+  This is the same lookup the office performs when it makes a call, so a connection that
+  registers is a connection whose credential resolves.
+</Callout>
 
 ### Proving it works is a separate ask
 

@@ -1375,21 +1375,118 @@ paths:
       operationId: regenerateOfficeSkill
       description: |
         Re-runs generation of the skill body for an integration sourced skill.
-        Returns the updated content length and token usage. Requires
-        `office:manage`.
+        Requires `office:manage`.
+
+        For a skill sourced from an integration this runs the full setup
+        sequence, not a bare generation, and the response reports each step it
+        ran along with an audit of the stored record afterwards. The audit reads
+        the saved integration back rather than trusting what the steps reported,
+        so a run can succeed and still return findings. That combination is
+        normal and useful: it means the skill was rewritten and the integration
+        is still misconfigured.
+
+        Skills sourced from a protocol, or written by hand, take the generator
+        directly and return only `contentLength` and `tokenUsage`.
 
         **This overwrites a locked body.** An explicit regenerate is treated as
-        an intentional override: it resets `contentSource` to `generated` first,
-        which unlocks the skill, then writes. A `manual` or `verified` body is
-        replaced.
+        an intentional override, so a `manual` or `verified` body is replaced.
+        The unlock is applied at the write rather than before it, which means a
+        generation that fails leaves the skill locked exactly as it was.
 
         Content locking protects against automatic sync, not against this call.
         If you want to keep a proven body, do not call regenerate on it.
+
+        **A rewrite that would know less than the body it replaces is refused.**
+        Skills carry no version history, so a section lost this way cannot be
+        recovered. When a generation drops whole sections it is retried with the
+        missing headings named, and if it still comes back short the existing
+        body is kept and the call returns `400` explaining why. The usual cause
+        is an integration that declares no endpoints, leaving the generation
+        nothing to re-derive its claims from.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum: [recompile, full, verify-only]
+                  default: recompile
+                  description: |
+                    How much of the sequence to run.
+
+                    `recompile` rewrites the body from the integration record and
+                    audits the result. It makes no calls to your API.
+
+                    `full` also sends real read only requests to your API to
+                    confirm the endpoints answer as documented. This is the only
+                    way a skill earns `verified` outside a Nova session, and it
+                    is opt in because a settings action should not call your
+                    production API without being asked.
+
+                    `verify-only` sends those same requests and re-stamps without
+                    rewriting anything. Use it on a body that was edited by hand,
+                    where a rewrite would discard the edit.
+
+                    Verification needs at least one declared read endpoint with no
+                    path parameter. An integration declaring none reports that and
+                    stays unverified.
       responses:
         '200':
           description: Regenerated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  mode:
+                    type: string
+                    enum: [recompile, full, verify-only]
+                  verified:
+                    type: boolean
+                    description: |
+                      True only when a real call against a declared endpoint
+                      returned a 2xx during this run. It cannot be set by a
+                      caller.
+                  contentLength:
+                    type: integer
+                    description: Size of the written body. Absent when nothing was rewritten.
+                  steps:
+                    type: array
+                    description: Each step in the order it ran.
+                    items:
+                      type: object
+                      properties:
+                        step:
+                          type: string
+                          enum: [declare, verify, env, regenerate, stamp, audit]
+                        status:
+                          type: string
+                          enum: [ok, skipped, failed]
+                        detail:
+                          type: string
+                  findings:
+                    type: array
+                    description: |
+                      Read back from the saved integration after the run. Present
+                      even on success, because the steps report what happened and
+                      the findings report what is true afterwards.
+                    items:
+                      type: object
+                      properties:
+                        severity:
+                          type: string
+                          enum: [error, warning, info]
+                        message:
+                          type: string
+                        fix:
+                          type: string
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -2582,6 +2679,24 @@ paths:
         Prefer `tenant` for anything shared: one rotation reaches every office
         referencing it.
 
+        ## The skill is updated by halves
+
+        The group name and the variables it produces are different strings. A
+        group called `stripe-live` holding a field `SECRET_KEY` is injected as
+        `STRIPE_LIVE_SECRET_KEY`, and that name is what the integration's skill
+        tells an employee to use.
+
+        Linking a group re-derives that list immediately, and the response
+        returns it as `requiresEnv`. It does not rewrite the skill's own text,
+        because the text is written by a generation and this call does not run
+        one. When the names change, `skillBodyMayBeStale` comes back `true` and
+        the skill can still describe the previous credential until you
+        [regenerate](/docs/api-reference/offices/skills/regenerateOfficeSkill)
+        it.
+
+        Regenerating in `full` mode is the one to use here. The credential
+        changed, so any `verified` stamp was earned against a different one.
+
         ```bash
         curl -X POST "$HOS_API/offices/off_9c1e7d/integrations/int_7d3a1f/secret-refs?workspaceId=ws_a1b2c3" \
           -H "Authorization: Bearer $HOS_KEY" \
@@ -2618,6 +2733,21 @@ paths:
                   secretName:
                     type: string
                     description: 'The secret group being referenced. Names a group in the office or tenant vault.'
+                  requiresEnv:
+                    type: array
+                    description: |
+                      The environment variable names the office will now inject,
+                      re-derived from every group this integration points at.
+                      Available to the employee after the office restarts.
+                    items:
+                      type: string
+                    examples: [[STRIPE_LIVE_SECRET_KEY]]
+                  skillBodyMayBeStale:
+                    type: boolean
+                    description: |
+                      True when this call changed the injected names, so the
+                      skill's text still describes the previous ones. Regenerate
+                      the skill to bring the text in line.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: A field is missing or invalid, or the office has no vault.
@@ -2663,9 +2793,31 @@ paths:
         Removes the association. Requires `office:manage`.
 
         The secret group itself is not deleted.
+
+        The injected variable list is re-derived and returned as `requiresEnv`,
+        the same as when linking. Unlinking is the sharper case: the skill can
+        now document a credential the office will not inject, and an employee
+        following it calls the API with nothing to authenticate. Regenerate the
+        skill when `skillBodyMayBeStale` comes back `true`.
       responses:
         '200':
           description: Removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  requiresEnv:
+                    type: array
+                    description: The environment variable names the office will inject after this change.
+                    items:
+                      type: string
+                  skillBodyMayBeStale:
+                    type: boolean
+                    description: True when the injected names changed, so the skill's text is behind.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
