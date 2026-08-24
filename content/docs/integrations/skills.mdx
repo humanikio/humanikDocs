@@ -32,7 +32,9 @@ creating a second one.
 
 <Step>
 **Compile.** A model reads the integration record and writes the body: what the
-software is, what each declared endpoint does, and what arguments it takes.
+software is, what each declared endpoint does, and what arguments it takes. It is
+also shown the version it is replacing, so a rewrite builds on what is already
+there instead of starting from nothing.
 </Step>
 
 </Steps>
@@ -41,6 +43,32 @@ The record is the input. Everything the document says about your software is
 derived from what the integration declares, which is why
 [declaring endpoints](/docs/integrations/creating#endpoints-are-the-part-that-matters)
 is the highest value thing you can do to a connection.
+
+## What a regeneration keeps
+
+A rewrite is shown the previous body, and what it may do with that body depends on
+what the body was worth.
+
+| Previous `contentSource` | What the rewrite does with it |
+| --- | --- |
+| `manual` | Preserves it. Wording, examples and ordering stay, and only what the integration contradicts is changed |
+| `verified` | Reproduces every endpoint, parameter and response shape exactly. Prose and ordering may improve, paths may not change |
+| `generated` | Reuses the structure, and re-derives the claims from the integration record |
+
+The `generated` rule is the strictest on purpose. An endpoint in an unconfirmed
+document was written by a previous run of the same process, so treating it as
+evidence would let one guess become permanent by repetition.
+
+<Callout type="warn">
+  **A rewrite that would know less than the document it replaces is refused.**
+  When an integration declares no endpoints, there is little for a rewrite to
+  re-derive claims from, and the result can be a thinner document than the one it
+  replaces. That is not an improvement: skills have no version history, so a
+  section lost this way cannot be recovered. A rewrite that drops whole sections
+  is retried with the missing headings named, and if it still comes back short,
+  the existing skill is kept and the compile reports why. The usual cause is an
+  integration with no declared endpoints.
+</Callout>
 
 ## A generated skill contains no credentials and no commands
 
@@ -143,6 +171,44 @@ A routine sync cannot discard a proven procedure or a human edit.
 Only one route produces `verified`, and it is worth asking for. See
 [Proving it works is a separate ask](/docs/integrations/creating#proving-it-works-is-a-separate-ask).
 
+<Callout>
+  **`verified` cannot be claimed, only earned.** There is no parameter that sets
+  it. Publishing a skill resolves the stamp from whether a real call against a
+  declared endpoint actually succeeded in that same cycle, so neither you nor an
+  employee can assert it. If nothing was proven, the skill publishes as
+  `generated` and says so in its own first line.
+</Callout>
+
+## Changing the credential does not rewrite the document
+
+An integration points at one or more secret groups, and each group supplies the
+environment variables the office injects when it makes a call. Linking or
+unlinking a group changes those variables straight away.
+
+The skill is updated by halves, and the halves move at different times.
+
+| What changes | When |
+| --- | --- |
+| The variables the office injects | Immediately |
+| The list of variables the skill records | Immediately |
+| The skill's own text | Only when you recompile |
+
+The first two are derived from the connection every time it changes, so they are
+never behind. The text is written by a compile, and linking a secret does not run
+one.
+
+<Callout type="warn">
+  **Recompile after changing what is connected.** Until you do, the document can
+  still describe the previous credential, and the document is what the employee
+  reads. The console offers the rebuild at the moment you make the change. A
+  compile also re-checks the text against what is really injected, and reports any
+  variable it names that does not exist.
+</Callout>
+
+Because the credential changed, this is also the moment to prove the connection
+again. A `verified` stamp was earned against the previous credential, and it says
+nothing about the new one.
+
 ## When a skill and a connection disagree
 
 They fail differently, and the difference tells you where to look.
@@ -150,7 +216,7 @@ They fail differently, and the difference tells you where to look.
 | Symptom | Where the problem is |
 | --- | --- |
 | The employee calls an endpoint that does not exist | The skill. Its body describes something the API does not have |
-| The employee calls the right endpoint and gets a `401` | The connection. The stored credential is rejected |
+| The employee calls the right endpoint and gets a `401` | The connection. Either the stored credential is rejected, or the authentication type on the integration does not match what the API expects |
 | The employee does not try at all | The skill. Its description did not match the task |
 | The employee reports the integration is not connected | The connection. It is not attached to this office |
 
