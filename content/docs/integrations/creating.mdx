@@ -149,6 +149,16 @@ can find public documentation for the service.
   well known service and a guess for yours.
 </Callout>
 
+<Callout>
+  **Nova will not invent an authentication type.** When it cannot find public documentation for
+  an API, it says so rather than choosing something plausible. Registration then stops and asks
+  you, because a wrong authentication type is not caught at setup: it produces a connection that
+  registers cleanly and then fails every call with a `401`, long after the step that caused it.
+
+  Two ways past it, and both are quick. Tell Nova what the API uses, or paste the specification
+  and let it read the answer.
+</Callout>
+
 <Callout type="warn">
   **A request that signs itself needs the specification.** Some APIs, internal ones especially, do
   not send a fixed credential on each call. They sign the request: a signature computed over the
