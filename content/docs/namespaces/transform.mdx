@@ -1,0 +1,173 @@
+---
+title: Transform on ingest
+description: Run SQL on every record between the key mapping and the write, to clean it, enrich it, or drop it.
+---
+
+A **transform** is one `SELECT` stored on a [source](/docs/namespaces/sources).
+It runs on every record that arrives, after the key mapping and before the row
+is written.
+
+```
+   Payload  ->  Key mapping  ->  Transform  ->  Row
+                which fields     your SQL      what is
+                become which                   stored
+                columns
+```
+
+The mapping moves values. The transform decides what they should look like. That
+split is why the mapping stayed a simple list of pairs instead of growing an
+expression language nobody wanted to learn.
+
+Reach for it to lowercase an email, combine two fields into one, strip the
+formatting out of a phone number, look an id up in another table, or refuse a
+record that fails a test.
+
+## The three things to understand first
+
+These are in the order they cost you if you miss them.
+
+### 1. Your statement reads the mapped record, not the payload
+
+`record` is a single row with one column, `payload`, holding the record **as the
+key mapping produced it**.
+
+That is not the JSON the source sent. If your mapping reads `metadata.phone`
+into a column called `phone`, the transform sees `phone`:
+
+```sql
+SELECT payload->>'phone' AS phone      -- correct
+FROM record
+```
+
+Writing `payload->>'metadata.phone'` gets you nothing, because by this point the
+nesting is gone. Look at the column names in your key mapping, not at the
+payload you are sending.
+
+### 2. What you return is the row
+
+The transform does not add to the mapped record. It **replaces** it. Columns you
+do not return are not written, even though the mapping produces them.
+
+So a mapping with seven columns and a statement like this:
+
+```sql
+SELECT lower(payload->>'email') AS email
+FROM record
+```
+
+stores a row with one column. The other six are gone, on every record, from the
+moment you turn it on.
+
+<Callout type="warn">
+  **Start from the full list and edit it down.** The editor offers a starting
+  statement built from your own mapped columns, which lists every one of them.
+  Beginning there and changing what you need is much safer than writing one line
+  and adding the rest from memory.
+
+  After a test, the editor also marks any column your samples carried that your
+  statement does not return, so this is caught while you are looking at it.
+</Callout>
+
+### 3. No rows means the record is dropped
+
+If your statement returns nothing for a record, that record is not written. This
+is a feature, not an error, and it is reported separately from failures.
+
+```sql
+SELECT payload->>'name' AS name, payload->>'email' AS email
+FROM record
+WHERE payload->>'email' IS NOT NULL
+```
+
+Anything without an email never reaches the table.
+
+Returning **more than one row** for a record is an error. One payload becoming
+two rows would change what an import count means.
+
+## Enriching from another table
+
+This is the reason a transform is SQL rather than a settings screen. `record` is
+a real relation, so you can join anything else in the same namespace:
+
+```sql
+SELECT r.payload->>'email'        AS email,
+       r.payload->>'name'         AS name,
+       c.id                       AS company_id
+FROM record r
+LEFT JOIN companies c
+  ON c.domain = split_part(r.payload->>'email', '@', 2)
+```
+
+Every row now arrives with the company already attached, without a workflow step
+and without a second pass.
+
+Use `LEFT JOIN` unless you mean the record to be dropped when there is no match.
+A plain `JOIN` that finds nothing returns no rows, which is a drop.
+
+## Testing it
+
+The transform has to run once, successfully, before it can be turned on. That is
+enforced on the server, not just in the screen, so a statement that has not been
+proven cannot be saved.
+
+The test runs against **the payloads your source has already received**, mapped
+exactly the way ingestion maps them, and then undoes itself. You see the mapped
+record and the row that would be written, side by side, for each sample.
+
+Change a character afterwards and it asks you to run it again. What was proven
+is the exact text, not the general idea.
+
+<Callout>
+  **A source with no stored payloads cannot be tested, so it cannot have a
+  transform.** Send something to the source's Test URL first. Testing against
+  invented data would prove nothing about the shape your systems actually send.
+</Callout>
+
+## When it fails on a record
+
+You choose what a failure costs:
+
+| | |
+| --- | --- |
+| **Drop that record and report it** | The default. The rest of the batch is unaffected |
+| **Write it as the mapping produced it** | The record still lands, without the transform |
+
+The second is for a source where losing data is worse than losing the cleanup.
+The first is right when a record that failed the transform is not one you want.
+
+## What you can and cannot write
+
+One `SELECT`. Not an `INSERT`, not an `UPDATE`, and never a `DELETE`, `DROP` or
+`TRUNCATE`, which are refused everywhere in the platform. See
+[Running SQL](/docs/namespaces/sql).
+
+Every table you name has to be in the same namespace as the source.
+
+## Turning it off
+
+Turning a transform off takes effect on the next record. Rows already written
+are not touched, and turning one off is never blocked, including when it is
+failing.
+
+Removing it deletes the statement. Turning it off keeps it, which is what you
+want while working out whether it was the cause of something.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Sources"
+    href="/docs/namespaces/sources"
+    description="Webhook addresses, key mapping, and CSV imports."
+  />
+  <Card
+    title="Running SQL"
+    href="/docs/namespaces/sql"
+    description="The editor, test runs, and what is refused."
+  />
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="Start a sequence when a record arrives."
+  />
+</Cards>

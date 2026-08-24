@@ -1,0 +1,152 @@
+---
+title: Sources
+description: How rows arrive in a table without anyone typing them.
+---
+
+A **source** is a way into one table. You give another system a web address, it
+sends JSON, and rows appear. A source belongs to one namespace and writes to one
+table.
+
+Every route into a table runs through the same pipeline, so a row from a webhook
+and a row from a spreadsheet are indistinguishable by the time anything reads
+them.
+
+```
+   Payload  ->  Key mapping  ->  Transform  ->  Row
+   what was      which fields     optional      what is
+   sent          become which     SQL step      stored
+                 columns
+```
+
+The middle two steps are what this page and
+[Transform on ingest](/docs/namespaces/transform) are about.
+
+## Creating one
+
+<Steps>
+
+<Step>
+**Open the table.** Namespaces, then the namespace, then Tables, then the table
+you want rows to land in.
+</Step>
+
+<Step>
+**Add a source.** It needs a name and nothing else. You get two web addresses
+back immediately.
+</Step>
+
+<Step>
+**Send a payload to the Test URL.** Nothing is stored in your table. The payload
+is captured so you can point its fields at your columns in the next step.
+</Step>
+
+<Step>
+**Set the key mapping.** Pick which field in the payload feeds which column.
+</Step>
+
+<Step>
+**Switch the sending system to the Live URL.** Rows now arrive.
+</Step>
+
+</Steps>
+
+## The two addresses
+
+| | What it does |
+| --- | --- |
+| **Live** | Maps the payload and writes a row. This is production |
+| **Test** | Captures the payload so you can build the mapping against it. **Writes nothing** |
+
+Keep sending to the Test URL while you are still deciding what the mapping
+should be. A payload captured there is also what the transform is tested
+against later, so a source with a few real test payloads is much easier to work
+with than one with none.
+
+<Callout type="warn">
+  **Treat both addresses as secrets.** Anyone holding one can put rows in your
+  table. There is no second credential.
+</Callout>
+
+## One shape per source
+
+A source expects payloads that all look the same, because the key mapping is a
+single fixed list of field-to-column pairs. It is not a rule the platform
+enforces so much as a consequence of how mapping works: a payload arriving in a
+different shape does not error, it just maps badly.
+
+If a second system sends a different shape, **give it its own source**. Two
+sources can write to the same table, each with its own mapping. That is the
+intended pattern and it costs nothing.
+
+## The key mapping
+
+The mapping says which path in the payload feeds which column.
+
+```
+   payload                          mapping              column
+   ─────────────────────────────    ────────────────     ─────────
+   { "name": "Ada",                 name              -> name
+     "email": "ada@example.com",    email             -> email
+     "metadata": {                  metadata.phone    -> phone
+        "phone": "416 555 0101" } } metadata.business -> business
+```
+
+A path can reach into nested objects with a dot, as `metadata.phone` does above.
+
+Two things about it are worth knowing before you write a transform, because both
+surprise people:
+
+**A field the payload does not carry is simply absent.** It is not written as
+empty, it is not written at all, and the column keeps whatever default it has.
+So a mapping that declares seven columns may well produce a record with three.
+
+**The mapping does no validation.** It moves values; it does not check them, and
+it does not reject a payload for having the wrong shape. If you need values
+cleaned, checked, or filtered, that is
+[Transform on ingest](/docs/namespaces/transform).
+
+<Callout>
+  **The raw payload is kept regardless.** Every row stores the untouched payload
+  it came from alongside the mapped columns, so a mapping you get wrong today
+  can be corrected and reapplied later without the original being lost.
+</Callout>
+
+## Importing a spreadsheet
+
+A source can also take a CSV. Rows stream through **the same key mapping** as a
+webhook payload, so the mapping you already built is the mapping the import
+uses, and a transform applies to those rows too.
+
+Automations are **off** for an import by default. Ten thousand rows arriving at
+once would otherwise start ten thousand workflow runs, which is almost never
+what someone importing a backlog wants. Turn it on deliberately when it is.
+
+## What a source does not do
+
+- **It does not deduplicate.** The same record sent twice becomes two rows.
+  Clearing rows that block a unique constraint is done from the table's
+  Duplicates page.
+- **It does not check the payload against your table.** See the mapping note
+  above.
+- **It does not retry.** A payload the sending system fails to deliver is gone.
+  Retrying is that system's responsibility.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Transform on ingest"
+    href="/docs/namespaces/transform"
+    description="Run SQL on each record between the mapping and the write."
+  />
+  <Card
+    title="Running SQL"
+    href="/docs/namespaces/sql"
+    description="Query and change a namespace, and what is deliberately not allowed."
+  />
+  <Card
+    title="Workflows"
+    href="/docs/workflows"
+    description="Start a sequence when a record arrives."
+  />
+</Cards>

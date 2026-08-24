@@ -1,0 +1,138 @@
+---
+title: Running SQL
+description: Query and change a namespace, test a statement before you keep it, and what is deliberately refused.
+---
+
+A namespace is backed by real Postgres tables, and you can write real SQL
+against them. There are three places to do it, and they all run the same
+statement through the same checks.
+
+| Where | For |
+| --- | --- |
+| **SQL Editor**, on the namespace | Exploring, one-off changes, building a statement |
+| **Transform on ingest**, on a source | Reshaping every record as it arrives. See [Transform on ingest](/docs/namespaces/transform) |
+| **Run SQL**, in a workflow | Asking the database a question mid-sequence. See [Steps](/docs/workflows/steps) |
+
+## Test run, then run
+
+Both buttons in the editor execute your statement against your real data. The
+difference is what survives.
+
+| | |
+| --- | --- |
+| **Test run** | Runs it, shows you the rows, then undoes all of it |
+| **Run** | Runs it and keeps the result |
+
+A test run is not a syntax check. Constraints fire, joins resolve, and a
+duplicate key fails exactly as it would for real. What you see is what would
+happen, and then it is rolled back.
+
+Reach for it whenever a statement changes something and you are not completely
+sure what it will touch. It costs nothing to be certain first.
+
+<Callout>
+  **A test run cannot be used on CREATE or ALTER.** Those change the shape of the
+  database rather than its contents, and there is nothing to roll back into.
+</Callout>
+
+## Table names
+
+Write the names you see in the console. `SELECT * FROM orders` is correct even
+though the physical table has a longer, scoped name.
+
+The rewrite happens for you, and every table you name has to belong to **this
+namespace**. A statement naming a table from somewhere else is refused before it
+runs. After a statement executes, the editor can show you what actually ran,
+which is the quickest way to see the real name.
+
+## Reading results
+
+A `SELECT` returns a table of rows you can scroll.
+
+A write returns **nothing** unless you ask for it. Add `RETURNING` to see what
+changed:
+
+```sql
+UPDATE orders
+SET status = 'shipped'
+WHERE id = 'ord_8842'
+RETURNING id, status, updated_at;
+```
+
+Without it you get a count of rows affected and no detail. This catches people
+out on `INSERT` in particular, where `RETURNING id` is usually what you wanted.
+
+## What is refused, and why
+
+Three statements are blocked everywhere SQL runs in the platform. This is not
+configurable.
+
+| Refused | Why | Instead |
+| --- | --- | --- |
+| `DELETE` | Nothing here is recoverable once a row is gone, and there is no undo step | Delete rows from the table view |
+| `DROP` | Same, for a whole table | Drop a table from the table management screen |
+| `TRUNCATE` | Same, without even naming what it removes | Drop and recreate, or delete rows |
+
+An `UPDATE` also has to carry a `WHERE` clause. Updating every row in a table is
+occasionally what someone means and almost never what they typed.
+
+<Callout type="warn">
+  **Rows blocking a unique constraint are the one exception**, because there is
+  no other way to clear them. The table's Duplicates page finds sets of rows
+  sharing the values you name and removes the extras, keeping one of each. That
+  is a deletion, it is not reversible, and it tells you the count before it runs.
+</Callout>
+
+### Creating tables
+
+`CREATE TABLE` works in the SQL editor and nowhere else. A table has to be
+registered with its namespace to appear in the table list and be available to
+mapping, and only the editor does that registration. A table created any other
+way would exist in the database and be invisible to everything else.
+
+Every table gets a set of system columns automatically. You do not declare them
+and should not try to.
+
+## Using it from a workflow
+
+The **Run SQL** step takes the same kind of statement and makes the result
+available to later steps. Two things work differently there and both matter.
+
+**Values go in a separate field, not into the statement.** The statement is
+fixed text; anything that changes per run goes in the step's Values field and is
+read back from a relation called `input`:
+
+```
+Values:  { "email": "{{trigger.email}}" }
+
+SELECT id, plan FROM customers
+WHERE email = (SELECT payload->>'email' FROM input)
+LIMIT 1
+```
+
+A `{{ }}` reference written into the statement itself is refused. It would put
+whatever arrived in a payload directly into your SQL, where a stray quote
+changes what the statement means.
+
+**`CREATE` and `ALTER` are refused in a workflow**, for the registration reason
+above. Build the schema in the editor, use it in the step.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Transform on ingest"
+    href="/docs/namespaces/transform"
+    description="Run SQL on every record as it arrives."
+  />
+  <Card
+    title="Sources"
+    href="/docs/namespaces/sources"
+    description="How rows get into a table in the first place."
+  />
+  <Card
+    title="Workflow steps"
+    href="/docs/workflows/steps"
+    description="The Run SQL step, and everything else a sequence can do."
+  />
+</Cards>

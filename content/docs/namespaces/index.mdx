@@ -29,7 +29,7 @@ same namespace. See [Files](/docs/namespaces/files).
 
 **Sources** are how data gets in without anyone typing it. A source gives you a
 web address you hand to another system, and rows arrive when that system sends
-them.
+them. See [Sources](/docs/namespaces/sources).
 
 ## Access is granted per namespace
 
@@ -88,13 +88,29 @@ are removed, and the stored files are deleted with them.
   mediated by the platform.
 - **It does not check an arriving payload against your table.** A source can map
   incoming field names onto your columns, but it does not reject a payload for
-  having the wrong shape.
+  having the wrong shape. A [transform](/docs/namespaces/transform) is where you
+  clean or refuse a record on the way in.
 - **It does not remove duplicates.** If a system sends the same record twice, you
   get two rows.
 - **It does not limit how much you store.** Nothing caps the number of tables,
   buckets, or files in a namespace.
 
 <Cards>
+  <Card
+    title="Sources"
+    href="/docs/namespaces/sources"
+    description="How rows arrive in a table without anyone typing them."
+  />
+  <Card
+    title="Transform on ingest"
+    href="/docs/namespaces/transform"
+    description="Run SQL on every record between the mapping and the write."
+  />
+  <Card
+    title="Running SQL"
+    href="/docs/namespaces/sql"
+    description="Query a namespace, test before you keep it, and what is refused."
+  />
   <Card
     title="Files"
     href="/docs/namespaces/files"

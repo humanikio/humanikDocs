@@ -192,7 +192,9 @@ SELECT, INSERT and UPDATE. An UPDATE has to have a WHERE clause.
 DELETE, DROP and TRUNCATE are refused here for the same reason they are refused
 everywhere in the product. CREATE and ALTER are refused in this step
 specifically: a table has to be created in the console so the namespace knows
-about it, and one made here would be invisible to the table list.
+about it, and one made here would be invisible to the table list. See
+[Running SQL](/docs/namespaces/sql) for the whole picture, including the editor
+you can build a statement in first.
 
 A write returns nothing unless you add `RETURNING`. Without it you get a count
 of rows changed and nothing else.
