@@ -1394,6 +1394,11 @@ paths:
         reads them, so a run in `running` or `waiting` returns a partial
         `nodeResults` array that grows on subsequent calls.
 
+        Paginated. Raise `limit` to 100 for a bigger page, then follow
+        `nextCursor` to read the rest. There is no value of `limit` that returns
+        every run, so a caller that only raises it stops at 100 and reports a
+        partial set as complete. See [Pagination](/docs/pagination) for the loop.
+
         **Permission:** `workflow:read` @ `workspace/{workspaceId}`
       parameters:
         - name: limit
@@ -1408,6 +1413,19 @@ paths:
             default: 25
             minimum: 1
             maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          description: |
+            The `nextCursor` from the previous page. Send it back unchanged to
+            read the following page.
+
+            The value is opaque. It encodes the ordering of the query that
+            produced it, so it is not portable to a different query or endpoint,
+            and it cannot be constructed by hand. A malformed or foreign cursor
+            is treated as absent and returns the first page rather than an error.
+          schema:
+            type: string
       responses:
         '200':
           description: OK.
@@ -1421,6 +1439,13 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/WorkflowRun'
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: |
+                      Pass as `cursor` to read the next page. `null` on the last
+                      page, which is the only reliable signal to stop. A page
+                      shorter than `limit` does not mean the end.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

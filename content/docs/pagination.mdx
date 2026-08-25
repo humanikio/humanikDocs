@@ -1,0 +1,119 @@
+---
+title: Pagination
+description: How to raise the page size, and how to page past it to pull every record.
+---
+
+Lists return a bounded number of records. Raising `limit` gets you a bigger
+page, and a cursor gets you the rest.
+
+## Raise the page size first
+
+Every paginated list accepts `limit`. The default is small because most callers
+are rendering a screen, but a program pulling records should ask for the maximum
+the endpoint allows.
+
+```bash
+curl "https://api.humanik.io/api/v1/workspaces/ws_a1b2c3/workflows/wf_x7y8z9/runs?limit=100" \
+  -H "Authorization: Bearer $HUMANIK_API_KEY"
+```
+
+Values are clamped rather than rejected. Asking for `limit=500` returns the
+maximum, and `limit=0` returns one. The maximum is stated on each endpoint in
+the [API reference](/docs/api-reference), because it differs by resource.
+
+<Callout type="warn">
+  A bigger page is not a substitute for paging. There is no value of `limit`
+  that returns every record, so a caller that only raises `limit` silently
+  stops at the maximum and reports a partial set as complete.
+</Callout>
+
+## Page past it with the cursor
+
+A paginated response carries `nextCursor` alongside the records. Pass it back as
+`cursor` to get the following page.
+
+```json
+{
+  "success": true,
+  "runs": [{ "runId": "run_a1b2c3" }],
+  "nextCursor": "eyJzIjoxNzU2MDkyODAwMDAwfQ"
+}
+```
+
+```bash
+curl "https://api.humanik.io/api/v1/workspaces/ws_a1b2c3/workflows/wf_x7y8z9/runs?limit=100&cursor=eyJzIjoxNzU2MDkyODAwMDAwfQ" \
+  -H "Authorization: Bearer $HUMANIK_API_KEY"
+```
+
+**`nextCursor` is `null` on the last page.** That is the signal to stop, and it
+is the only reliable one. A short page does not mean the end, and neither does
+an empty one.
+
+## Pulling every record
+
+Loop until `nextCursor` comes back `null`.
+
+```js
+async function fetchAllRuns(workspaceId, workflowId, apiKey) {
+  const runs = []
+  let cursor = null
+
+  do {
+    const params = new URLSearchParams({ limit: '100' })
+    if (cursor) params.set('cursor', cursor)
+
+    const res = await fetch(
+      `https://api.humanik.io/api/v1/workspaces/${workspaceId}/workflows/${workflowId}/runs?${params}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    )
+    const body = await res.json()
+    if (!body.success) throw new Error(body.error)
+
+    runs.push(...body.runs)
+    cursor = body.nextCursor
+  } while (cursor)
+
+  return runs
+}
+```
+
+Three rules keep that loop correct:
+
+1. **Stop on `null`, not on a short page.** A page can come back smaller than
+   `limit` and still have more behind it.
+2. **Send the cursor back unchanged.** It is an opaque string. Do not parse it,
+   build one, or carry one between different queries.
+3. **Do not skip a page.** Cursors are sequential. There is no way to jump to an
+   arbitrary offset, by design.
+
+## What a cursor guarantees
+
+A cursor marks a position in the result, not an offset into it. Records created
+while you are paging appear at the start of the list and do not shift the pages
+below, so a page is never skipped or repeated because the data changed mid loop.
+This matters most on lists that grow quickly, which is where offset based paging
+returns duplicates.
+
+What it does not do is freeze the data. A record changed after you read its page
+is returned as it was when you read it. If you need a consistent view, compare
+timestamps on the records rather than assuming the pages were a snapshot.
+
+## Cursors expire with the query, not with time
+
+A cursor encodes the ordering of the query that produced it. Change the filters,
+the sort direction, or the endpoint, and the cursor no longer means anything.
+Start that new query without one.
+
+A malformed or foreign cursor is treated as no cursor, so the call returns the
+first page rather than an error. Check that you are advancing if a loop appears
+to repeat itself.
+
+## Which lists are paginated
+
+Support is stated per endpoint in the [API reference](/docs/api-reference). A
+list that accepts `cursor` documents it as a parameter and returns `nextCursor`
+in the response.
+
+Some lists are deliberately not paginated because they are bounded by design,
+such as the nodes in one workflow. Those endpoints say so, and they return every
+record in one call.
