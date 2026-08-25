@@ -1,0 +1,196 @@
+---
+title: The path of a call
+description: What happens between someone dialing your number and hearing your employee answer.
+---
+
+Most software that answers phones is a thin layer over somebody else's calling
+product. The call is held elsewhere, a transcript arrives afterwards, and the
+software reads it.
+
+This is not that. The call arrives on a number you own, we decide who answers it,
+we hold the live session on our own servers for the length of the call, and the
+employee that speaks is the same employee that reads your inbox and updates your
+records. There is no handoff to a voice product and no transcript to catch up on
+later.
+
+This page follows one call from the first ring to the last word.
+
+## The whole path
+
+<CallPath />
+
+### 1. The call arrives with almost nothing
+
+A caller dials. What reaches us is the number they dialled, and that is the only
+thing we have to work with. So the first job is resolution: turning a number into
+one workspace, and then into the one employee set to receive on it.
+
+That lookup is the reason a number can only belong to one workspace. There is no
+ambiguity to resolve at the moment a person is waiting.
+
+### 2. Waking the employee starts before we answer
+
+An employee that is not working does not exist as a running machine. See
+[Where offices run](/docs/cloud). A caller will not wait for one to start, so
+waking it and answering the call happen at the same time rather than one after
+the other.
+
+<Callout type="warn">
+  **A call to a sleeping employee takes a message.** Rather than hold the line
+  through a start up, the caller rings for about eight seconds and reaches
+  voicemail, while the machine wakes in the background. The next call connects
+  normally.
+
+  If calls arriving on a quiet line matter to you, that is a reason to keep the
+  employee awake rather than to expect waking to get faster. Keeping it awake is
+  a setting, and it costs money while nothing is happening.
+</Callout>
+
+### 3. The session is ours, and it is held open
+
+Once we answer, one connection stays open for the whole call. Every sentence the
+caller says arrives on it, and every word of the answer leaves on it.
+
+The address of that session is signed by us and valid only briefly, so a session
+cannot be resumed, replayed, or opened by anything that did not get the address
+from us. If we cannot sign it, the call does not connect. Failing closed is the
+deliberate choice.
+
+### 4. Each sentence is a round trip to your employee
+
+A turn is not a message queued for later. The caller finishes a sentence, that
+sentence goes to the employee's own machine, and the reply comes back word by
+word while the caller is still on the line.
+
+The employee is not a voice bot with a copy of your data. It is the machine that
+holds your credentials, your tools, your files and your records, so during the
+call it can look something up, write it down, send a text, or check a calendar,
+and then say the answer.
+
+### 5. The answer starts speaking before it is finished
+
+Words leave for the phone network the moment they exist. The caller hears the
+start of a reply while the rest of it is still being written, which is what makes
+the conversation feel like a conversation rather than a series of pauses.
+
+## Hearing and speaking
+
+<VoicePipeline />
+
+Two of those three steps happen in the media path, where the audio already is.
+Doing them there rather than shipping audio to ourselves and back is most of the
+reason a reply starts quickly.
+
+**Hearing.** The caller's speech is transcribed live and we receive finished
+sentences, not audio. Half finished guesses arrive too, and we ignore them: a
+turn begins only when a sentence is complete.
+
+**Speaking.** Text is turned into speech by a voice provider as it arrives. We
+send pieces, not paragraphs.
+
+<Callout type="warn">
+  **Live transcription is English today.** Speech in another language is not
+  transcribed, which means the employee does not hear it and it does not appear
+  in the record. A caller who switches to English is heard again from that point.
+</Callout>
+
+### Two brains, one mouth
+
+Inside a turn there are two different jobs with two different speeds, and the
+system treats them as two different things.
+
+A **fast model writes the words the caller hears**. It owns the opening of every
+turn: the greeting, the acknowledgement, the small talk, anything already
+established on this call.
+
+Anything it could not know is handed to the **employee**, which does the actual
+work: reads the record, checks the calendar, sends the message. It then speaks
+its own answer directly to the caller.
+
+That last part is the design decision worth naming. There is no second model
+taking the employee's answer and saying it again in its own words. The employee
+writes for the ear and speaks for itself, so an answer cannot be finished and
+then lost on the way to the caller.
+
+<Callout>
+  **The line is not silent while work happens.** The employee narrates as it
+  goes, so a caller who asks something that takes real work hears what is being
+  done rather than a gap. Anything found during the call is also remembered for
+  the rest of it, so asking again later is answered immediately instead of
+  looked up twice.
+</Callout>
+
+### When somebody talks over the answer
+
+A caller interrupting the employee mid sentence cancels the reply and takes the
+new sentence, which is what an interruption should do.
+
+A caller who speaks in a gap, before anything has been said, is treated
+differently: the turn already under way is allowed to speak, and the extra
+sentence is recorded rather than answered. Answering both would mean talking over
+ourselves.
+
+## The call is one conversation, not a series of requests
+
+One identifier is created when the call starts and follows it everywhere: the
+wake up, the live session, the employee's memory of this call, and the record
+written into the CRM.
+
+That is what makes the employee remember the third sentence when the caller
+refers back to the first. It is one session, kept for the call, rather than a
+fresh model call each time with the previous text pasted in front of it.
+
+## How the call stays in the system
+
+<Callout>
+  **Every turn is written as it happens, not at the end.** A call that drops
+  halfway, or is cut off by a network problem, still leaves everything said up to
+  that point in the record.
+</Callout>
+
+The call lands in the [contact's one conversation](/docs/crm), next to their
+texts and their email. There is no separate call log to go and read.
+
+What is on the record:
+
+| | |
+| --- | --- |
+| **Who it was** | The caller is resolved to a contact, and a new one is created if they are not known yet |
+| **What was said** | Each turn, labelled as the caller or the employee |
+| **What happened** | Direction, status, and how long it lasted |
+| **The audio** | Only if recording is turned on for that number. See [Recording and transcripts](/docs/phone/recording-and-transcripts) |
+
+Calls placed by your people from the browser land in the same place as calls
+answered by an employee. One person, one thread, whatever channel it came in on.
+
+## When something goes wrong
+
+**If the employee produces nothing, the call stays silent.** It does not say
+"sorry, I did not catch that", because that is not what happened: the caller was
+heard, and our processing failed. A misleading apology is worse than a pause the
+caller can speak into.
+
+**One slow turn costs one turn.** A turn that hangs is given a hard limit, then
+closed, so the next thing the caller says is heard normally. The first turn of a
+call is allowed longer than the rest, because it is the one that pays for any
+remaining wake up.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Who answers"
+    href="/docs/phone/answering"
+    description="Employee, your people, or your people first with the employee behind them."
+  />
+  <Card
+    title="Recording and transcripts"
+    href="/docs/phone/recording-and-transcripts"
+    description="What is kept from a call, and what is not."
+  />
+  <Card
+    title="Where offices run"
+    href="/docs/cloud"
+    description="Why an employee sleeps, and what waking one costs."
+  />
+</Cards>

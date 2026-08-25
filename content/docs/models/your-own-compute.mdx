@@ -28,15 +28,25 @@ Enrolling a machine, choosing its flavor, and setting what it is allowed to do
 all live in [Devices](/docs/devices), which covers the whole setup. This page
 picks up once a machine is connected.
 
-Two kinds of machine can serve thinking:
+Two kinds of machine can serve thinking, and they are not two versions of the
+same thing:
 
-| Flavor | Serves | Behaves like |
-| --- | --- | --- |
-| **A** | Completions from a local model | A model |
-| **B** | A Claude Code agent turn | An agent |
+| Flavor | Serves | Behaves like | Can also act on that machine |
+| --- | --- | --- | --- |
+| **A** | Completions from a local model | A model | No |
+| **B** | A Claude Code agent turn | An agent | Yes, within the ceiling you set |
 
-Flavor B is the common one, and the distinction matters more than it looks. See
-[the split](#one-turn-two-sets-of-tools) below.
+**Flavor A moves the inference and nothing else.** The machine receives a
+conversation and returns text. The employee's tools all run where they always
+did, in the office.
+
+**Flavor B moves the reasoning to a capable agent that is already on your
+computer.** It can read your files, run things, and use the connectors that
+machine is signed into, in the middle of the same turn it is answering in. That
+is what produces the split below, and it does not arise on a flavor A machine,
+because there is no local half for it to be a split between.
+
+See [the split](#one-turn-two-sets-of-tools) below.
 
 ## Allocating it to a workspace
 
@@ -69,25 +79,47 @@ setting, it lands when the office next starts, so follow it with [Restart an off
   *Local machine* is picking that exact machine.
 </Callout>
 
+## How it looks on the board
+
+Once an office is pointed at a machine you own, it changes appearance on the
+board. This is deliberate: where an employee thinks changes what you can expect
+from it, so it should be visible without opening anything.
+
+<BoardNodes />
+
+Expand the node and the model row changes with it.
+
+| The row says | Meaning |
+| --- | --- |
+| **Model** | An ordinary employee. The value is the model it runs |
+| **Model · your machine** | Running on your hardware right now. The value names the machine |
+| **Model · fallback** | Pointed at your machine, but that machine is not connected, so work is going to the cloud |
+
+That third state is the one to look for when an employee is behaving like an
+ordinary cloud employee and you expected it not to. It means the machine is
+offline, not that the setting was lost.
+
+<Callout type="warn">
+  **The employee itself has not moved.** Pointing an office at your machine moves
+  where the thinking happens. The office is still a machine on HumanikOS, still
+  holding its skills, its integrations, its secrets and its environment, and that
+  is where its tools still run. An employee running on your laptop does not have
+  your laptop's copy of anything, and looking for its integrations there is the
+  mistake this distinction exists to prevent.
+</Callout>
+
 ## One turn, two sets of tools
 
 This is the part worth reading twice, because a flavor B machine serving an
 office holds **two different kinds of tool at once**, and they run in different
 places under different rules.
 
-```
-   ┌─ the office's tools ─────────────────────────────────┐
-   │  run on the office's own machine, with its own        │
-   │  credentials, reaching what the office was allocated  │
-   └──────────────────────────────────────────────────────┘
-                        ▲
-                        │  same turn, same agent
-                        ▼
-   ┌─ your machine's tools ───────────────────────────────┐
-   │  run on your laptop, reading your files, using your   │
-   │  connectors, bounded by the ceiling you set           │
-   └──────────────────────────────────────────────────────┘
-```
+It exists because the thing on your machine is an agent rather than a model. A
+model would end its turn and hand every tool back to the office. An agent already
+holds tools of its own, on the computer it is running on, so a single turn now
+spans two places.
+
+<ToolSplit />
 
 The agent is thinking on your hardware, and in one turn it can read a file on
 your disk **and** do something inside the office it is working for.
@@ -110,7 +142,7 @@ briefed on the distinction explicitly rather than left to work it out.
 
 For what this means for the integrations you have connected to an office, and a worked example
 of both halves in one turn, see
-[Using your office's integrations from here](/docs/devices#using-your-offices-integrations-from-here).
+[Tools your machine does not hold](/docs/devices/office-tools).
 
 ## When to use this
 

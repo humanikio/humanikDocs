@@ -1,0 +1,77 @@
+---
+title: Calling from the browser
+description: Your people dialing out from a business number, without a phone system on their desk.
+---
+
+A person can place a call from the workspace, in their browser, from a number the
+workspace holds. The person they are calling sees the business number rather than
+a personal one, and the call lands in the same conversation everything else does.
+
+No handset, no desk phone, and nothing to install.
+
+## What it takes
+
+**The workspace needs a number that can make calls.** Staff calling does not
+require the number to be assigned to an employee. A number allocated to the
+workspace and nothing else is enough, which makes it a reasonable way to run a
+line that only people use.
+
+**The person needs `phone:call`.** This is a separate action from `phone:send`
+for a specific reason: it is the ability to open a voice line as the business,
+and read only roles should not have it.
+
+<Callout>
+  **`phone:call` is held by people, not by employees.** The built in
+  [`officeAgent`](/docs/access-control/roles) role holds `phone:send` and not
+  `phone:call`, so an employee cannot mint a browser calling credential. Employees
+  place calls their own way, from their own machine, and that is covered in
+  [Contacts and conversations](/docs/crm).
+</Callout>
+
+## Which number the call comes from
+
+The person picks, and the pick is checked. A number that is not allocated to that
+workspace is refused rather than substituted.
+
+The check does not trust the browser. The credential minted for a session carries
+both who the person is and which workspace they are acting in, it is signed, and
+the from number is validated against that rather than against anything the page
+sends. Someone editing values in their browser cannot call from another
+workspace's number.
+
+Credentials last an hour, so a long session renews rather than persisting.
+
+## Outward only
+
+<Callout type="warn">
+  **You can call out from the browser. You cannot receive in it.** Inbound calls
+  ring real phones, using the call forwarding number each person sets for
+  themselves. See [Who answers](/docs/phone/answering).
+</Callout>
+
+## What is kept
+
+A call placed this way is recorded only if `recordOutboundStaff` is on for that
+number, and it is transcribed when it is recorded, with each side labelled. Both
+are off by default. See
+[Recording and transcripts](/docs/phone/recording-and-transcripts).
+
+Either way the call appears in the contact's conversation, attributed to the
+person who made it, with its direction, status and length. A person calling a
+customer and an employee calling the same customer produce the same kind of
+record in the same thread.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Who answers"
+    href="/docs/phone/answering"
+    description="Ringing your people when a call comes the other way."
+  />
+  <Card
+    title="Access control"
+    href="/docs/access-control"
+    description="Granting phone actions, and to whom."
+  />
+</Cards>

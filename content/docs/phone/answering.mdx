@@ -1,0 +1,128 @@
+---
+title: Who answers
+description: Sending a number to your employee, to your people in order, or to both.
+---
+
+Every number decides for itself who picks up. One line can go straight to an
+employee while another rings three people first and falls back to the employee
+behind them.
+
+<AnswerModes />
+
+The default is `ai`. A number you have just allocated is answered by the employee
+holding it, with voicemail behind it.
+
+## Ringing your people
+
+Both staff modes work the same way: an ordered list of people, rung one at a
+time, in the order you set.
+
+<Steps>
+
+<Step>
+**Each person adds their own number.** A call forwarding number is set by the
+person themselves, in their workspace settings. Nobody adds it on their behalf.
+</Step>
+
+<Step>
+**An administrator builds the ring order.** The picker shows who has a number
+configured and lets you order them. It never shows the number.
+</Step>
+
+<Step>
+**The cascade runs in order.** Each person is rung for a set time before the call
+moves to the next one. The default is fifteen seconds per person.
+</Step>
+
+<Step>
+**Whoever answers presses 1 to take it.** Then the caller is connected. This step
+is on by default and can be turned off.
+</Step>
+
+<Step>
+**If nobody takes it**, `staff-first` hands the call to the employee, and
+`staff-only` goes to voicemail.
+</Step>
+
+</Steps>
+
+<Callout>
+  **A staff member's personal number is never shown to anyone.** The ring order
+  picker returns whether a person has a number configured and nothing more, so an
+  administrator can put someone in the order without ever seeing what they are
+  dialing.
+</Callout>
+
+### Why the keypress is there
+
+Without it, a personal voicemail can hijack the call. A phone that is off, or
+declined, sends the call to that person's own voicemail, which answers, which
+looks to the cascade exactly like a human picking up. The caller would then be
+recording a message on somebody's personal phone instead of moving to the next
+person on the list.
+
+Requiring a keypress makes the difference visible. A voicemail box does not press
+1, so an unconfirmed leg counts as no answer and the cascade continues.
+
+Turn it off only where every number in the ring order is a phone that a person
+actually answers.
+
+## What the employee says first
+
+When an employee answers, it opens the call. The default is a short line asking
+how it can help.
+
+You can replace it with your own, per number, and an empty greeting is a real
+setting: the employee answers and says nothing, leaving the caller to speak
+first.
+
+<Callout type="warn">
+  **Silence is not a good default, which is why it is not the default.** A call
+  answered into silence usually means the caller talks first, into what feels to
+  them like a dead line. Set an empty greeting deliberately, not to save a
+  second.
+</Callout>
+
+## When the employee cannot take the call
+
+An employee that has been idle is not running, and starting one takes longer than
+a caller will wait. When a call arrives for a sleeping employee the caller rings
+for about eight seconds and reaches voicemail, while the machine wakes in the
+background. The next call connects normally.
+
+This applies to `ai` and to `staff-first` after the cascade has run out. See
+[The path of a call](/docs/phone/how-a-call-works) for why it works this way, and
+[Where offices run](/docs/cloud) for keeping an employee awake.
+
+## Configuring it
+
+Answer mode, ring order, timeout, the keypress and the greeting are all part of
+one voice configuration, set per number, in the console.
+
+| | |
+| --- | --- |
+| `answerMode` | `ai`, `staff-first`, or `staff-only`. Default `ai` |
+| `ringTargets` | The ordered list of people. Sending a new list replaces the old one, because the order is the point |
+| `ringTimeoutSec` | Seconds each person rings before the call moves on. Default 15 |
+| `confirmAnswer` | The press 1 step. Default on |
+| `greeting` | The employee's opening line. Empty means answer silently |
+
+These are console settings rather than API ones: the whole number management
+surface requires a signed in person and refuses a service account key. Paths and
+permissions are listed in
+[Phone numbers and email](/docs/api-reference/phone-and-email).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Voicemail"
+    href="/docs/phone/voicemail"
+    description="The greeting, the recording, and where the message lands."
+  />
+  <Card
+    title="Calling from the browser"
+    href="/docs/phone/staff-calling"
+    description="Your people dialing out from the same number."
+  />
+</Cards>

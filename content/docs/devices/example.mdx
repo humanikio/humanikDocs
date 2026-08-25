@@ -1,0 +1,242 @@
+---
+title: A worked example
+description: One machine, one employee named after it, and a team that can send it work.
+---
+
+The clearest way to understand a device is to set one up for a real job. This
+page follows one all the way through: a Mac mini in the corner of an office,
+turned into an employee the whole team can send work to.
+
+Everything here uses what the earlier pages describe. Nothing is a special mode.
+
+## What makes this possible
+
+The machine is running a **capable agent**, not just serving inference. That is
+the whole basis of the example.
+
+If it were only doing the thinking, this would be a cost and privacy decision and
+nothing else: the same employee, the same abilities, a different place for the
+tokens to be produced. Because the thing on the machine is an agent, it has tools
+where it is running, so it can open a file on that computer, run something, and
+use the connectors that machine is signed into.
+
+So a message typed in the workspace turns into work happening on a specific
+computer. And because the credentialed half of the work is still done in the
+office, that computer never has to hold a company credential to be useful. See
+[Tools your machine does not hold](/docs/devices/office-tools).
+
+## The setup
+
+A machine that is always on, enrolled as flavor B so it behaves like an agent,
+and an employee pointed at it.
+
+<Steps>
+
+<Step>
+**Enrol the machine.** `humanikd setup` on the Mac mini, flavor B, signed into
+the account whose connectors this machine should have. See
+[Connect your own machine](/docs/devices).
+</Step>
+
+<Step>
+**Set its ceiling deliberately.** This is a machine doing real local work, so it
+probably needs more than the read only default. Name exactly what it may do, and
+nothing else.
+</Step>
+
+<Step>
+**Allocate it to the workspace** that should be able to use it, then create an
+employee and point that employee at it. Both steps are on
+[Bring your own compute](/docs/models/your-own-compute).
+</Step>
+
+<Step>
+**Name the employee after the machine.** Call it `Mac mini` or `Studio box`
+rather than something abstract.
+</Step>
+
+</Steps>
+
+### The name is what weaves the machine into the workspace
+
+This step looks cosmetic and is not.
+
+An employee appears everywhere an employee can be picked: on the board, in the
+list people choose from when they want something done, and in the step that hands
+work to one from inside a workflow. Whatever you called it is the label in all
+of those places.
+
+So calling it `Mac mini` rather than `Assistant 3` makes a physical computer into
+something the workspace can address by name. Someone building a workflow that
+needs a file from that machine picks it out of a list because the name says which
+machine it is. Nothing else in the product has to know that this employee is
+special: the name carries it.
+
+Give it a description in the same spirit. "Runs on the Mac mini in the studio.
+Use it for anything that needs files on that machine" tells a colleague both what
+it is for and why it is sometimes the only one that will do.
+
+The board says the same thing a second way, without relying on the name:
+
+<BoardNodes />
+
+An employee whose machine is offline keeps its shape and says so in its model
+row, which is the difference between "this is not available right now" and "this
+is not that kind of employee".
+
+## What you can now ask it
+
+Work reaches this employee three ways, and all three end up on the Mac mini.
+
+| | |
+| --- | --- |
+| **Somebody sends it a message** | The most common one. A person in the workspace asks it to do something, in words |
+| **A schedule fires** | The employee wakes on a recurring schedule and does a job nobody had to remember |
+| **A workflow reaches a step** | The **Prompt Office** step hands work to this employee mid sequence. See [Workflow steps](/docs/workflows/steps#asking-an-employee) |
+
+That third one is the interesting one, because it means work on your computer can
+be driven by things happening in the workspace rather than by somebody deciding
+to type.
+
+A workflow that fires when a deal moves stage, or when a form arrives, or on a
+booking, can hand the job to this employee, and the job runs on the Mac mini. The
+trigger lives in the workspace and the work lives on your hardware.
+
+<Callout type="warn">
+  **A workflow does not wait for the answer.** The **Prompt Office** step hands
+  the work over and carries on. The employee's reply lands in its own
+  conversation, not back in the workflow, so nothing later in the sequence should
+  depend on what it said.
+</Callout>
+
+## Locking it down to the people who should have it
+
+Anyone holding `office:use` on that employee can send it work. The permission is
+on the employee, not on the machine, and it is granted exactly the way it is for
+any other employee, which means the ordinary
+[access control](/docs/access-control) model is the lockdown mechanism here.
+
+The thing to get right is the **boundary** on the assignment. A role assigned at
+the workspace covers every employee in it, including this one. Assigned at this
+one employee, it covers only this one.
+
+| Assignment | Who ends up able to run work on the Mac mini |
+| --- | --- |
+| `officeOperator` @ `workspace/W1` | Everyone with that assignment, for every employee in the workspace |
+| `officeOperator` @ `workspace/W1/office/O3` | Only the people you name, and only through this employee |
+| No assignment | Nobody. It is not visible to them as something they can drive |
+
+**Scope it at the office.** For a machine that is somebody's actual computer, a
+workspace wide grant is almost never what you meant: it hands use of that
+computer to everyone who was given broad access for unrelated reasons. Naming the
+employee in the assignment is a one line difference that turns "the workspace can
+use Tyler's machine" into "these three people can".
+
+The same is true in reverse. Someone who should be able to read the results does
+not need `office:use` to do it, because the conversation is where the answers
+land.
+
+<Callout>
+  **A machine that serves people who are not you should not inherit your
+  connectors.** A flavor B machine passes the MCP servers you configured on it
+  through to whoever is driving the employee. Setting `mcp.scope: isolated` in
+  the device config hides them, so a colleague using this employee gets the
+  machine without getting your signed in accounts. It is mutually exclusive with
+  the browser, for a reason explained on
+  [Use your own browser](/docs/devices/browser#devices-that-serve-other-people).
+</Callout>
+
+The grant is worth pausing on, because it is the one thing about this arrangement
+that surprises people.
+
+<Callout type="warn">
+  **Granting someone use of this employee lets them cause work to run on your
+  computer.** Not arbitrary work: everything they can cause is bounded by the
+  ceiling you set on the machine, and by the directory the daemon derives. But
+  within that boundary, they do not have to ask you, and you are not prompted.
+
+  The control is the ceiling and the grant, in that order. Set the ceiling for
+  what you are willing to let the workspace do unattended, then decide who gets
+  `office:use`.
+</Callout>
+
+## Adding a second machine for a different job
+
+One machine per employee, and the flavor follows the job.
+
+**A machine that does things.** Flavor B, as above. It reasons on your hardware,
+touches your files, uses your connectors, and reaches company software through
+its office. This is the one that behaves like a colleague with their own
+computer.
+
+**A machine that thinks privately.** Flavor A, running a local model. The prompt,
+the context and the answer stay on your hardware and no vendor is in the path at
+all. Its employee is an ordinary one in every other respect.
+
+Both point at their own employee, and both get the credentialed half of their
+work done in the office rather than locally. That part does not change with the
+flavor. What changes is only whether the turn pauses mid way or breaks and
+resumes, which is covered in
+[Tools your machine does not hold](/docs/devices/office-tools).
+
+<Callout>
+  **Different machines, different ceilings.** The Mac mini in your own office and
+  a contractor's laptop are the same kind of device with very different sensible
+  limits. The ceiling is per machine and set by whoever owns it, so those two do
+  not have to agree.
+</Callout>
+
+## What this arrangement does not give you
+
+**No failover to another machine.** If the Mac mini is asleep, work falls back to
+the cloud rather than to your second device. If the local half of a job was the
+point, a cloud fallback will not do it, and that is the reason to keep a machine
+that matters switched on.
+
+**No approval prompt.** Nothing asks the machine owner before a job runs. See the
+warning above.
+
+**No sharing one machine between two employees.** A machine serves one flavor,
+and pointing two employees at the same one gives up the property this whole
+arrangement rests on: knowing what a job will run on. If two employees need to do
+local work, give each its own machine.
+
+**Connectors belong to the signed in account.** If somebody signs this machine
+into a different account, the hosted connectors go with the old one and the
+machine stays online with fewer abilities than the day before. Treat the account
+this machine is signed into as part of its configuration rather than a personal
+preference.
+
+**A long turn can lose its tail.** An interruption between your machine and the
+platform during a long agent turn discards the remainder rather than resuming it.
+See [How work reaches your machine](/docs/devices/how-work-reaches-it).
+
+## What it costs
+
+Inference on your own machine has no per token cost and no vendor. You are paying
+for hardware you already own, and no platform credit is spent on the thinking.
+
+The office itself is still a machine on HumanikOS, and it still costs while it is
+awake, because that is where the credentialed work happens and where the
+employee's identity lives. See [Where offices run](/docs/cloud) and
+[Spending](/docs/spend).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Tools your machine does not hold"
+    href="/docs/devices/office-tools"
+    description="The other half of the turn, and how to set the office up for it."
+  />
+  <Card
+    title="How work reaches your machine"
+    href="/docs/devices/how-work-reaches-it"
+    description="The connection, the queue, and what a deploy costs."
+  />
+  <Card
+    title="Bring your own compute"
+    href="/docs/models/your-own-compute"
+    description="Allocating a machine and pointing an employee at it."
+  />
+</Cards>

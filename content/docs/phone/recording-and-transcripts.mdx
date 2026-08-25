@@ -1,0 +1,96 @@
+---
+title: Recording and transcripts
+description: What is kept from a call, who can play it back, and where the words come from.
+---
+
+Two different things come out of a call, and they are produced two different
+ways. A **transcript** is text of what was said. A **recording** is the audio.
+You can have either without the other.
+
+## Recording is off until you turn it on
+
+There is no recording switch at the phone company and nothing to reconcile
+upstream. The decision is made per call, at the moment the call starts, by
+reading the number's settings. Turning recording off stops the next call from
+being recorded, with nothing left over.
+
+Two settings, both off by default:
+
+| Setting | Covers |
+| --- | --- |
+| `recordOutboundOffice` | Calls your employee is on |
+| `recordOutboundStaff` | Calls your people place from the browser |
+
+<Callout type="warn">
+  **The first one is named for outbound calls and covers inbound calls too.** An
+  employee's calls are recorded in both directions when it is on. If you enable
+  it to capture calls the employee places, you are also recording the calls it
+  answers.
+</Callout>
+
+Recordings are dual channel, one side of the conversation per channel, so the two
+speakers stay separable.
+
+### Playing one back
+
+A recording is not a public link. Playing one goes through us, needs `phone:read`
+in the workspace that owns the call, and is checked against where the call
+actually happened rather than against the workspace the request claims.
+
+That means a recording cannot be played by guessing an identifier, and a link
+copied out of the console does not work for someone without permission.
+
+## Where the words come from
+
+**A call your employee holds is transcribed as part of the conversation.** The
+caller's speech is turned into text so the employee can answer it, and that text
+is the transcript. It is written turn by turn, as it happens, so a call that ends
+badly still leaves everything said up to that point.
+
+**A call between two people is transcribed only if it is recorded.** Transcription
+is deliberately coupled to recording on those calls: if you have decided not to
+keep the audio, we do not keep a written copy of it either. Turning recording on
+turns both on, with each side labelled.
+
+**Voicemail is not transcribed at all.** A message is audio, and someone has to
+listen to it.
+
+<Callout type="warn">
+  **Transcription is English today.** Speech in another language is not
+  transcribed. On an employee call that also means the employee does not hear it,
+  because the text is what reaches it.
+</Callout>
+
+## Everything lands in one place
+
+Whatever is produced goes onto the call's record in the contact's conversation,
+next to their texts and their email. There is no call log to reconcile with the
+CRM, because there is no separate call log.
+
+A recording arrives later than the call does. The audio is finalised after
+everyone hangs up, so a call appears in the conversation immediately and its
+recording attaches to the same record when it is ready.
+
+## Before you turn recording on
+
+Recording and transcribing a call is regulated, and the rules depend on where
+both parties are. Some places require both sides to consent, some require one,
+and some require an announcement at the start of the call.
+
+Nothing here announces anything. The employee's greeting is the place to say it,
+if saying it is what you need. See [Who answers](/docs/phone/answering).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="The path of a call"
+    href="/docs/phone/how-a-call-works"
+    description="Where the transcript is produced, and why it is written as it happens."
+  />
+  <Card
+    title="Contacts and conversations"
+    href="/docs/crm"
+    description="The record a call attaches to."
+  />
+</Cards>

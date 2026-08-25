@@ -1,0 +1,152 @@
+---
+title: Phone numbers
+description: Buying a number, giving it to an employee, and what changes the moment you do.
+---
+
+A phone number is something your organization owns, in the same sense as a
+workspace or a domain. You buy one inside the product, hand it down to the people
+and employees who should use it, and configure it per number.
+
+What makes a number different from every other asset is what happens after you
+hand it over. A domain gives an employee an address to send from. A number gives
+an employee a line that rings, with a person on the other end who is waiting for
+an answer right now. Almost everything on these pages follows from that one
+difference.
+
+## Nobody has to set up telephony
+
+There is no account to open with a phone company, no credentials to paste in, and
+no connector to configure. You search available numbers from inside your
+organization, buy one, and it exists.
+
+<Callout>
+  The other side of that is worth knowing before you buy: **you cannot bring a
+  number or an account you already have.** Numbers come from inside the product,
+  and they are the only numbers your employees can use.
+</Callout>
+
+## Who can hold a number
+
+<AllocationChain />
+
+Three levels, and each one is a different decision made by a different person.
+
+**Your organization owns it.** Buying a number spends money every month from the
+moment it is bought, so it sits with someone who administers the organization
+rather than with an individual team.
+
+**One workspace holds it.** A number belongs to exactly one workspace and cannot
+be shared between two. Pointing it somewhere else means taking it back from the
+first workspace before giving it to the second.
+
+**Any number of employees can use it, and exactly one answers it.** The employee
+holding the number as **primary** is the one that receives incoming calls and
+texts. The others can call and text out from it, which is what lets a team of
+employees present one business line.
+
+<Callout type="warn">
+  **Promoting a different employee to primary moves inbound, it does not add a
+  second recipient.** There is no ringing of two employees, and no queue. If two
+  employees should each answer their own calls, they need a number each.
+</Callout>
+
+### Giving a number to an employee also gives it to the workspace
+
+You do not have to do both. Allocating a number to an employee records the
+workspace allocation at the same time, so the two cannot drift apart, and an
+administrator who only ever uses the employee picker still ends up with correct
+records underneath.
+
+## What happens the moment you allocate
+
+Three things, none of which you do by hand.
+
+| | |
+| --- | --- |
+| **Incoming calls start arriving** | The number is wired to us when it is allocated, not when someone remembers to configure it. Doing it again is harmless. |
+| **Text messaging turns on** | Inbound texts reach the primary employee, and it replies. Auto reply is on by default, per number, and you can turn it off. See [Text messaging](/docs/phone/texting). |
+| **Voicemail turns on** | Anything the employee cannot take becomes a message rather than a dead line. See [Voicemail](/docs/phone/voicemail). |
+
+If you want a number that does not text, or does not take messages, turn those
+off after allocating rather than expecting them to be off to begin with.
+
+## Taking a number back
+
+Two different actions, and only one of them is reversible.
+
+**Deallocating** removes the number from an employee or a workspace. The number
+stays yours and can be given to somebody else. This is the one you want almost
+every time.
+
+**Releasing** gives the number up entirely. It stops being yours, it stops being
+billed, and it returns to the public pool where it may be given to someone else.
+
+<Callout type="warn">
+  **Releasing cannot be undone, and nothing checks what the number was doing
+  first.** There is no warning about calls in progress, employees holding it, or
+  conversations that reference it. Deallocate when you mean "stop using this
+  here". Release only when you mean "we no longer want this number at all".
+</Callout>
+
+An employee that has just had a number taken away may keep using it for outgoing
+messages until its machine next restarts. Removing the capability from the
+employee is the reliable control, not removing the number.
+
+## What an employee can do with one
+
+| | Needs |
+| --- | --- |
+| Answer an incoming call | Holding the number as primary |
+| Speak on that call, look things up, and act during it | Its ordinary permissions |
+| Place a call | A number assigned to it |
+| Send a text | [`phone:send`](/docs/access-control/actions) at the workspace |
+| Buy, allocate or configure a number | **Nothing. An employee cannot do this at all** |
+
+The last row is the shape of the whole system. Acquiring a capability is a human
+action, exercising it is a machine action, and the split is enforced rather than
+advised: the entire number management surface refuses a service account key, so
+an employee cannot buy itself a line however it is asked.
+
+<Callout>
+  The built in [`officeAgent`](/docs/access-control/roles) role holds
+  `phone:send` and not `phone:call`. An employee with that role texts from its
+  number but cannot mint a dialing credential for a browser. That distinction is
+  doing real work rather than decorating the list.
+</Callout>
+
+## What this does not do
+
+**Nothing meters calls or messages.** No budget, no cap, and no usage record
+reaches [spending limits](/docs/spend). A number costs what it costs and the
+traffic on it is unbounded.
+
+**Nothing asks you before an employee calls or texts someone.** There is no
+approval step and no review queue. The control is the permission and the
+allocation: an employee with no number cannot place a call, and an employee
+without `phone:send` cannot text.
+
+**An incoming call or text does not start a workflow.** They land in the
+conversation and reach the employee. They are not a trigger.
+
+**Routing is per number, not per organization.** There are no business hours, no
+queues, and no overflow groups.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="The path of a call"
+    href="/docs/phone/how-a-call-works"
+    description="What actually happens between a caller dialing and hearing an answer."
+  />
+  <Card
+    title="Who answers"
+    href="/docs/phone/answering"
+    description="Sending a number to your employee, to your people, or to both in order."
+  />
+  <Card
+    title="Phone numbers API"
+    href="/docs/api-reference/phone-and-email"
+    description="The management surface, and the one endpoint an employee can call."
+  />
+</Cards>

@@ -63,6 +63,40 @@ An appointment created directly in Google or Outlook has none of this, because
 nobody filled a form in. A custom question also resolves empty on a page that
 does not ask it, so branch on the answer rather than assuming it is there.
 
+### What a record hands the workflow
+
+A data source trigger hands the run **the row it just wrote**, using the column
+names from that source's [key mapping](/docs/namespaces/sources#the-key-mapping).
+A source with `name`, `email` and `phone` columns gives you
+`{{trigger.name}}`, `{{trigger.email}}` and `{{trigger.phone}}`.
+
+Two fixed fields come with every one:
+
+- `{{trigger.eventKey}}` names the data source that fired
+- `{{trigger.event}}` is the envelope type, which is always `webhook`. It is not
+  a description of what happened
+
+<Callout type="warn">
+  **The columns are the mapping, not the payload.** Only mapped columns resolve.
+  A field that arrives in the payload and has no column is kept on the row but is
+  not a token, and `{{trigger.recordId}}`, `{{trigger.payload}}` and
+  `{{trigger.timestamp}}` resolve empty because they are not handed over at all.
+</Callout>
+
+So the mapping is worth settling before you build the workflow, because it is
+what decides which tokens exist. If a source has no mapping yet, send it a
+payload first and build the mapping against it.
+
+**Only a new record starts a run.** Editing or deleting a row does not, and
+nothing fires on a schedule.
+
+<Callout type="warn">
+  **The Test address does not start workflows.** It captures a payload and writes
+  no row, so there is nothing to trigger on. Testing a workflow end to end means
+  sending to the Live address and accepting a real row. See
+  [the two addresses](/docs/namespaces/sources#the-two-addresses).
+</Callout>
+
 ## Messaging
 
 | Step | Does |

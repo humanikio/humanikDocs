@@ -1,0 +1,296 @@
+---
+title: Tools your machine does not hold
+description: Turning an office into an execution environment for the credentialed half of the work.
+---
+
+An employee running on your machine can do two kinds of thing in one breath: work
+on your computer, and work that needs a company credential your computer has no
+business holding.
+
+It does the first here and the second in its office, and it does not experience
+them as different. That split is the point of this page, and it is what makes it
+reasonable to run real work on a laptop.
+
+The split exists because a flavor B machine runs a **capable agent** rather than
+serving pure inference. It has tools of its own, on your computer, so a turn
+spans two places at once. This page assumes that flavor throughout.
+
+<ToolSplit />
+
+## The office is the place credentials already are
+
+An office is a machine of its own with its own vault. Everything you connect to
+it, along with everything it ships with, is available to the employee as tools
+with names.
+
+**Your machine never learns any of it.** No key is written to it, sent to it, or
+readable from it. When the employee needs one, the call is made in the office and
+only the answer comes back.
+
+That holds even for a machine you trust completely, and it matters more the less
+you own the machine: a contractor's laptop can run work against your billing
+system without ever being able to make that call on its own.
+
+## What the office brings to the turn
+
+Two kinds of tool, and they behave the same way from the employee's side.
+
+### The ones that ship
+
+Every office starts with a working set, without you configuring anything: its
+[contacts and conversations](/docs/crm), its
+[calendars and booking links](/docs/calendars), its
+[files and namespaces](/docs/namespaces), the
+[browsers](/docs/api-reference/browsers) it has been given, its own schedules,
+image generation, and the ability to read its own
+[skills](/docs/skills-and-protocols) and integrations.
+
+These are compiled into the office. There is nothing to enable and nothing that
+can drift.
+
+### The ones you connect
+
+Everything else comes from an [integration](/docs/integrations). Each endpoint
+you declare and enable becomes a tool the employee can call by name, with its own
+parameter schema, and the credential stays where you put it. See
+[Integration skills](/docs/integrations/skills) for how the employee is taught to
+use one, and [Creating an integration](/docs/integrations/creating) for declaring
+the endpoints.
+
+<Callout>
+  **An integration cannot take over a tool that ships.** Names are resolved
+  against the built in set first, and only a miss falls through to your
+  integrations, so an integration reusing a shipped name is ignored rather than
+  shadowing it. Two integrations declaring the same name keep the first and warn
+  about the second.
+</Callout>
+
+## How the call actually crosses
+
+What happens next depends on which flavor of machine you are running, and the
+difference is worth knowing because it changes what a turn feels like.
+
+<Tabs items={['Flavor B, an agent', 'Flavor A, a model']}>
+
+<Tab value="Flavor B, an agent">
+
+The agent on your machine calls the tool and waits. The call travels up the same
+connection your machine already holds, HumanikOS routes it to that office's
+machine, the office runs it with its own credentials, and the result comes back
+down. The agent picks up in the same turn, exactly where it stopped.
+
+This is what makes a single instruction like "reconcile this local file against
+last month's payouts" work: the reading and the writing happen on your disk, the
+payout lookup happens in the office, and there is no round trip through a person
+in between.
+
+**One tool call is capped at about two minutes.** A tool that takes longer fails
+with a readable error rather than leaving the agent blocked for the rest of the
+turn.
+
+**Pictures come back too.** A tool that returns a screenshot or a rendered image
+sends it alongside its text rather than encoded inside it, so the model gets both
+the picture and the context for it.
+
+</Tab>
+
+<Tab value="Flavor A, a model">
+
+A local model is a model, so it ends its turn by saying which tool it wants and
+stopping. The office runs the tool and starts the next turn with the result
+already in hand.
+
+The tool still runs in the office, with the office's credentials, and your
+machine still never sees them.
+
+<Callout>
+  **On a flavor A machine there is no local half.** The machine has no tools, no
+  working directory, and no connectors, because a model has nothing to apply them
+  to. Every tool in the turn is an office tool. The page you are reading still
+  applies, it is just that the split it describes has only one side.
+
+  Everything about acting on your own computer needs
+  [flavor B](/docs/devices#three-kinds-of-device).
+</Callout>
+
+</Tab>
+
+</Tabs>
+
+<Callout type="warn">
+  **The third flavor does not do this at all.** An OpenClaw harness device brings
+  its own tools and calls the platform itself, so no office tool is offered to it.
+  It is also not available yet.
+</Callout>
+
+## A worked example
+
+Say you have a Stripe integration on the office and the employee is running on
+your laptop:
+
+> *"Reconcile yesterday's payouts against the ledger in `~/finance/2026-08.csv`
+> and write me a summary."*
+
+<Steps>
+
+<Step>
+**It reads `~/finance/2026-08.csv`** with `Read`, on your machine. That file never
+leaves it, and no copy is uploaded.
+</Step>
+
+<Step>
+**It calls `stripe_list_payouts`.** That call does not run here. It goes up to the
+office, which holds the Stripe key, makes the request, and sends back only the
+response.
+</Step>
+
+<Step>
+**It compares the two** and writes the summary to a path you allowed.
+</Step>
+
+</Steps>
+
+Steps 1 and 3 happen on your hardware under your ceiling. Step 2 happens in the
+office under the office's permissions. The employee does not distinguish between
+them, because from where it sits they are all just tools.
+
+**Local files stay local.** The office never sees `~/finance/2026-08.csv`. It
+sees a request for a list of payouts, and answers it.
+
+## The credential never enters the conversation
+
+This is worth stating on its own, because the obvious implementation gets it
+wrong.
+
+The employee supplies arguments. The office attaches the credential to the
+outgoing request. At no point is a key placed in the employee's context, which
+means it is not in the transcript, not in any log that captures one, and not in
+anything that travels to your machine.
+
+The office reads the value from its vault when the call is made, not from
+anything the model said, and holds it briefly rather than keeping it around.
+
+**Arguments the endpoint did not declare are dropped rather than forwarded.** If
+a model invents a parameter, it does not reach the third party. An unfilled
+placeholder in a path is refused rather than sent literally.
+
+## Setting it up
+
+<Steps>
+
+<Step>
+**Connect what the office needs.** Create the [integrations](/docs/integrations)
+on the office, declare each endpoint you want callable with every parameter given
+a location, and point them at a secret group. A tenant vault group is the right
+home for anything shared across employees.
+</Step>
+
+<Step>
+**Restart the office.** The callable set is built when the office starts.
+Declaring an endpoint on a running office does not add the tool until it comes
+back up.
+</Step>
+
+<Step>
+**Enrol your machine** and choose flavor B, which is the one that behaves like an
+agent. [Connect your own machine](/docs/devices) covers the whole install, and it
+is the point where you decide the ceiling.
+</Step>
+
+<Step>
+**Set the ceiling for the local half.** Only the tools you name are permitted on
+your machine, and the default is read only. This governs what happens on your
+computer and has no effect on what the office may do.
+</Step>
+
+<Step>
+**Allocate the machine to the workspace**, then point the office at it. Both
+steps, and the request that does the second one, are on
+[Bring your own compute](/docs/models/your-own-compute).
+</Step>
+
+<Step>
+**Restart the office again** so it picks up the machine, then check the board:
+the employee's node changes shape when it is running on your hardware. See
+[how it looks](/docs/models/your-own-compute#how-it-looks-on-the-board).
+</Step>
+
+</Steps>
+
+Then confirm the machine side is sound without spending anything:
+
+```bash
+humanikd verify     # everything this flavor needs
+humanikd status     # what this machine is advertising right now
+```
+
+## The rules that keep the two halves apart
+
+**Your ceiling governs your machine, and only your machine.** Widening it does
+not widen what the office may do, and narrowing it does not restrict the office.
+The ceiling exists to protect your computer, not to bound the employee.
+
+**The office's permissions govern the office, and only the office.** An
+integration reaching an API is doing so with what that office was granted. It has
+no route back onto your machine.
+
+**Nothing upstream can name your tools.** The job never carries a tool list, a
+working directory, or a permission mode. Your machine intersects what is asked
+with what you allowed, and never widens.
+
+**The employee is told which is which.** It is briefed explicitly on the two
+trust domains rather than left to work out from a name whether a tool runs on
+your disk or in the office.
+
+## When a tool is not there
+
+Almost always the integration, not the device.
+
+<Steps>
+
+<Step>
+**Check the endpoint is declared and enabled**, and that every parameter says
+where it belongs. A parameter with no location is dropped at call time, which
+looks like a broken tool rather than a missing field.
+</Step>
+
+<Step>
+**Check the integration has a base address and a credential.** One with neither
+registers no tools at all. That is a valid thing to have, and the employee is
+told plainly that it has no callable endpoints rather than being invited to
+invent names.
+</Step>
+
+<Step>
+**Restart the office.** The registry is built at boot, so a declaration added
+since the last start is not loaded.
+</Step>
+
+</Steps>
+
+<Callout type="warn">
+  **Do not trust a message telling you the office needs redeploying.** When a
+  single tool is missing, the employee can report it as an out of date office.
+  One tool failing is not evidence of that, and a redeploy will not fix a
+  declaration problem. Work through the three steps above first.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="A worked example"
+    href="/docs/devices/example"
+    description="Your own computer as an employee the whole team can send work to."
+  />
+  <Card
+    title="Integrations and secrets"
+    href="/docs/integrations"
+    description="Connecting software, and where its credentials live."
+  />
+  <Card
+    title="How work reaches your machine"
+    href="/docs/devices/how-work-reaches-it"
+    description="The connection the tool call travels back up."
+  />
+</Cards>

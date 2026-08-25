@@ -1,0 +1,214 @@
+---
+title: How work reaches your machine
+description: The connection, the queue, and the trip a job makes from the workspace to your hardware and back.
+---
+
+Your machine sits behind a router that blocks incoming connections. It has no
+fixed address on the internet, and it holds no password we issued. We still have
+to send it work.
+
+Everything on this page follows from that. It is worth understanding once,
+because it explains the behaviour you will actually notice: why a closed laptop
+is not an error, why a machine appears within seconds of waking, and why nothing
+we run can reach into your computer.
+
+## The direction is inverted
+
+Nothing on HumanikOS connects to your machine, because nothing can. Instead the
+daemon on your machine reaches out to one address and holds that connection open
+for as long as it is switched on, the way a chat client stays logged in.
+
+Work then travels down the connection your own machine opened.
+
+<Steps>
+
+<Step>
+**Your machine dials out.** One outbound connection to one address, set in your
+config file.
+</Step>
+
+<Step>
+**The gateway asks it to prove who it is.** It sends a fresh random challenge and
+gives the daemon ten seconds to answer.
+</Step>
+
+<Step>
+**The daemon signs the challenge** with the private key it generated locally at
+enrolment and has never sent anywhere.
+</Step>
+
+<Step>
+**The gateway checks the signature** against the public half, and checks that the
+machine has not been revoked. Both must pass, and a failure of either returns the
+same message.
+</Step>
+
+<Step>
+**The machine is now reachable**, and it says what it is serving: its flavor, and
+the models it can run.
+</Step>
+
+</Steps>
+
+<Callout>
+  **The challenge is new every time.** A signature captured from one connection
+  is worthless on the next, and nothing anywhere stores a signature to compare
+  against. The gateway holds no secret of yours: it verifies against a public
+  key, which is public by definition.
+</Callout>
+
+## One job, from the workspace to your hardware
+
+<DeviceTransport />
+
+The two mechanisms in the middle are the part worth reading closely, because they
+are not the same and swapping them would break the system in two different ways.
+
+<TransportDirections />
+
+<Callout type="warn">
+  **An answer is produced once and is not replayable.** For a completion measured
+  in seconds this is not something you will meet. For a long agent turn it means
+  a network interruption on our side discards the tail of the work rather than
+  resuming it, and the turn has to be asked again.
+</Callout>
+
+## Why the queue is addressed to a gateway instance
+
+This is the fact that explains most of the rest of the behaviour.
+
+Several gateway instances may be running, and your machine's connection lives in
+the memory of exactly one of them. A connection cannot be shared or moved. So the
+platform keeps a pointer, `device:{deviceId}` naming the instance that currently
+holds you, and the job is queued to that instance rather than to your machine.
+
+The pointer is rewritten every 25 seconds by the instance holding the connection,
+and expires after 90 if it stops.
+
+```
+   device:{deviceId}  ->  instanceId        the pointer, 90s
+   relay:inbox:{instanceId}                 that instance's queue
+   reply:{jobId}                            the channel your answer comes back on
+```
+
+Both the queue and the answer channel are backed by Redis. The queue is a stream,
+the answer channel is publish and subscribe, and the difference between them is
+the figure above.
+
+### When your machine moves between instances
+
+It can happen, most often just after we deploy: your machine reconnects to a
+different instance in the moment between the pointer being read and the job being
+queued. The job lands in a queue nobody is listening to on your behalf.
+
+The gateway does not sit on it. It reports immediately that the machine is not
+there, and the sender looks the pointer up again and queues the job once more.
+
+**Once, not repeatedly.** A machine flapping between instances fails the job
+rather than having it bounce between queues, because a job that keeps moving is
+worse than one that fails and can be asked again.
+
+## The other heartbeat
+
+A gateway instance writes to two registries, and they answer different questions.
+
+<DeviceRegistries />
+
+The distinction matters because the failures are not symmetrical. If the routing
+registry stops, machines become unreachable and you notice at once. If the fleet
+registry stops, every machine keeps working exactly as before while the platform
+mis-counts how many gateway instances it has.
+
+## How the platform knows your machine is there
+
+It does not ask. There is no polling, no health check pointed at your machine,
+and no field anywhere that says `online`.
+
+**Absence is the signal.** The pointer is rewritten while the connection is held,
+and it expires on its own if the connection stops. So:
+
+| | |
+| --- | --- |
+| **You open the lid** | The daemon dials out, proves itself, and the machine is available within seconds |
+| **You close the lid** | The heartbeat stops, the pointer expires, and the machine is gone in about ninety seconds |
+| **The network drops** | Identical to the above, with no special handling |
+| **The machine crashes** | Also identical |
+
+A crash, a closed lid and a pulled cable converge to the same state through the
+same mechanism, which is why none of them needs to be detected.
+
+<Callout>
+  **Enrolled and offline is the normal state of a laptop.** Whether a machine is
+  enrolled and whether it is connected are two independent things. A machine can
+  be perfectly enrolled and switched off, and nothing about that needs repairing.
+</Callout>
+
+## What a deploy costs you
+
+When a gateway instance is asked to stop, it does not simply drop the connections
+it is holding. It tells each machine to reconnect, stops taking new work, and
+gives them a few seconds to move before closing.
+
+Your daemon treats that as an ordinary instruction rather than an error. It
+reconnects, starting at about a second, and comes back on whichever instance
+answers.
+
+What that costs is one short interruption. What it can cost is the tail of a long
+turn that was in flight, for the reason in the callout above.
+
+## Revoking a machine
+
+Revoking is a push rather than something the machine has to notice for itself.
+
+Two things happen. The machine is marked revoked in the record the gateway reads
+when a machine connects. And a message goes to the instance holding the
+connection right now, which closes it in well under a second.
+
+The daemon treats that particular refusal as permanent rather than as a network
+problem, and stops trying for five minutes instead of reconnecting in a loop.
+
+<Callout type="warn">
+  **Revocation is checked when a connection is made, not continuously.** The live
+  connection drops immediately, and a machine that tries to come back is refused.
+  Treat the whole thing as taking effect on the order of a minute rather than
+  instantly, and for a machine you have lost confidence in, do not make it your
+  only step. If the machine is yours, stop the daemon on it as well.
+</Callout>
+
+## What the gateway deliberately does not do
+
+**It does not decide who may use your machine.** It authenticates the machine and
+nothing else. Which workspace may send work to which machine is resolved before a
+job is ever queued, and no permission decision happens at the door.
+
+**It holds no credentials.** Not yours, not ours. It verifies signatures against
+a public key from a public record, which is what lets it be a box with nothing
+worth stealing on it.
+
+**It does not read what it carries.** The job it hands to your machine, the
+output your machine streams back, and the result of a tool are all passed through
+without being interpreted. That is what lets a new kind of work ship without
+changing anything in the middle.
+
+**It does not store anything.** No job history, no session, no transcript. A job
+that fails mid flight leaves nothing behind on that side.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Tools your machine does not hold"
+    href="/docs/devices/office-tools"
+    description="How a turn on your hardware reaches credentials that never leave the office."
+  />
+  <Card
+    title="Connect your own machine"
+    href="/docs/devices"
+    description="Enrolling, flavors, and the ceiling."
+  />
+  <Card
+    title="Bring your own compute"
+    href="/docs/models/your-own-compute"
+    description="Pointing an office at a machine you own."
+  />
+</Cards>

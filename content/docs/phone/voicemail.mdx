@@ -1,0 +1,109 @@
+---
+title: Voicemail
+description: The greeting, the message, and where it ends up.
+---
+
+Voicemail here is ours rather than the phone network's. We play the greeting, we
+take the recording, and the message arrives in the caller's conversation like
+every other thing they have sent you.
+
+That is why there is no separate voicemail box to check, and no forwarding to an
+email address to configure.
+
+## When a caller reaches it
+
+Four situations, and you did not have to configure any of them:
+
+| | |
+| --- | --- |
+| **The employee is asleep** | The caller rings for about eight seconds while the machine wakes, then takes a message. The next call connects |
+| **Nobody in the ring order answered** | On `staff-only`, the cascade ends here |
+| **The number has a workspace but no employee** | A number that is allocated but not yet given to anyone takes a message instead of refusing the call |
+| **The number is not allocated at all** | This one does not reach voicemail. The caller is told the number is not configured |
+
+Voicemail is on by default for every number. Turning it off means an unanswered
+call gets nothing rather than a message, so it is worth a deliberate decision.
+
+## The greeting
+
+If you set nothing, callers hear a plain spoken line saying nobody is available
+and asking them to leave a message. It works, and it sounds like a default.
+
+Two ways to replace it.
+
+<Tabs items={['Upload your own', 'Have one written']}>
+
+<Tab value="Upload your own">
+
+An MP3 or WAV file, up to 5 MB. Anything else is refused rather than converted.
+
+This is the option to use when the greeting is part of how the business sounds:
+a recording of a real person, or something produced elsewhere.
+
+</Tab>
+
+<Tab value="Have one written">
+
+Give it your company name, and optionally some direction on tone or details to
+include. A model writes a short script, a voice provider reads it, and you get
+the audio back to listen to before anything is saved.
+
+You can rewrite the direction and generate again as many times as you like. You
+can also supply the exact script yourself and have it read as written, which
+skips the writing step entirely.
+
+Nothing is saved until you choose to use it, at which point it is stored the same
+way an uploaded file is. There is one greeting per number and one way it gets
+there.
+
+</Tab>
+
+</Tabs>
+
+<Callout>
+  **The greeting lives in your organization's storage, not at the phone company.**
+  Replacing it takes effect on the next call, and there is nothing upstream to
+  reconcile or wait for.
+</Callout>
+
+## The message
+
+Recording stops when the caller hangs up or when the maximum length is reached.
+The default maximum is 120 seconds.
+
+The message then lands in the conversation for that caller, as a call marked
+unanswered, with the recording attached and the length recorded. If the caller is
+not already a contact, one is created for them.
+
+<Callout type="warn">
+  **A voicemail is audio, not text.** Messages are not transcribed, so nothing
+  searches or reads them for you. Someone has to listen.
+</Callout>
+
+## Configuring it
+
+| | |
+| --- | --- |
+| `voicemail.enabled` | Default on |
+| `voicemail.maxMessageSec` | Longest message you will accept. Default 120 |
+| The greeting | Uploaded or generated. Removing it falls back to the spoken default |
+
+Voicemail settings sit inside a number's voice configuration, alongside
+[who answers](/docs/phone/answering). Like the rest of number management, they
+require a signed in person: paths and permissions are in
+[Phone numbers and email](/docs/api-reference/phone-and-email).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Recording and transcripts"
+    href="/docs/phone/recording-and-transcripts"
+    description="What is kept from an ordinary call, and what is not."
+  />
+  <Card
+    title="Contacts and conversations"
+    href="/docs/crm"
+    description="The thread a message lands in."
+  />
+</Cards>

@@ -1,0 +1,119 @@
+---
+title: Text messaging
+description: Inbound texts, automatic replies, and the keywords you are obliged to honour.
+---
+
+A number that can carry text messages does so from the moment it is allocated. An
+inbound text reaches the employee holding the number, and the employee replies.
+
+Everything lands in the same conversation as that person's calls and email. There
+is no separate messaging inbox.
+
+## Inbound
+
+A text arrives, the sender is matched to a contact or a new one is created, and
+the message is added to their conversation. If the number is held by an employee
+and automatic replies are on, the employee is woken and answers.
+
+Picture and file attachments are stored with the message. Only the first
+attachment on a message is kept today, so a person sending four photos in one
+message leaves you one.
+
+<Callout>
+  **Turning automatic replies off does not turn messaging off.** Inbound texts
+  still arrive and still land in the conversation. What stops is the employee
+  answering them, which is the setting you want when a person should handle the
+  replies.
+</Callout>
+
+## STOP, START and HELP
+
+Carriers require these to work, so they work by default on every number, before
+anything else looks at the message.
+
+| Someone texts | What happens |
+| --- | --- |
+| `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END` | They are marked opted out, and get a confirmation saying so |
+| `START`, `YES`, `UNSTOP` | The opt out is cleared, and they get a confirmation |
+| `HELP` or `INFO` | They get your help text, or a default that names STOP |
+
+Matching is on the first word, so "STOP please" counts. A keyword match ends
+there: the message does not reach the employee and nothing else replies to it.
+
+You can change which words count as opting out or back in. `HELP` and `INFO` are
+fixed, because carrier rules require them.
+
+<Callout type="warn">
+  **Opting out covers every channel, not just texts.** The flag is on the contact,
+  and it stops calls and email as well. See
+  [Contacts and conversations](/docs/crm) for how it behaves and what can clear
+  it.
+</Callout>
+
+## Outbound
+
+An employee sends a text to a contact through the CRM, with its own key, passing
+the same permission check a person would:
+[Send an SMS to a contact](/docs/api-reference/crm/messaging/sendContactMessage),
+which needs `phone:send` at the workspace.
+
+Which number it leaves from is resolved for you, in this order:
+
+<Steps>
+
+<Step>
+**The number you named**, if you named one. Anything outside the workspace's own
+numbers is refused rather than substituted.
+</Step>
+
+<Step>
+**The number this person is already talking to**, so a contact keeps seeing one
+number rather than a rotating set.
+</Step>
+
+<Step>
+**The only number**, if the workspace has exactly one that can text.
+</Step>
+
+<Step>
+**Otherwise it asks.** With several numbers and no continuity to go on, the send
+comes back with the choices rather than picking one.
+</Step>
+
+</Steps>
+
+## Configuring it
+
+Per number, in the console:
+
+| | |
+| --- | --- |
+| `enabled` | Whether inbound texts route into a conversation at all. Default on |
+| `autoReply` | Whether the employee answers them. Default on |
+| `optOutKeywords` | Default `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END` |
+| `optInKeywords` | Default `START`, `YES`, `UNSTOP` |
+| `helpText` | The reply to `HELP`. Defaults to a line naming STOP and standard rates |
+
+Whether a number can send texts at all is a property of the number itself, not a
+setting. These control what we do with a number that can.
+
+<Callout type="warn">
+  **Nothing meters or caps messaging.** No budget applies and no
+  [spending limit](/docs/spend) reaches it. An employee with `phone:send` sends
+  as many messages as it decides to send, immediately, with no approval step.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Contacts and conversations"
+    href="/docs/crm"
+    description="Where messages land, and how a person is matched to a record."
+  />
+  <Card
+    title="Phone numbers"
+    href="/docs/phone"
+    description="Allocating a number, and what turns on when you do."
+  />
+</Cards>

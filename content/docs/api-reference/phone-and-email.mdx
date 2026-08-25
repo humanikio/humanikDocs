@@ -35,25 +35,100 @@ like any other capability.
 
 ## Phone numbers
 
+<Callout>
+  What these endpoints are for, and how a call actually reaches an employee, is
+  in [Phone numbers](/docs/phone). Read that first if you are deciding what to
+  build rather than looking up a path.
+</Callout>
+
 ### Management: signed in user only
 
 The entire `/twilio` surface requires a signed in user. An API key is rejected
 whatever permissions the service account holds.
 
+Buying and releasing sit at **console** scope, because a number is an
+organization asset with a recurring cost and releasing one cannot be undone.
+Allocation sits at **workspace** and **office** scope, because that is where the
+decision belongs.
+
+#### Buying and releasing
+
 | Method | Path | Permission |
 | --- | --- | --- |
-| `GET` | `/twilio/phone-numbers/search` | `phone:read` @ workspace |
-| `POST` | `/twilio/phone-numbers/purchase` | `phone:manage` @ workspace |
-| `GET` | `/twilio/workspace-phone-numbers` | `phone:read` @ workspace |
+| `GET` | `/twilio/phone-numbers` | `tenant:read` @ `console` |
+| `POST` | `/twilio/phone-numbers/search` | `tenant:read` @ `console` |
+| `POST` | `/twilio/phone-numbers/purchase` | `tenant:manage` @ `console` |
+| `GET` | `/twilio/phone-numbers/{phoneNumberSid}` | `tenant:read` @ `console` |
+| `PATCH` | `/twilio/phone-numbers/{phoneNumberSid}` | `tenant:manage` @ `console` |
+| `DELETE` | `/twilio/phone-numbers/{phoneNumberSid}` | `tenant:manage` @ `console` |
+| `GET` | `/twilio/pricing/{countryCode}` | `tenant:read` @ `console` |
+
+Search is a `POST` because it carries many filters. It changes nothing.
+
+<Callout type="warn">
+  **`DELETE` releases the number, it does not unassign it.** The number stops
+  being yours and returns to the public pool. Nothing checks what was using it
+  first. To stop an employee or a workspace using a number while keeping it,
+  deallocate below.
+</Callout>
+
+#### Allocating
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `GET` | `/twilio/workspace-phone-numbers` | `workspace:read` @ workspace |
 | `GET` | `/twilio/workspaces/{workspaceId}/phone-numbers/allocated` | `phone:read` @ workspace |
+| `POST` | `/twilio/workspaces/{workspaceId}/phone-numbers/{phoneNumberSid}` | `phone:manage` @ workspace |
+| `DELETE` | `/twilio/workspaces/{workspaceId}/phone-numbers/{phoneNumberSid}` | `phone:manage` @ workspace |
 | `GET` | `/twilio/offices/{officeId}/phone-numbers` | `office:read` @ office |
 | `POST` | `/twilio/offices/{officeId}/phone-numbers` | `office:manage` @ office |
 | `DELETE` | `/twilio/offices/{officeId}/phone-numbers/{phoneNumberSid}` | `office:manage` @ office |
 | `POST` | `/twilio/offices/{officeId}/phone-numbers/{phoneNumberSid}/primary` | `office:manage` @ office |
-| `GET` · `PATCH` | `/twilio/offices/{officeId}/voice-config` | `office:read` · `office:manage` |
 
-Numbers are bought at workspace level, then allocated down. An office can hold
-several, with one marked primary.
+A number belongs to exactly one workspace, and allocating it to a second is
+refused. An office can hold several numbers, with one marked primary, and only
+the primary receives inbound. Allocating to an office records the workspace
+allocation at the same time.
+
+#### Configuring a number
+
+Per number settings sit at console scope, because the number is an organization
+asset. The office voice configuration is the exception and sits at office scope.
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `GET` · `PATCH` | `/twilio/phone-numbers/{phoneNumberSid}/voice-config` | `tenant:read` · `tenant:manage` @ `console` |
+| `GET` · `PATCH` | `/twilio/phone-numbers/{phoneNumberSid}/sms-config` | `tenant:read` · `tenant:manage` @ `console` |
+| `POST` · `DELETE` | `/twilio/phone-numbers/{phoneNumberSid}/voicemail-greeting` | `tenant:manage` @ `console` |
+| `POST` | `/twilio/phone-numbers/{phoneNumberSid}/voicemail-greeting/generate` | `tenant:manage` @ `console` |
+| `GET` | `/twilio/voicemail/voices` | `tenant:read` @ `console` |
+| `GET` | `/twilio/voice/forwarding-users` | `tenant:read` @ `console` |
+| `GET` · `PATCH` | `/twilio/offices/{officeId}/voice-config` | `office:read` · `office:manage` @ office |
+
+`voice-config` carries [who answers](/docs/phone/answering), the ring order and
+[voicemail](/docs/phone/voicemail). `sms-config` carries
+[text messaging](/docs/phone/texting). The greeting upload is multipart, field
+`file`, MP3 or WAV, 5 MB. Generating a greeting returns a preview: saving it goes
+back through the upload endpoint, so there is one write path rather than two.
+
+The office `voice-config` requires `?workspaceId=`.
+
+#### Calling and playback
+
+Still signed in user only, but scoped to the workspace rather than the console.
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `GET` | `/twilio/phone-numbers/usable` | `phone:read` @ workspace |
+| `GET` | `/twilio/voice/token` | `phone:call` @ workspace |
+| `GET` | `/twilio/recordings/{callSid}/media` | `phone:read` @ workspace |
+
+The recording endpoint is a proxy rather than a redirect, and it pins the call to
+where it actually happened rather than to the workspace the request names. A call
+identifier from another workspace returns `404`, not `403`, so it cannot be used
+to confirm that a call exists. See
+[Calling from the browser](/docs/phone/staff-calling) and
+[Recording and transcripts](/docs/phone/recording-and-transcripts).
 
 ### Usage: an office's own key
 
