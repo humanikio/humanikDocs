@@ -246,6 +246,24 @@ components:
         enabledToolCount:
           type: integer
           description: 'How many of `tools` have `enabled` set true.'
+        lastFailureAt:
+          type: integer
+          description: |
+            Epoch milliseconds of the most recent failed call an employee made
+            through this integration. Absent until one fails.
+        lastFailureSummary:
+          type: string
+          description: 'What came back, e.g. `GET /v1/invoices returned 401`.'
+          examples: ['GET /analytics/query/catalog returned 401']
+        failuresDismissedAt:
+          type: integer
+          description: |
+            Epoch milliseconds of the last time someone marked the failures
+            reviewed. **Show a warning while `lastFailureAt` is greater than
+            this.** There is no boolean, deliberately: one cleared here would
+            suppress every later failure and leave a broken integration looking
+            healthy. Comparing the two means the next failure raises the warning
+            again on its own.
       required: [id, name, baseUrl, authType]
 
     Skill:
@@ -2620,6 +2638,137 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}/executions:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        description: 'The integration the call was made through.'
+        schema:
+          type: string
+    post:
+      tags: [Integrations]
+      summary: Report an integration call
+      operationId: reportOfficeIntegrationExecution
+      description: |
+        Records the outcome of one call an employee made through this
+        integration. Requires `office:manage`.
+
+        **This is reported by the office, not called by you.** An employee's
+        calls happen on the office machine, which cannot write to the console's
+        store, so the office reports each outcome here. It is documented because
+        it exists and is reachable, not because an integrator needs it.
+
+        A non-2xx response, a timeout, or a host that never answered marks the
+        integration with `lastFailureAt` and notifies everyone who can read the
+        office. A 2xx is logged and changes nothing.
+
+        `path` must be a path, not a full URL. A URL carries the query string,
+        and for an integration that signs its requests the query string is part
+        of what gets signed. It would end up in a log line and in a notification
+        body.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method, path]
+              properties:
+                method:
+                  type: string
+                  examples: [GET]
+                path:
+                  type: string
+                  description: Path relative to the integration's base URL. Never a full URL.
+                  examples: ['/analytics/query/catalog']
+                status:
+                  type: integer
+                  description: HTTP status. Absent when the request never reached the host.
+                  examples: [200]
+                durationMs:
+                  type: integer
+                toolName:
+                  type: string
+                  description: The declared endpoint used, absent for a free-form call.
+                integrationName:
+                  type: string
+                error:
+                  type: string
+                  description: Transport level failure text, when there was no status at all.
+      responses:
+        '202':
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  failed:
+                    type: boolean
+                    description: True when this call counted as a failure and raised a warning.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /offices/{officeId}/integrations/{integrationId}/dismiss-failures:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+      - name: integrationId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Integrations]
+      summary: Mark integration failures as reviewed
+      operationId: dismissOfficeIntegrationFailures
+      description: |
+        Records that someone has looked at this integration's recent failures.
+        Requires `office:manage`.
+
+        **It does not clear the failure and does not claim the integration
+        works.** It writes `failuresDismissedAt`, and the console warns while
+        `lastFailureAt` is greater than it. So the next failure raises the
+        warning again on its own, with nothing to reset.
+
+        This is why there is no boolean to clear. A flag turned off here would
+        suppress every later failure too, leaving a broken integration looking
+        healthy, which is worse than showing no warning at all.
+
+        Acknowledging needs the permission to fix the integration, not just to
+        read it. The notification goes to anyone with `office:read`, because
+        being unable to fix something is not a reason to be left unaware of it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Acknowledged.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  failuresDismissedAt:
+                    type: integer
+                    description: Epoch milliseconds. Compared against lastFailureAt to decide the warning.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
 

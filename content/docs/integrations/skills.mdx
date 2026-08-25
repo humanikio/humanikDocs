@@ -217,11 +217,32 @@ They fail differently, and the difference tells you where to look.
 | --- | --- |
 | The employee calls an endpoint that does not exist | The skill. Its body describes something the API does not have |
 | The employee calls the right endpoint and gets a `401` | The connection. Either the stored credential is rejected, or the authentication type on the integration does not match what the API expects |
+| A red warning on the integration, saying a call failed | Neither, yet. The console recorded a real failure. Open the logs it links to and the response says which |
 | The employee does not try at all | The skill. Its description did not match the task |
 | The employee reports the integration is not connected | The connection. It is not attached to this office |
 
 Editing a skill to describe an endpoint does not make that endpoint reachable,
 and deleting a skill does not revoke a credential.
+
+## When a call fails, the console says so
+
+Employees call integrations on their own, often while nobody is looking. So a
+failed call is recorded rather than lost.
+
+Every call an employee makes is logged against the integration it used. A call
+that returns an error, times out, or never reaches the host also marks the
+integration, and the console shows a warning on it with the response that came
+back. **Anyone who can read the office is notified**, and the notification opens
+that office's logs already filtered to the integration.
+
+The warning stays until someone marks it reviewed. Marking it reviewed records
+that a person looked; it does not claim the integration is fixed, and **the next
+failure raises it again on its own**.
+
+<Callout>
+  **A busy integration failing repeatedly will notify repeatedly today.** There
+  is no cooldown yet. If that becomes noisy, tell us.
+</Callout>
 
 ## Where to go next
 
