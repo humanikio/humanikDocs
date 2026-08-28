@@ -107,11 +107,33 @@ asset. The office voice configuration is the exception and sits at office scope.
 
 `voice-config` carries [who answers](/docs/phone/answering), the ring order and
 [voicemail](/docs/phone/voicemail). `sms-config` carries
-[text messaging](/docs/phone/texting). The greeting upload is multipart, field
+[text messaging](/docs/phone/texting), including the
+[opt out instructions](/docs/phone/texting#opt-out-instructions-on-outbound)
+added to a first message and how often they are repeated. The greeting upload is multipart, field
 `file`, MP3 or WAV, 5 MB. Generating a greeting returns a preview: saving it goes
 back through the upload endpoint, so there is one write path rather than two.
 
 The office `voice-config` requires `?workspaceId=`.
+
+#### Checking and repairing where a number routes
+
+A number can be held by several offices, and exactly one of them receives
+inbound. These report that and fix it when the two disagree.
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `GET` | `/twilio/phone-numbers/{phoneNumberSid}/routing` | `tenant:read` @ `console` |
+| `POST` | `/twilio/offices/{officeId}/phone-numbers/{phoneNumberSid}/primary` | `office:manage` @ office |
+| `DELETE` | `/twilio/phone-numbers/{phoneNumberSid}/orphan-allocations` | `tenant:manage` @ `console` |
+| `DELETE` | `/twilio/phone-numbers/{phoneNumberSid}/inbound-routing` | `tenant:manage` @ `console` |
+
+`routing` reads the whole picture in one call: the workspace, every office
+holding the number, which one receives inbound, and anything inconsistent
+between them. It changes nothing.
+
+The two `DELETE` paths clear up after a deleted office. They sit at console scope
+rather than office scope because the office they would otherwise be checked
+against is the one that no longer exists.
 
 #### Calling and playback
 

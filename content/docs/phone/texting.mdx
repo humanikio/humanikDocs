@@ -33,12 +33,18 @@ anything else looks at the message.
 
 | Someone texts | What happens |
 | --- | --- |
-| `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END` | They are marked opted out, and get a confirmation saying so |
+| `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END`, `REVOKE`, `OPTOUT` | They are marked opted out, and get a confirmation saying so |
 | `START`, `YES`, `UNSTOP` | The opt out is cleared, and they get a confirmation |
 | `HELP` or `INFO` | They get your help text, or a default that names STOP |
 
-Matching is on the first word, so "STOP please" counts. A keyword match ends
-there: the message does not reach the employee and nothing else replies to it.
+Matching runs on the first word, so "STOP please" counts. Short messages are also
+read for plain language, so "please stop", "opt me out" and "take me off" are
+honoured as well. That second check applies only to messages of six words or
+fewer, because a longer message that happens to contain the word "stop" is a
+sentence rather than an instruction.
+
+A keyword match ends there: the message does not reach the employee and nothing
+else replies to it.
 
 You can change which words count as opting out or back in. `HELP` and `INFO` are
 fixed, because carrier rules require them.
@@ -48,6 +54,38 @@ fixed, because carrier rules require them.
   and it stops calls and email as well. See
   [Contacts and conversations](/docs/crm) for how it behaves and what can clear
   it.
+</Callout>
+
+## Opt out instructions on outbound
+
+The first text a person receives from one of your numbers carries instructions
+for stopping them, added for you. You do not have to remember it, and neither
+does an employee writing the message.
+
+This applies to every text that leaves the number: one typed by a person in the
+console, one sent by an employee answering a conversation, and one sent by a
+workflow step.
+
+| | |
+| --- | --- |
+| When it is added | The first message this person receives from this number, then again once the notice is older than the repeat window |
+| What is added | A blank line, then your opt out sentence. Your business name goes in front of it when you turn that on |
+| When it is skipped | The message already tells the reader how to stop, or you have turned it off |
+
+The record of who has been told is kept against the phone number, not against
+the contact. A contact record can be deleted and rebuilt from the next inbound
+message, and a merge changes which record a person belongs to. Their phone number
+does not change, so the phone number is what carries the history.
+
+It is also kept per number of yours. A person who has heard from one of your
+numbers has not heard from the others, so their first message from a second
+number carries the instructions again.
+
+<Callout type="warn">
+  **Added text can cost an extra message.** A text is one message up to 160
+  characters. Adding "Reply STOP to unsubscribe" adds 25, so a message already
+  near the limit becomes two, and bills as two. The console shows the assembled
+  first message and its message count while you edit the wording.
 </Callout>
 
 ## Outbound
@@ -93,9 +131,20 @@ Per number, in the console:
 | `optOutKeywords` | Default `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END` |
 | `optInKeywords` | Default `START`, `YES`, `UNSTOP` |
 | `helpText` | The reply to `HELP`. Defaults to a line naming STOP and standard rates |
+| `compliance.appendOptOut` | Add opt out instructions to a first message. Default on |
+| `compliance.optOutText` | The sentence added. Default `Reply STOP to unsubscribe` |
+| `compliance.appendSenderId` | Put your business name in front of it. Default off |
+| `compliance.senderIdText` | The business name. Nothing is added while this is empty |
+| `compliance.repeatAfterDays` | How long before the instructions are added again. Default 30. Set it to nothing for first message only |
 
 Whether a number can send texts at all is a property of the number itself, not a
 setting. These control what we do with a number that can.
+
+<Callout>
+  **Where to find these.** Console, Assets, Phone Numbers, pick a number, then the
+  Messaging tab. Opt out compliance is the first card, and text messaging settings
+  sit under it.
+</Callout>
 
 <Callout type="warn">
   **Nothing meters or caps messaging.** No budget applies and no
