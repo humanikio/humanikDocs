@@ -122,29 +122,12 @@ comes back with the choices rather than picking one.
 
 ## Configuring it
 
-Per number, in the console:
-
-| | |
-| --- | --- |
-| `enabled` | Whether inbound texts route into a conversation at all. Default on |
-| `autoReply` | Whether the employee answers them. Default on |
-| `optOutKeywords` | Default `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END` |
-| `optInKeywords` | Default `START`, `YES`, `UNSTOP` |
-| `helpText` | The reply to `HELP`. Defaults to a line naming STOP and standard rates |
-| `compliance.appendOptOut` | Add opt out instructions to a first message. Default on |
-| `compliance.optOutText` | The sentence added. Default `Reply STOP to unsubscribe` |
-| `compliance.appendSenderId` | Put your business name in front of it. Default off |
-| `compliance.senderIdText` | The business name. Nothing is added while this is empty |
-| `compliance.repeatAfterDays` | How long before the instructions are added again. Default 30. Set it to nothing for first message only |
+Text messaging and the opt out instructions are set per number, in the console
+under **Messaging**. The settings and their defaults are listed in
+[Configuring a number](/docs/phone/config#text-messaging).
 
 Whether a number can send texts at all is a property of the number itself, not a
 setting. These control what we do with a number that can.
-
-<Callout>
-  **Where to find these.** Console, Assets, Phone Numbers, pick a number, then the
-  Messaging tab. Opt out compliance is the first card, and text messaging settings
-  sit under it.
-</Callout>
 
 <Callout type="warn">
   **Nothing meters or caps messaging.** No budget applies and no

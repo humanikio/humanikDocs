@@ -97,20 +97,16 @@ This applies to `ai` and to `staff-first` after the cascade has run out. See
 ## Configuring it
 
 Answer mode, ring order, timeout, the keypress and the greeting are all part of
-one voice configuration, set per number, in the console.
+one voice configuration, set per number, in the console under **Routing**. The
+settings and their defaults are listed in
+[Configuring a number](/docs/phone/config#answering-a-call).
 
-| | |
-| --- | --- |
-| `answerMode` | `ai`, `staff-first`, or `staff-only`. Default `ai` |
-| `ringTargets` | The ordered list of people. Sending a new list replaces the old one, because the order is the point |
-| `ringTimeoutSec` | Seconds each person rings before the call moves on. Default 15 |
-| `confirmAnswer` | The press 1 step. Default on |
-| `greeting` | The employee's opening line. Empty means answer silently |
-
-These are console settings rather than API ones: the whole number management
-surface requires a signed in person and refuses a service account key. Paths and
-permissions are listed in
-[Phone numbers and email](/docs/api-reference/phone-and-email).
+<Callout type="warn">
+  **A new number answers nothing until you choose.** The default is
+  `voicemail-only`. Handing a number to an employee does not by itself put that
+  employee on the phone: you may have done that so it can send texts. Turning
+  answering on is a separate choice, made on the number's Routing tab.
+</Callout>
 
 ## Where to go next
 

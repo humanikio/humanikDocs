@@ -1,0 +1,185 @@
+---
+title: Configuring a number
+description: Every setting that lives on a phone number, what it defaults to, and where to change it.
+---
+
+Every setting on this page belongs to one phone number. Two numbers in the same
+workspace can answer differently, take messages differently, and add different
+opt out wording, and changing one never changes the other.
+
+The behaviour behind each group is explained on its own page. This is the list of
+what you can change and what it starts as.
+
+## Where these live
+
+In the console: **Assets**, then **Phone Numbers**, then pick a number. The
+settings are grouped into tabs that match the groups below.
+
+| Tab | Holds |
+| --- | --- |
+| **Overview** | The number itself, its label, and releasing it |
+| **Routing** | Who answers a call, and the opening line |
+| **Messaging** | Opt out instructions, and text messaging |
+| **Voicemail** | The greeting, message length, and call recording |
+| **Offices** | Which employees hold the number, and which one receives inbound |
+
+## Who can change them
+
+A signed in person, holding administrative rights over the organization.
+
+Number management refuses a service account key. This is not a permission you can
+grant: the whole surface requires a person, whatever rights the service account
+holds. Sending a message or placing a call is the opposite, and a key is exactly
+what does that.
+
+<Callout>
+  This split runs through the whole product. Acquiring or configuring a
+  capability is a human action. Exercising it is a machine action. See
+  [service accounts](/docs/access-control/service-accounts).
+</Callout>
+
+Paths and permissions are listed in
+[Phone numbers and email](/docs/api-reference/phone-and-email).
+
+---
+
+## Answering a call
+
+What each mode does, and what happens when nobody picks up, is in
+[Who answers a call](/docs/phone/answering).
+
+| | |
+| --- | --- |
+| `answerMode` | `voicemail-only`, `ai`, `staff-first`, or `staff-only`. Default `voicemail-only` |
+| `greeting` | The employee's opening line when it answers. Empty means answer silently |
+| `ringTargets` | The ordered list of people to ring. Sending a new list replaces the old one, because the order is the point |
+| `ringTimeoutSec` | Seconds each person rings before the call moves on. Default 15 |
+| `confirmAnswer` | The press 1 step before a call connects. Default on |
+
+<Callout type="warn">
+  **A new number answers nothing until you choose.** The default is
+  `voicemail-only`: the caller hears the greeting and leaves a message, and no
+  employee is woken. Giving a number to an employee does not by itself put that
+  employee on the phone, because you may have done that only so it can send
+  texts. Turning answering on is a separate, deliberate choice.
+</Callout>
+
+## Voicemail
+
+Covered in [Voicemail](/docs/phone/voicemail).
+
+| | |
+| --- | --- |
+| `voicemail.enabled` | Default on |
+| `voicemail.maxMessageSec` | Longest message you will accept. Default 120 |
+| The greeting | Uploaded or generated. Removing it falls back to the spoken default |
+
+Answering off and voicemail off is a valid combination, and it means the number
+takes no calls at all. A caller hears a short line saying so.
+
+## Recording
+
+Covered in [Recording and transcripts](/docs/phone/recording-and-transcripts).
+
+| | |
+| --- | --- |
+| `recordOutboundStaff` | Record calls your people place from the browser. Default off |
+| `recordOutboundOffice` | Record calls an employee places or answers. Default off |
+
+## Text messaging
+
+Covered in [Text messaging](/docs/phone/texting).
+
+| | |
+| --- | --- |
+| `enabled` | Whether inbound texts route into a conversation at all. Default on |
+| `autoReply` | Whether the employee answers them. Default on |
+| `optOutKeywords` | Default `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END`, `REVOKE`, `OPTOUT` |
+| `optInKeywords` | Default `START`, `YES`, `UNSTOP` |
+| `helpText` | The reply to `HELP`. Defaults to a line naming STOP and standard rates |
+
+`HELP` and `INFO` are fixed and cannot be changed, because carrier rules require
+them to work.
+
+---
+
+## Opt out instructions
+
+The first text a person receives from a number carries instructions for stopping
+them, added for you. What gets added, when it is skipped, and why the record is
+kept against the phone number is explained in
+[Text messaging](/docs/phone/texting#opt-out-instructions-on-outbound).
+
+| | |
+| --- | --- |
+| `compliance.appendOptOut` | Add the instructions. Default on |
+| `compliance.optOutText` | The sentence added. Default `Reply STOP to unsubscribe`. Up to 160 characters |
+| `compliance.appendSenderId` | Put your business name in front of it. Default off |
+| `compliance.senderIdText` | The business name. Nothing is added while this is empty, even with the switch on |
+| `compliance.repeatAfterDays` | How long before the instructions are added again. Default 30. Clear it for first message only |
+
+The assembled message looks like this, with a blank line between your text and
+the addition:
+
+```
+Hi Jane, just confirming your appointment on Tuesday at 2pm.
+
+Northside Plumbing Reply STOP to unsubscribe
+```
+
+<Callout type="warn">
+  **Added text can cost an extra message.** A text is one message up to 160
+  characters. `Reply STOP to unsubscribe` adds 25, so a message already close to
+  the limit becomes two, and bills as two. The console shows the assembled first
+  message with its length and message count while you edit the wording, so you
+  can see the cost before you save it.
+</Callout>
+
+### Choosing a repeat window
+
+The instructions are added again once the last ones are older than the window.
+
+| Setting | Suits |
+| --- | --- |
+| First message only | Short exchanges that finish in a day or two |
+| 30 days, the default | Ongoing conversations, and campaigns that run for months |
+| A shorter window | Frequent outbound to a large list |
+
+A long running conversation is the case the window exists for. The first message
+scrolls out of view within a week, and a person who wants out should not have to
+scroll to find out how.
+
+<Callout>
+  **Turning it off does not remove your obligation.** Carriers require a working
+  opt out, and `STOP` keeps working whether or not you advertise it. What you are
+  turning off is the reminder, not the mechanism.
+</Callout>
+
+---
+
+## What is not a setting
+
+Whether a number can carry voice, text, or picture messages is a property of the
+number itself, fixed when you buy it. There is no switch that adds a capability a
+number does not have. The settings above control what happens on a number that
+already has one.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Text messaging"
+    href="/docs/phone/texting"
+    description="Inbound texts, opt out handling, and what the instructions do."
+  />
+  <Card
+    title="Who answers a call"
+    href="/docs/phone/answering"
+    description="The order a call is offered in, and what happens when nobody picks up."
+  />
+  <Card
+    title="Phone numbers"
+    href="/docs/phone"
+    description="Buying a number and handing it to an employee."
+  />
+</Cards>
