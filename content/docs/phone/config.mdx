@@ -92,14 +92,37 @@ Covered in [Text messaging](/docs/phone/texting).
 
 | | |
 | --- | --- |
-| `enabled` | Whether inbound texts route into a conversation at all. Default on |
-| `autoReply` | Whether the employee answers them. Default on |
+| `enabled` | **Text messaging** in the console. Whether this number carries texts at all, in **both directions**. Default on |
+| `autoReply` | **Let an employee answer** in the console. Whether the employee that receives this number replies on its own. Default on |
 | `optOutKeywords` | Default `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END`, `REVOKE`, `OPTOUT` |
 | `optInKeywords` | Default `START`, `YES`, `UNSTOP` |
 | `helpText` | The reply to `HELP`. Defaults to a line naming STOP and standard rates |
 
 `HELP` and `INFO` are fixed and cannot be changed, because carrier rules require
 them to work.
+
+<Callout type="warn">
+  **Turning text messaging off stops sending as well as receiving.** It reads
+  like an inbound setting and it is not. While it is off, incoming texts are
+  discarded with no record kept, and nothing can send from the number either:
+  the composer, an employee, and the Send SMS workflow step all stop without an
+  error. Turn it off to retire a number, not to stop an employee replying. That
+  second thing is the setting below it.
+</Callout>
+
+<Callout>
+  **Opting out still works on a number with texting switched off.** Someone
+  texting STOP is recorded as opted out whether or not the number is carrying
+  messages, because an opt out applies to your whole workspace rather than to
+  the one number they happened to text. What they do not get is the confirmation
+  reply, since the number cannot send.
+</Callout>
+
+**Letting an employee answer needs an employee.** The setting does nothing until
+one receives the number, and while that is the case the console disables it and
+points you at the number's **Offices** tab. Which employee receives a number, and
+how several can hold one while only one gets the incoming messages, is in
+[Phone numbers](/docs/phone).
 
 ---
 
