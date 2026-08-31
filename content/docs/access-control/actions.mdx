@@ -153,7 +153,8 @@ granted at the workspace above it to cover every office in it.
 | `office:manage` | Administer an office: its integrations, scheduled work, configuration, and the office itself. | `office` |
 
 <Accordions>
-<Accordion title="Endpoints that need `office:read` (21)">
+<Accordion title="Endpoints that need `office:read` (22)">
+- [Mark integration failures as reviewed](/docs/api-reference/offices/integrations/dismissOfficeIntegrationFailures)
 - [Get an office](/docs/api-reference/offices/offices/getOffice)
 - [Get an allocated app](/docs/api-reference/offices/allocations/getOfficeApp)
 - [Get office cloud config](/docs/api-reference/offices/offices/getOfficeCloudConfig)
@@ -181,7 +182,7 @@ granted at the workspace above it to cover every office in it.
 - [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine)
 - [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine)
 </Accordion>
-<Accordion title="Endpoints that need `office:manage` (32)">
+<Accordion title="Endpoints that need `office:manage` (34)">
 - [Add a secret reference](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef)
 - [Allocate an app](/docs/api-reference/offices/allocations/allocateOfficeApp)
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
@@ -200,11 +201,13 @@ granted at the workspace above it to cover every office in it.
 - [Delete an integration](/docs/api-reference/offices/integrations/deleteOfficeIntegration)
 - [Delete a protocol](/docs/api-reference/offices/protocols/deleteOfficeProtocol)
 - [Delete a skill](/docs/api-reference/offices/skills/deleteOfficeSkill)
+- [Mark integration failures as reviewed](/docs/api-reference/offices/integrations/dismissOfficeIntegrationFailures)
 - [Get an office's model provider](/docs/api-reference/offices/model-provider/getOfficeModelProvider)
 - [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
 - [Provision a missing office API key](/docs/api-reference/offices/identity/provisionOfficeApiKey)
 - [Regenerate a skill body](/docs/api-reference/offices/skills/regenerateOfficeSkill)
 - [Remove a secret reference](/docs/api-reference/offices/integrations/removeOfficeIntegrationSecretRef)
+- [Report an integration call](/docs/api-reference/offices/integrations/reportOfficeIntegrationExecution)
 - [Revoke the office API key](/docs/api-reference/offices/identity/revokeOfficeApiKey)
 - [Sync an integration from its template](/docs/api-reference/offices/integrations/syncOfficeIntegrationFromTemplate)
 - [Sync the integration's skill](/docs/api-reference/offices/integrations/syncOfficeIntegrationSkill)
@@ -242,6 +245,7 @@ granted at the workspace above it to cover every office in it.
 | --- | --- | --- |
 | `groupchat:read` | Read conversations you are a member of. | `workspace` |
 | `groupchat:send` | Send messages in conversations you are a member of. | `workspace` |
+| `groupchat:create-pm` | Open a one to one message with a named person, without full chat administration. This is what lets an AI employee start a direct message with someone rather than only reply in one. | `workspace` |
 | `groupchat:manage` | Create, rename and delete conversations, and change who is in them. | `workspace` |
 | `groupchat:read:all` | Read any conversation in the workspace, including ones you are not in. Membership is checked first; this is what lets an administrator through when it fails, and every access it grants is logged. | `workspace` |
 
@@ -271,8 +275,11 @@ granted at the workspace above it to cover every office in it.
 | `email:me:use` | Send only from addresses assigned to you. This is what makes an AI employee a self-scoped sender rather than a broad one. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `email:read` (1)">
+<Accordion title="Endpoints that need `email:read` (4)">
 - [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
+- [Get an email template](/docs/api-reference/crm/email-templates/getEmailTemplate)
+- [List email templates](/docs/api-reference/crm/email-templates/listEmailTemplates)
+- [Render a template](/docs/api-reference/crm/email-templates/previewEmailTemplate)
 </Accordion>
 <Accordion title="Endpoints that need `email:send` (2)">
 - [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
@@ -281,8 +288,11 @@ granted at the workspace above it to cover every office in it.
 <Accordion title="Endpoints that need `email:me:read` (1)">
 - [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
 </Accordion>
-<Accordion title="Endpoints that need `email:me:use` (2)">
+<Accordion title="Endpoints that need `email:me:use` (5)">
 - [Get composer defaults](/docs/api-reference/crm/messaging/getContactEmailContext)
+- [Get an email template](/docs/api-reference/crm/email-templates/getEmailTemplate)
+- [List email templates](/docs/api-reference/crm/email-templates/listEmailTemplates)
+- [Render a template](/docs/api-reference/crm/email-templates/previewEmailTemplate)
 - [Send an email to a contact](/docs/api-reference/crm/messaging/sendContactEmail)
 </Accordion>
 </Accordions>
@@ -296,7 +306,7 @@ granted at the workspace above it to cover every office in it.
 | `contact:manage` | Create, update, archive, import and delete contacts, and curate the tag registry. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `contact:read` (10)">
+<Accordion title="Endpoints that need `contact:read` (11)">
 - [Find a contact by phone](/docs/api-reference/crm/contacts/findContactByPhone)
 - [Get a contact](/docs/api-reference/crm/contacts/getContact)
 - [Get many contacts by id](/docs/api-reference/crm/contacts/getContactsByIds)
@@ -304,6 +314,7 @@ granted at the workspace above it to cover every office in it.
 - [List notes](/docs/api-reference/crm/notes/listContactNotes)
 - [List a contact's workflow runs](/docs/api-reference/crm/contacts/listContactRuns)
 - [List contacts](/docs/api-reference/crm/contacts/listContacts)
+- [List contact merge tokens](/docs/api-reference/crm/email-templates/listContactTokenFields)
 - [List custom field definitions](/docs/api-reference/crm/custom-fields/listCustomFields)
 - [List the tag registry](/docs/api-reference/crm/tags/listTags)
 - [Mark a conversation read](/docs/api-reference/crm/contacts/markContactRead)
@@ -346,6 +357,34 @@ granted at the workspace above it to cover every office in it.
 - [Create an opportunity](/docs/api-reference/crm/opportunities/createOpportunity)
 - [Create a pipeline](/docs/api-reference/crm/opportunities/createPipeline)
 - [Update an opportunity](/docs/api-reference/crm/opportunities/updateOpportunity)
+</Accordion>
+</Accordions>
+
+## CustomField
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `customField:manage` | Define the custom fields on a contact: create them, change their labels, remove them. Setting a value on a contact is contact:manage, and reading the definitions travels with contact:read. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `customField:manage` (3)">
+- [Create a custom field definition](/docs/api-reference/crm/custom-fields/createCustomField)
+- [Delete a custom field definition](/docs/api-reference/crm/custom-fields/deleteCustomField)
+- [Update a custom field definition](/docs/api-reference/crm/custom-fields/updateCustomField)
+</Accordion>
+</Accordions>
+
+## EmailTemplate
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `emailTemplate:manage` | Write and delete reusable email templates. Separate from email:manage, which is domain and address infrastructure: authoring copy and changing mail plumbing are different jobs. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `emailTemplate:manage` (3)">
+- [Create an email template](/docs/api-reference/crm/email-templates/createEmailTemplate)
+- [Delete an email template](/docs/api-reference/crm/email-templates/deleteEmailTemplate)
+- [Update an email template](/docs/api-reference/crm/email-templates/updateEmailTemplate)
 </Accordion>
 </Accordions>
 
@@ -427,18 +466,20 @@ granted at the workspace above it to cover every office in it.
 | `workflow:manage` | Create, save, delete and test-fire automations. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `workflow:read` (11)">
+<Accordion title="Endpoints that need `workflow:read` (13)">
 - [Get a node definition](/docs/api-reference/workflows/node-definitions/getNodeDefinition)
 - [Get a run's place in a queue](/docs/api-reference/workflows/runs/getRunQueuePosition)
 - [Get a workflow](/docs/api-reference/workflows/workflows/getWorkflow)
 - [Get the compiled graph](/docs/api-reference/workflows/versions/getWorkflowIr)
 - [Get a run](/docs/api-reference/workflows/runs/getWorkflowRun)
 - [Get a version](/docs/api-reference/workflows/versions/getWorkflowVersion)
+- [List contact merge tokens](/docs/api-reference/crm/email-templates/listContactTokenFields)
 - [List node definitions](/docs/api-reference/workflows/node-definitions/listNodeDefinitions)
 - [List collections](/docs/api-reference/workflows/collections/listWorkflowCollections)
 - [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns)
 - [List workflows](/docs/api-reference/workflows/workflows/listWorkflows)
 - [List versions](/docs/api-reference/workflows/versions/listWorkflowVersions)
+- [Check a canvas](/docs/api-reference/workflows/workflows/validateWorkflow)
 </Accordion>
 <Accordion title="Endpoints that need `workflow:manage` (7)">
 - [Register a collection name](/docs/api-reference/workflows/collections/addWorkflowCollection)
@@ -561,6 +602,15 @@ granted at the workspace above it to cover every office in it.
 | `surface:read` | View a shared surface. | `workspace` |
 | `surface:edit` | Change the contents of a shared surface. | `workspace` |
 | `surface:manage` | Create, delete and share surfaces. | `workspace` |
+
+## Bulletin
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `bulletin:read` | View the workspace board and its tiles. It does not grant the contents of any tile: reading through one still needs datasource:read on the namespace it points at, so this can be handed out broadly without widening anyone’s reach. | `workspace` |
+| `bulletin:post` | Put a tile on the board. Contributing without being able to rearrange what is already there. | `workspace` |
+| `bulletin:edit` | Change or remove tiles, and create and rename boards. | `workspace` |
+| `bulletin:manage` | Administer the board: pin tiles, and set the order boards appear in. Pinning and ordering decide what the whole workspace sees first, which is why they sit above editing. | `workspace` |
 
 ## Browser
 
@@ -712,6 +762,7 @@ Usually that means they gate a console-only surface. See
 - `users:manage`
 - `groupchat:read`
 - `groupchat:send`
+- `groupchat:create-pm`
 - `groupchat:manage`
 - `groupchat:read:all`
 - `phone:read`
@@ -729,6 +780,10 @@ Usually that means they gate a console-only surface. See
 - `surface:read`
 - `surface:edit`
 - `surface:manage`
+- `bulletin:read`
+- `bulletin:post`
+- `bulletin:edit`
+- `bulletin:manage`
 - `device:use`
 
 ## Where to go next

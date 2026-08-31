@@ -36,6 +36,8 @@ tags:
     description: Deals, pipelines, and stages.
   - name: Custom fields
     description: Tenant defined fields on a contact.
+  - name: Email templates
+    description: Reusable HTML email bodies, sent by the composer or a workflow.
 
 components:
   securitySchemes:
@@ -82,6 +84,39 @@ components:
         message:
           type: string
       required: [success, error]
+
+    EmailTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+          description: |
+            Assigned on create. This is the `templateId` the send body and the
+            Send Email workflow node take.
+        name:
+          type: string
+          description: Shown in the template picker.
+        description:
+          type: string
+          description: An internal note about when to use it. Not sent.
+        subject:
+          type: string
+          description: Supports `{{contact.*}}` tokens, rendered as text.
+        html:
+          type: string
+          description: >
+            The complete HTML email document, exactly as stored. Supports
+            `{{contact.*}}` tokens, whose resolved values are escaped.
+        textFallback:
+          type: string
+          description: >
+            The plain text alternative. Absent when it is derived from the HTML
+            at send time.
+        createdAt: { type: string, format: date-time, readOnly: true }
+        updatedAt: { type: string, format: date-time, readOnly: true }
+        createdBy: { type: string, readOnly: true }
+        updatedBy: { type: string, readOnly: true }
 
     Contact:
       type: object
@@ -810,6 +845,16 @@ paths:
         Sends email from an address assigned to the caller. Requires
         `email:send` **or** `email:me:use`.
 
+        Supply exactly one body: `text` for plain text, `html` for inline HTML,
+        or `templateId` for a saved template. `html` may be paired with `text`,
+        which then serves as the plain text alternative. Every HTML send carries
+        both parts, because an HTML only message scores badly with spam filters
+        and is unreadable in text only clients.
+
+        `{{contact.*}}` merge tokens in the subject and body resolve against the
+        recipient at send time. In an HTML body the resolved values are escaped.
+        See [Email templates](/docs/crm/email-templates).
+
         The difference matters. `email:send` permits sending as any address in
         the tenant. `email:me:use` permits only addresses assigned to you, and is
         the one to grant an AI employee. The route gate is address blind; the
@@ -828,8 +873,26 @@ paths:
               properties:
                 subject:
                   type: string
+                  description: >
+                    Subject line. Supports `{{contact.*}}` merge tokens. Required
+                    unless `templateId` is supplied, where it overrides the
+                    template's own subject.
                 text:
                   type: string
+                  description: >
+                    Plain text body. With `html`, this becomes the plain text
+                    alternative rather than the body.
+                html:
+                  type: string
+                  description: >
+                    HTML body. Sent with a plain text alternative alongside it,
+                    derived from the HTML when `text` is absent.
+                templateId:
+                  type: string
+                  description: >
+                    A saved email template to send. Get one from
+                    `GET /email-templates`. Read at send time, so the message
+                    carries whatever the template says when it goes out.
                 fromAddress:
                   type: string
                   description: Optional. Resolved from the caller's assigned addresses when omitted.
@@ -1654,6 +1717,355 @@ paths:
                     type: boolean
                     const: true
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /contacts/token-fields:
+    get:
+      tags: [Email templates]
+      summary: List contact merge tokens
+      operationId: listContactTokenFields
+      description: |
+        Every `{{contact.*}}` merge token this workspace can resolve: the built
+        in fields, plus the custom fields the workspace has defined.
+
+        **Call this before writing a template or a message body.** Custom field
+        keys are defined per workspace and appear in no fixed list, so a token
+        written from memory may not exist. A token that does not resolve is not
+        an error. It is delivered to the recipient as the literal text
+        `{{contact.whatever}}`.
+
+        A field the contact has not filled in resolves to an empty string, so
+        copy has to read correctly when it is blank. Write "Hi
+        {{contact.first_name}}," rather than "Your company, {{contact.company}},
+        needs this", which reads as "Your company, , needs this".
+
+        Requires `contact:read` **or** `workflow:read`. The second is there
+        because someone who builds workflows needs this vocabulary for a message
+        body without necessarily holding any contact permission.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The workspace's merge token vocabulary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  standard:
+                    type: array
+                    description: Built in contact fields, the same in every workspace.
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string, example: first_name }
+                        label: { type: string, example: First name }
+                        token:
+                          type: string
+                          description: The literal token to write.
+                          example: '{{contact.first_name}}'
+                  custom:
+                    type: array
+                    description: Fields this workspace has defined.
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string }
+                        label: { type: string }
+                        token: { type: string }
+                        type:
+                          type: string
+                          description: The field's type, as defined in the workspace.
+                        options:
+                          type: array
+                          description: Allowed values, for dropdown and multiselect fields.
+                          items:
+                            type: object
+                            properties:
+                              value: { type: string }
+                              label: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /email-templates:
+    get:
+      tags: [Email templates]
+      summary: List email templates
+      operationId: listEmailTemplates
+      description: |
+        Lists the workspace's email templates, ordered by name.
+
+        **This is where a `templateId` comes from.** Every other operation here
+        takes one, as does `POST /contacts/{contactId}/emails` and the Send
+        Email workflow node.
+
+        Requires `email:read` **or** `email:me:use`. A sender restricted to their
+        own address still has to be able to see the templates they may send.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The workspace's templates.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  templates:
+                    type: array
+                    items: { $ref: '#/components/schemas/EmailTemplate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Email templates]
+      summary: Create an email template
+      operationId: createEmailTemplate
+      description: |
+        Creates a template. The body is a complete HTML email document.
+
+        Email clients are not browsers. Use tables for layout rather than flex or
+        grid, put styles inline on every element rather than relying on a
+        `<style>` block, keep the width to 600px, and host images at a public URL
+        rather than embedding them. Scripts are stripped everywhere.
+
+        The HTML is stored exactly as sent. It is not sanitized, because email
+        markup legitimately carries the things a sanitizer removes, such as
+        Outlook conditional comments and VML.
+
+        Requires `emailTemplate:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, subject, html]
+              properties:
+                name:
+                  type: string
+                  description: Shown in the template picker. Max 120 characters.
+                subject:
+                  type: string
+                  description: >
+                    Supports `{{contact.*}}` tokens. Rendered as text, not markup,
+                    so values in it are not escaped. Max 500 characters.
+                html:
+                  type: string
+                  description: >
+                    A complete HTML email document. Supports `{{contact.*}}`
+                    tokens, whose resolved values are escaped. Max 256 KB.
+                textFallback:
+                  type: string
+                  description: >
+                    The plain text alternative. Derived from the HTML when
+                    omitted, which is usually what you want. Supply one when the
+                    derived version would read badly, such as a template that is
+                    mostly images and buttons.
+                description:
+                  type: string
+                  description: An internal note about when to use it. Not sent.
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  template: { $ref: '#/components/schemas/EmailTemplate' }
+        '400':
+          description: >
+            Missing a required field, or the HTML is over 256 KB. The message
+            names which.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /email-templates/preview:
+    post:
+      tags: [Email templates]
+      summary: Render a template
+      operationId: previewEmailTemplate
+      description: |
+        Renders a subject and body against a contact and reports which tokens did
+        not resolve.
+
+        **Run this before saving HTML you have not sent before.** It uses the same
+        resolver the send path uses, so what it returns is what would be
+        delivered. `unresolvedTokens` lists anything left literal, which is how a
+        misspelled field is caught before a customer sees it.
+
+        Pass `templateId` to render a saved template, or `subject` and `html` to
+        check content you have not saved yet. Inline content wins when both are
+        given.
+
+        Requires `email:read` **or** `email:me:use`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                templateId:
+                  type: string
+                  description: A saved template, from `GET /email-templates`.
+                subject:
+                  type: string
+                  description: Unsaved subject to render instead.
+                html:
+                  type: string
+                  description: Unsaved HTML to render instead.
+                textFallback: { type: string }
+                contactId:
+                  type: string
+                  description: >
+                    Render against this contact, from `GET /contacts`. Omit to
+                    use a sample contact, whose values are obviously fictional.
+      responses:
+        '200':
+          description: The rendered message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  preview:
+                    type: object
+                    properties:
+                      subject: { type: string }
+                      html: { type: string }
+                      text:
+                        type: string
+                        description: The plain text part that would ship alongside the HTML.
+                      contactId:
+                        type: string
+                        nullable: true
+                        description: Null when rendered against the sample contact.
+                      contactName: { type: string, nullable: true }
+                      unresolvedTokens:
+                        type: array
+                        description: >
+                          Tokens left literal. Each one would be delivered as
+                          visible text. An empty array means every token resolved.
+                        items: { type: string }
+                        example: ['{{contact.industry}}']
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /email-templates/{templateId}:
+    parameters:
+      - name: templateId
+        in: path
+        required: true
+        description: The template's ID, from `GET /email-templates`.
+        schema: { type: string }
+    get:
+      tags: [Email templates]
+      summary: Get an email template
+      operationId: getEmailTemplate
+      description: |
+        Returns one template in full, with its tokens unresolved. This is the
+        authoring view. Use `POST /email-templates/preview` to see what a
+        recipient would get.
+
+        Requires `email:read` **or** `email:me:use`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The template.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  template: { $ref: '#/components/schemas/EmailTemplate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    patch:
+      tags: [Email templates]
+      summary: Update an email template
+      operationId: updateEmailTemplate
+      description: |
+        Changes a template. Only the fields you send are changed, so sending
+        `html` alone leaves the name and subject as they were.
+
+        **There is no version history.** An update replaces what was there, and
+        the previous content is not recoverable. Emails already sent keep their
+        own rendered copy and are unaffected.
+
+        Templates are read at send time, so this changes the next send rather
+        than anything already delivered.
+
+        Requires `emailTemplate:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                subject: { type: string }
+                html: { type: string, description: Max 256 KB. }
+                textFallback: { type: string }
+                description: { type: string }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  template: { $ref: '#/components/schemas/EmailTemplate' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      tags: [Email templates]
+      summary: Delete an email template
+      operationId: deleteEmailTemplate
+      description: |
+        Deletes a template.
+
+        **Nothing is checked for references first.** A workflow's Send Email node
+        still pointing at this template fails on its next run, with "Email
+        template not found" naming the ID. That is deliberate: a loud failure
+        per run beats scanning every workflow in the tenant on every delete. If a
+        template is used by a workflow, change the node before deleting it.
+
+        Requires `emailTemplate:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }

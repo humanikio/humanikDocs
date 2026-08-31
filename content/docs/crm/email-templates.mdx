@@ -1,0 +1,214 @@
+---
+title: Email templates
+description: Reusable HTML bodies, personalised per recipient at send time.
+---
+
+A template is an HTML email written once and sent to many people, with each
+person's own details filled in as it goes out. The composer sends one. A workflow
+sends one. Nova writes one for you if you ask it to.
+
+The personalisation is the point. `Hi {{contact.first_name}},` reaches Ada as
+"Hi Ada," and Sam as "Hi Sam," from a single stored body.
+
+## Merge tokens
+
+A token is a placeholder that becomes a real value when the message is sent.
+
+```
+Hi {{contact.first_name}}, thanks for your time today.
+```
+
+Two families exist, and both come from the same place:
+
+| | |
+| --- | --- |
+| **Built in** | `full_name` `first_name` `last_name` `phone` `email` `company` `title` |
+| **Custom** | Whatever fields your workspace has defined |
+
+Custom field keys are yours, so no fixed list can tell you what they are. Ask the
+API:
+
+```bash
+curl "$HOS_API/contacts/token-fields?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Each entry carries the exact `token` string to paste, which is the value to use
+rather than assembling one yourself.
+
+### What happens when a token is wrong
+
+Nothing loud. That is the part worth understanding before you write a template.
+
+A token naming a field that does not exist is left exactly as you typed it, and
+the recipient sees the literal characters `{{contact.industry}}` in their inbox.
+It is not an error and nothing fails. So check before you save:
+
+```bash
+curl -X POST "$HOS_API/email-templates/preview?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Following up, {{contact.first_name}}",
+    "html": "<p>Hi {{contact.first_name}}, how are things at {{contact.industry}}?</p>"
+  }'
+```
+
+`unresolvedTokens` in the response lists everything that would ship as visible
+text. An empty array means every token resolved.
+
+### Empty fields
+
+A field the contact has not filled in resolves to an empty string. There is no
+conditional logic, so write copy that still reads correctly when a value is
+missing.
+
+| | |
+| --- | --- |
+| Reads fine when blank | `Hi {{contact.first_name}},` |
+| Reads badly when blank | `Your company, {{contact.company}}, needs this` |
+
+The second renders as "Your company, , needs this" for anyone with no company on
+file. Put a value that is often missing on its own line, where a blank is simply
+an invisible line.
+
+## Writing the HTML
+
+Email clients are not browsers. Outlook renders with Word, and none of them
+support modern layout.
+
+| | |
+| --- | --- |
+| **Layout** | Tables. Not flex, not grid, not floats |
+| **Styles** | Inline on every element. A `<style>` block alone is not enough |
+| **Width** | 600px maximum, centred, with a mobile breakpoint |
+| **Images** | Hosted at a public URL, always with `alt` text. Many clients block images by default |
+| **Scripts** | Stripped everywhere. They will not run |
+| **Size** | Under 256 KB. Gmail clips around 102 KB |
+
+Your HTML is stored exactly as you send it. It is not cleaned up, because email
+markup legitimately contains the things a sanitizer strips, such as Outlook
+conditional comments and VML.
+
+**Values are escaped for you.** A company called `Smith & Sons` arrives intact
+rather than breaking the markup around it. Do not escape tokens yourself.
+
+## Sending one
+
+Get the ID first:
+
+```bash
+curl "$HOS_API/email-templates?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Then send it to a contact:
+
+```bash
+curl -X POST "$HOS_API/contacts/con_7f3a91/emails?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": "tpl_4c8e21",
+    "fromAddress": "sales@yourcompany.com"
+  }'
+```
+
+The subject comes from the template. Supply your own `subject` to override it,
+which is how a reply keeps its `Re:` line while still using a template body.
+
+In the composer and in a workflow's Send Email node, picking a template loads its
+subject into the Subject field, where you can edit it. What you see there is what
+sends. Editing it by hand and then switching template keeps what you typed.
+
+Both places also render the template underneath the picker, so you can read what
+is going out before it does. In the composer it is rendered for the contact you
+are writing to, with their own values filled in. In a workflow node there is no
+recipient yet, so it renders against a sample contact and says so.
+
+**The template is read at send time.** Editing it changes the next send, never
+one already delivered. Every sent email keeps its own rendered copy.
+
+**Every HTML email ships with a plain text version alongside it**, derived from
+your HTML unless you supply `textFallback`. That is not optional: an HTML only
+message scores badly with spam filters and is unreadable in text only clients.
+
+## Working with Nova
+
+Nova can write and edit templates for you. It is worth knowing what it needs and
+what it will refuse.
+
+### What to give it
+
+Describe what you want. Nova finds the rest:
+
+> Make me a follow up email for after a demo call. Use their first name and
+> company, and put a "Book a follow up" button linking to our booking page.
+
+You do not need to look anything up first. Nova lists your templates to find the
+one you mean by name, and reads your workspace's fields to know which tokens
+exist. If you already have an ID, giving it removes a step, but it is never
+required.
+
+To change an existing one, name it:
+
+> In the demo follow up template, make the headline warmer and the button dark
+> green. Leave everything else alone.
+
+### It asks before it changes anything
+
+Creating a template is safe, so Nova just does it. **Editing one is not**, because
+there is no version history and an update replaces what was there.
+
+So for an edit, Nova proposes first. You get a card showing what will change,
+and nothing is written until you approve it. Dismiss it and the template is
+untouched. If you have the template open while you approve, the editor updates in
+front of you.
+
+### What it will refuse, and why
+
+Nova checks a template renders before saving it, and will not save one that would
+send a broken token. Two requests it declines:
+
+**A field that does not exist.** Ask for `{{contact.industry}}` when your
+workspace has no industry field and Nova says so, rather than writing a token
+that ships as literal text. It will offer the fields you do have.
+
+**Workflow data.** `{{trigger.email}}` and `{{nodes.…}}` cannot work in a stored
+template. Those belong to a workflow run, and a template is rendered per
+recipient by the CRM, which never sees that run. There is no spelling of it that
+works. Put run values in the Send Email node's own subject or plain text body
+instead.
+
+## Permissions
+
+| | |
+| --- | --- |
+| Read and preview templates | `email:read` **or** `email:me:use` @ `workspace/{id}` |
+| Create, change, delete | `emailTemplate:manage` @ `workspace/{id}` |
+| List merge tokens | `contact:read` **or** `workflow:read` @ `workspace/{id}` |
+| Send one to a contact | `email:send` **or** `email:me:use` @ `workspace/{id}` |
+
+Authoring is deliberately separate from sending. Someone who may send from their
+own address can pick a template and use it without being able to rewrite it for
+everyone else.
+
+It is also separate from `email:manage`, which connects domains and creates
+addresses. Writing marketing copy and changing mail infrastructure are different
+jobs, and one does not imply the other.
+
+For how roles, actions and assignments fit together, see
+[Access control](/docs/access-control).
+
+## Deleting
+
+Nothing is checked for references first. A workflow's Send Email node still
+pointing at a deleted template fails on its next run, naming the missing ID.
+
+That is deliberate. A loud failure on the one workflow that used it beats a
+delete that has to scan every workflow you own. Change the node before you delete
+the template.
+
+## Reference
+
+[Email templates in the API reference](/docs/api-reference/crm)
