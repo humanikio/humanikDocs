@@ -1,0 +1,75 @@
+---
+title: Bulletin
+description: A noticeboard for the workspace, where each item reads its own data live.
+---
+
+The bulletin is the page a workspace opens on. It holds tiles, and each tile
+points at something: a table, a file, a saved query, or a note somebody wrote.
+
+The difference between a bulletin and a document is that nobody keeps it up to
+date. A tile pointing at a table shows what that table says now. Change the
+data and the tile changes with it, without anyone editing the board.
+
+## Why tiles rather than a page
+
+A written page goes stale the moment the thing it describes moves on, and it
+goes stale quietly. Nobody can tell by looking whether the number in a
+paragraph was true this morning or last quarter.
+
+A tile carries an address rather than a copy:
+
+```
+   Tile  "This week's orders"
+     │
+     └─ points at ─▶  Table "orders" in namespace "Operations"
+```
+
+Nothing is copied into the tile. When somebody opens the board, the tile reads
+the table and draws what is there. There is no stale version to find, because
+there is no version.
+
+Some things are not data, and those get a tile too. A note is text somebody
+wrote, and it stays exactly as written. See [Tiles](/docs/bulletin/tiles).
+
+## What you do not have to decide
+
+You do not choose how a tile is drawn.
+
+When a tile is posted, its data is read and a presentation is chosen from it: a
+short table stays a table, a single number becomes a metric, a spreadsheet with
+a date column and a count becomes a chart, a PDF becomes something you can open.
+The reason for the choice is stored with the tile, so "why does this look like
+this" has an answer.
+
+If the automatic choice is not the one you want, you say so in plain words
+rather than picking from a menu. That is a
+[tile prompt](/docs/bulletin/prompts).
+
+## Boards
+
+Tiles are filed onto boards, and boards appear as a strip along the top. A
+workspace can have one board or several: Operations, Content, Reference.
+
+The first board in the strip is what the workspace opens on, so its order is a
+decision about what people see first rather than a personal preference. See
+[Boards](/docs/bulletin/boards).
+
+## Where to go next
+
+<Cards>
+  <Card title="Tiles" href="/docs/bulletin/tiles">
+    What a tile can point at, and what it stores.
+  </Card>
+  <Card title="Tile prompts" href="/docs/bulletin/prompts">
+    Changing how a tile reads, in plain words.
+  </Card>
+  <Card title="Boards" href="/docs/bulletin/boards">
+    Filing tiles, laying out a page, and deciding what opens first.
+  </Card>
+  <Card title="Keeping a tile current" href="/docs/bulletin/automating">
+    Updating a tile from your own systems.
+  </Card>
+  <Card title="Permissions" href="/docs/bulletin/permissions">
+    Who can read, post, edit, and administer.
+  </Card>
+</Cards>

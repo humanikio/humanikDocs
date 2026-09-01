@@ -1,0 +1,94 @@
+---
+title: Boards
+description: Filing tiles, arranging a page around them, and deciding what the workspace opens on.
+---
+
+A board is a named group of tiles, shown as a tab along the top of the
+bulletin. A workspace can run on one board or on several: Operations, Content,
+Reference.
+
+Tiles are filed onto a board when they are posted, and can be moved between
+boards later. A tile on no board is not lost: it sits on the un-grouped board
+until somebody files it.
+
+## Laying a board out
+
+A board holds tiles. Its **page** is the arrangement around them: the headings,
+the sections, the order, and which tile gets the width.
+
+That page is written once and kept, rather than being reassembled every time
+somebody looks. Laying a board out is therefore an action you take, not
+something that happens continuously.
+
+You lay a board out when the set of tiles on it changes:
+
+- A tile was posted to it
+- A tile was moved onto it or off it
+- A tile was removed
+- A tile was pinned, and should now lead the page
+
+You do **not** lay a board out to refresh it. The contents are read live
+whenever somebody opens the board, so a number on the page is current whether
+the page was arranged this morning or last month.
+
+<Callout>
+  Lay a board out **once** after a run of changes rather than once per tile.
+  Each pass costs a generation and rearranges the page under anybody reading
+  it.
+</Callout>
+
+### The page never holds your data
+
+The arrangement is written without ever being shown a row, a total, or a value
+from any tile. It is given the titles and the shapes, and it writes headings
+and empty places for the tiles to sit in.
+
+Every place on the page is filled by the tile itself when somebody opens it.
+This is why a page cannot go stale and cannot quote a number that has since
+changed: it has never seen one.
+
+If a tile is removed after a page was arranged, its place remains and says so.
+The page stays readable, and laying the board out again closes the gap when you
+are ready.
+
+## Steering the arrangement
+
+A board can be laid out with an instruction, which applies to the whole pass:
+
+> Keep it dense, this is read on a phone.
+
+This is weaker than a tile's own prompt. See
+[Tile prompts](/docs/bulletin/prompts).
+
+## Order decides what the workspace sees
+
+Boards appear in an order you set, and **the first board is where the workspace
+lands**. Reordering is not a personal preference: it changes what every person
+in the workspace opens onto.
+
+<Callout type="warn">
+  Putting an empty board first means everybody opens the bulletin to an empty
+  page. Check what is on a board before promoting it.
+</Callout>
+
+## Deleting a board keeps its tiles
+
+Deleting a board does not delete what was on it. The tiles are un-grouped and
+survive, and they need filing somewhere or they stay off every board people
+navigate to.
+
+This is deliberate. Tiles are addresses into your data, and a tidy-up should
+never be the thing that quietly removes access to a document somebody relied
+on. Removing a tile is a separate action, and even that removes only the tile:
+the table, file, or bucket it pointed at is untouched.
+
+## Next
+
+<Cards>
+  <Card title="Keeping a tile current" href="/docs/bulletin/automating">
+    Updating tiles from your own systems.
+  </Card>
+  <Card title="Permissions" href="/docs/bulletin/permissions">
+    Who can file, arrange, pin, and reorder.
+  </Card>
+</Cards>

@@ -1,0 +1,112 @@
+---
+title: Keeping a tile current
+description: Why most tiles need no updating, and how to change one from your own systems.
+---
+
+Most tiles never need updating. A tile pointing at a table reads that table
+when somebody opens the board, so writing a row into the table is all it takes
+for the board to show it.
+
+The two are worth separating, because only one of them involves the bulletin at
+all:
+
+| You changed | What to do |
+| --- | --- |
+| **The data** the tile points at | Nothing. The tile reads it on next open |
+| **Which data** the tile points at, or how it reads | Update the tile |
+
+## Tiles have stable identifiers
+
+Every tile has an id, issued when it is posted and returned in that response.
+It does not change when the tile is edited, renamed, moved to another board, or
+pinned.
+
+Keep the id at the moment you create the tile. It is the handle you use later:
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/bulletin/tiles?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "title": "This week orders", "source": { "kind": "table", "namespaceId": "ns_orders", "table": "orders" } }'
+```
+
+#### Response `201 Created`
+
+```json
+{ "success": true, "tile": { "id": "3f9c2a71-5d84-4e10-9b6c-1a2f7e8d4c33" } }
+```
+
+Keep that `id`.
+
+<Callout>
+  A tile id comes from creating the tile or from listing the board. There is no
+  way to construct one, and an id from another workspace does not resolve.
+</Callout>
+
+## Changing what a tile points at
+
+Repointing a tile is a single edit. The tile keeps its id, its place on the
+board, and its pin.
+
+#### Request
+
+```bash
+curl -X PATCH "$HOS_API/bulletin/tiles/3f9c2a71-5d84-4e10-9b6c-1a2f7e8d4c33?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "source": { "kind": "table", "namespaceId": "ns_orders", "table": "orders_q4" } }'
+```
+
+#### Response `200 OK`
+
+```json
+{ "success": true }
+```
+
+Changing the source or the prompt causes the presentation to be worked out
+again, because either can change what the right presentation is. Changing only
+the title does not, since a new title cannot change the shape of the data.
+
+The tile does not move, so the board does not need laying out again.
+
+<Callout type="warn">
+  A source can only be repointed to something the current presentation can
+  draw. A tile drawn as a document cannot be repointed at a table, because a
+  document cannot draw rows. This is refused rather than silently reset, so a
+  tile never quietly becomes something else.
+</Callout>
+
+## When a change reaches somebody watching
+
+Anyone with the board open sees a tile change without reloading. Posting,
+editing, removing, pinning, moving, and laying out all reach open boards.
+
+A change to the **underlying data** does not push. A row written into a table
+appears the next time somebody opens the board, or when the tile itself is next
+changed. Nothing polls your data on a timer: that would mean every open browser
+reading your tables continuously, mostly to redraw what was already on screen.
+
+If a tile needs re-reading on a schedule, put the schedule on the job that
+updates it rather than on the browsers watching it.
+
+## A pattern that works well
+
+Point a tile at a table, then let your own systems write to that table. The
+board stays current and nothing ever calls the bulletin:
+
+```
+   Your system  ──writes rows──▶  Table "deliveries"
+                                        ▲
+                                        │ reads on open
+                                   Tile "Today's deliveries"
+```
+
+Reach for a tile edit when the **question** changes, not when the answer does.
+
+## Permissions
+
+Posting a tile and editing one are different grants, and editing covers
+somebody else's tile as well as your own. See
+[Permissions](/docs/bulletin/permissions).

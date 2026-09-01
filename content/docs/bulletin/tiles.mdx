@@ -1,0 +1,84 @@
+---
+title: Tiles
+description: What a tile points at, and why it never holds a copy of your data.
+---
+
+A tile is an address and an intention. It records what to show and how the
+person wants it read. It does not record the data.
+
+That distinction is the whole design. A tile pointing at a table of orders has
+no orders in it. When somebody opens the board, the table is read and the tile
+draws what it finds.
+
+## The four things a tile can point at
+
+| Points at | What it is | Example |
+| --- | --- | --- |
+| **A table** | Rows in a [namespace](/docs/namespaces) | This week's job sites |
+| **A file** | A document, spreadsheet, or image in a bucket | The signed proposal |
+| **A saved query** | A question asked of a table, rather than the whole table | Orders over 5000, this month |
+| **A note** | Text somebody wrote | The winter dispatch schedule |
+
+The first three are live. The fourth is not, and that is deliberate: an
+announcement should say what its author wrote, not change under them.
+
+<Callout>
+  A file is addressed by its **path**, not by an internal identifier. Replacing
+  the file at that path is the ordinary way to update a document tile, and it
+  keeps working when somebody renames or re-uploads.
+</Callout>
+
+## What the tile decides, and what it does not
+
+A tile stores:
+
+- **What it points at.** The table, path, query, or note text.
+- **A prompt**, if somebody wrote one. How they want it read. See
+  [Tile prompts](/docs/bulletin/prompts).
+- **How it is currently drawn**, and a sentence saying why that was chosen.
+- **Whether it is pinned**, and which board it is filed on.
+
+It does not store rows, totals, titles taken from the data, or anything read
+out of the source. Nothing in a tile can be out of date with the thing it
+points at, because nothing in it was copied from there.
+
+## How a tile gets its appearance
+
+When a tile is posted, its data is read and a presentation is chosen from what
+is actually there rather than from the source type alone. The available
+presentations are:
+
+`table` · `list` · `metric` · `chart` · `document` · `image` · `gallery` · `note`
+
+A spreadsheet with one number in it is a metric, not a table. A bucket of
+photographs is a gallery. A PDF is a document with a way to open it.
+
+The choice is made once and stored, along with the reason. It is made again
+when the tile changes: a new source, or a new prompt. It is **not** made again
+when the underlying data changes, because the data changing is the normal case
+and re-deciding the presentation every time would make the board move around
+under whoever is reading it.
+
+## Reading a tile is not the same as seeing it
+
+A tile on a board is visible to anyone who can read the bulletin. Its
+**contents** are not.
+
+When somebody opens a board, each tile fetches its own data, and that fetch is
+checked against the reader's own access to the namespace behind it. Somebody
+without `datasource:read` on that namespace sees the tile and a short note in
+place of the contents.
+
+This means a board can be shared broadly without widening anybody's reach into
+the data. See [Permissions](/docs/bulletin/permissions).
+
+## Next
+
+<Cards>
+  <Card title="Tile prompts" href="/docs/bulletin/prompts">
+    Say how a tile should read, in plain words.
+  </Card>
+  <Card title="Keeping a tile current" href="/docs/bulletin/automating">
+    Point a tile somewhere new from your own systems.
+  </Card>
+</Cards>

@@ -1,0 +1,76 @@
+---
+title: Tile prompts
+description: Say how a tile should read in plain words, rather than choosing from a menu.
+---
+
+A tile prompt is a sentence about how you want a tile read. Not what it should
+say, and not what data it should show: only how what is there should be
+presented.
+
+> Do not show the raw rows, chart the volume by week.
+
+> This is a budget. Lead with the total.
+
+> Rank by usage, most used first, and flag the ones going stale.
+
+You do not pick a chart type or a column layout. You write the instruction and
+the presentation is worked out from your words together with the data that is
+actually there.
+
+## Why a prompt rather than a setting
+
+A menu of presentations can only offer what somebody anticipated. A prompt
+carries the thing you know about your own data that reading twelve sample rows
+would never reveal: that this column is the one people care about, that the
+totals matter more than the detail, that a date field is really a deadline.
+
+Most tiles do not need one. Leaving it empty means the data decides, which is
+the common case and works well.
+
+## A prompt cannot invent content
+
+A prompt is an instruction about **interpretation**. It can decide what is
+emphasised, what is grouped, what is hidden, and what shape the tile takes.
+
+It cannot add a number that is not in the data, change a value, or introduce a
+fact. If you ask a tile to show something its source does not contain, nothing
+appears, because there is nothing to draw.
+
+<Callout type="warn">
+  A prompt asking for something the data cannot support is stored and does
+  nothing. Asking for week-over-week movement on a table with no dates in it is
+  not an error, and it will not be reported as one. The tile simply shows what
+  it has.
+</Callout>
+
+## Changing a prompt redraws the tile
+
+Editing a tile's prompt causes its presentation to be worked out again, at
+once. The tile does not move on the page, so the board does not need laying out
+again for the change to appear.
+
+Clearing a prompt back to empty returns the tile to letting the data decide.
+
+## The board instruction
+
+A prompt belongs to one tile. There is a second, weaker instruction that
+applies to a whole board when its page is being arranged:
+
+> Keep it dense, this is read on a phone.
+
+> Put anything about deadlines near the top.
+
+The two are read in a fixed order. **A tile's own prompt outranks the board
+instruction.** They are given separately rather than merged, so that when they
+disagree the tile's owner wins.
+
+Use the board instruction for a house style across a board. Use a tile prompt
+for the one tile that needs to behave differently.
+
+See [Boards](/docs/bulletin/boards) for how a board's page is arranged.
+
+## Who can set one
+
+Writing a prompt on a new tile travels with posting it. Changing the prompt on
+a tile that already exists is an edit, including on somebody else's tile. See
+[Permissions](/docs/bulletin/permissions).
