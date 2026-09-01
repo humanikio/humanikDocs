@@ -24,7 +24,7 @@ import { cn } from '@/lib/cn';
  */
 const SECTIONS = [
   { text: 'HumanikOS', url: '/docs' },
-  { text: 'Access control', url: '/docs/access-control' },
+  { text: 'Access Control (IAM)', url: '/docs/access-control' },
   { text: 'Devices', url: '/docs/devices' },
 ];
 
