@@ -1,0 +1,1195 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Bulletin
+  version: v1
+  summary: The workspace noticeboard. Tiles hold addresses, not copies.
+  description: |
+    A bulletin is the page a workspace opens on. It holds **tiles**, and a tile
+    is an address into something else: a table, a saved query, a file, or a note
+    somebody wrote.
+
+    **Nothing is copied into a tile.** A tile pointing at a table stores the
+    address of that table and no rows. When somebody opens the board, the tile
+    reads its source and draws what is there, so there is never a stale version
+    to find.
+
+    **You do not choose how a tile is drawn.** The data is read and a
+    presentation is worked out from what is actually there together with the
+    owner's `prompt`. Send `prompt` in plain words: "do not show the rows, chart
+    the volume by week". A prompt governs interpretation only. It cannot add a
+    value the source does not contain.
+
+    **Seeing a tile is not reading through it.** `bulletin:read` lists tiles and
+    their arrangement. The contents come from `GET /bulletin/tiles/{tileId}/data`,
+    which evaluates `datasource:read` against the **caller**, not against
+    whoever posted the tile. A board can therefore be shared broadly without
+    widening anyone's reach into data.
+
+    ## Boards
+
+    Tiles are filed onto boards, called groups in the paths and `groupId` in the
+    bodies. A board's **page** is the arrangement written around its tiles:
+    headings, sections, and an empty place per tile. That page is generated once
+    and kept, and it is written without ever being shown a row or a total, which
+    is why it cannot go stale.
+
+    Lay a board out when the **set** of tiles on it changes. Never to refresh
+    it: contents are read live on open.
+
+    The first board in the order is the landing board for the whole workspace.
+
+    ## What is not here
+
+    Live updates do not arrive over HTTP. There is no webhook and no streaming
+    endpoint. Nothing polls your data on a timer either: a change to the rows
+    behind a tile appears the next time somebody opens the board.
+
+    Every fact in this document is resolved from `hos-api` source.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Tiles
+    description: Posting, reading, changing and removing the items on a board.
+  - name: Tile data
+    description: Reading through a tile to what it points at.
+  - name: Boards
+    description: The named groups tiles are filed onto, and their order.
+  - name: Pages
+    description: Arranging a board into a page, and rolling one back.
+  - name: Presentation
+    description: Re-deciding how a tile draws, after its prompt or source changed.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: A service account API key, sent whole as a bearer token.
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: query
+      required: true
+      description: |
+        The workspace whose bulletin this is. From `GET /workspaces`.
+
+        It is not a path segment on this API. Handlers accept it as a query
+        parameter or in the request body; omitting both returns `400`.
+      schema:
+        type: string
+
+    TileId:
+      name: tileId
+      in: path
+      required: true
+      description: 'From `POST /bulletin/tiles` or `GET /bulletin`.'
+      schema:
+        type: string
+        format: uuid
+
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      description: 'A board id. From `POST /bulletin/groups` or `GET /bulletin/groups`.'
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Error:
+      type: object
+      description: '`error` is a human readable string, not a stable machine code.'
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+      required: [success, error]
+
+    Source:
+      type: object
+      description: |
+        What a tile points at. Four kinds, and the first three are live.
+
+        `object` addresses a file by **path**, never by an internal id. An id
+        survives a rename and is useless against a replacement, and replacing
+        the file behind a tile is the common case.
+      oneOf:
+        - type: object
+          title: table
+          properties:
+            kind: { type: string, const: table }
+            namespaceId:
+              type: string
+              description: 'From `GET /namespaces`.'
+            table:
+              type: string
+              description: 'From `GET /namespaces/{namespaceId}/tables`.'
+          required: [kind, namespaceId, table]
+        - type: object
+          title: query
+          properties:
+            kind: { type: string, const: query }
+            namespaceId: { type: string }
+            table: { type: string }
+          required: [kind, namespaceId]
+        - type: object
+          title: object
+          properties:
+            kind: { type: string, const: object }
+            namespaceId: { type: string }
+            bucket:
+              type: string
+              description: 'From `GET /namespaces/{namespaceId}/buckets`.'
+            path:
+              type: string
+              description: The file path inside the bucket.
+          required: [kind, namespaceId]
+        - type: object
+          title: note
+          properties:
+            kind: { type: string, const: note }
+            body:
+              type: string
+              description: Text the author wrote. Not live, deliberately.
+          required: [kind, body]
+
+    Render:
+      type: object
+      description: |
+        How a tile is currently drawn. One of `table`, `list`, `metric`,
+        `chart`, `document`, `image`, `gallery`, `note`.
+
+        You are not expected to send this. It is worked out from the data and
+        the prompt, and sending one only seeds the tile before the first pass
+        runs.
+      properties:
+        type:
+          type: string
+          enum: [table, list, metric, chart, document, image, gallery, note]
+        options:
+          type: object
+          additionalProperties: true
+      required: [type]
+
+    Tile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string }
+        groupId:
+          type: [string, 'null']
+          description: The board it is filed on. `null` means un-grouped, which is a real state.
+        title: { type: string }
+        source: { $ref: '#/components/schemas/Source' }
+        render: { $ref: '#/components/schemas/Render' }
+        prompt:
+          type: [string, 'null']
+          description: |
+            How the owner wants it read, in their own words. `null` means the
+            data decides, which is the common case.
+        layout:
+          type: object
+          properties:
+            w: { type: integer }
+            h: { type: integer }
+        pinned:
+          type: boolean
+          description: Pinned tiles lead the page. Set through the pin routes, not here.
+        refreshSec: { type: integer }
+        createdBy: { type: string }
+        createdByName: { type: string }
+        createdByType: { type: string, enum: [human, ai] }
+        updatedBy:
+          type: string
+          description: |
+            Who last changed the tile's content. Absent when only the author has
+            touched it. The byline stays `createdBy`: the post is still theirs.
+        updatedByName: { type: string }
+        updatedByType: { type: string, enum: [human, ai] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, title, source, render]
+
+    Board:
+      type: object
+      description: A named group of tiles. Shown as a tab, and the first one is where the workspace lands.
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        colour: { type: string }
+        order:
+          type: integer
+          description: |
+            Ascending, zero based. Written only by `POST /bulletin/groups/reorder`.
+            An absent order sorts **last**, so a board written before the field
+            existed does not claim the front.
+        cadence:
+          type: string
+          enum: [manual, daily, weekly, monthly]
+          description: |
+            Recorded intent. **Nothing acts on it today**: there is no
+            scheduler, and a board with a cadence is not laid out on one.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name]
+
+    BoardSummary:
+      allOf:
+        - $ref: '#/components/schemas/Board'
+        - type: object
+          properties:
+            tileCount: { type: integer }
+            namespaceIds:
+              type: array
+              items: { type: string }
+            staleTileCount:
+              type: integer
+              description: Tiles whose stored presentation no longer matches their prompt, source or columns.
+
+    Page:
+      type: object
+      description: |
+        A board's arrangement. `html` carries headings, sections and an empty
+        place per tile, and no data of any kind: the author of this document is
+        never shown a row, a total or a title from a tile.
+      properties:
+        boardId: { type: string }
+        version: { type: integer }
+        html: { type: string }
+        plan:
+          type: string
+          description: The design decisions taken before the markup was written.
+        tileIds:
+          type: array
+          items: { type: string }
+        omittedTileCount:
+          type: integer
+          description: Tiles left off because the reader cannot see through them.
+        generatedAt: { type: string, format: date-time }
+
+  responses:
+    BadRequest:
+      description: The request is malformed or a required field is missing.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+    Forbidden:
+      description: The caller lacks the required action on this workspace.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+    NotFound:
+      description: |
+        No such row, or it belongs to another workspace. The two are
+        deliberately indistinguishable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+    ServerError:
+      description: Server side failure.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+paths:
+  /bulletin:
+    get:
+      tags: [Tiles]
+      summary: List the tiles on a bulletin
+      operationId: listBulletinTiles
+      description: |
+        Every tile in the workspace, with its address, its board, and how it is
+        currently drawn. Requires `bulletin:read`.
+
+        **This returns no contents.** A tile's data comes from
+        `GET /bulletin/tiles/{tileId}/data`, one tile at a time, and is gated
+        separately. Listing a board tells you what exists, not what it says.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The workspace's tiles.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tiles:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/tiles:
+    post:
+      tags: [Tiles]
+      summary: Post a tile
+      operationId: createBulletinTile
+      description: |
+        Puts a tile on the board. Requires `bulletin:post`.
+
+        **Two gates run, not one.** Besides `bulletin:post`, a tile pointing at
+        a namespace is refused unless the author also holds `datasource:read` on
+        that namespace. Without that check, posting would be a way to mint a
+        readable view of data the poster was never entitled to, since the read
+        gate checks the viewer.
+
+        Send `prompt` to say how the tile should read. Omit `render`: the
+        presentation is worked out from the data, and anything you send is only
+        a seed for the moment before the first pass runs.
+
+        Omitting `groupId` leaves the tile un-grouped, which is a real state
+        rather than an error. It sits on the un-grouped board until it is filed.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source: { $ref: '#/components/schemas/Source' }
+                title: { type: string }
+                prompt:
+                  type: string
+                  description: 'How it should be read, in plain words. Interpretation only: it cannot add data.'
+                groupId:
+                  type: string
+                  description: 'The board to file it on. From `GET /bulletin/groups`. Omit to leave it un-grouped.'
+                render: { $ref: '#/components/schemas/Render' }
+                layout:
+                  type: object
+                  properties:
+                    w: { type: integer }
+                    h: { type: integer }
+                refreshSec:
+                  type: integer
+                  description: Clamped server side to a floor.
+                actorName: { type: string }
+                actorType: { type: string, enum: [human, ai] }
+                postedVia: { type: string, enum: [manual, agent, workflow, subscription] }
+              required: [source]
+      responses:
+        '201':
+          description: The tile was created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tile: { $ref: '#/components/schemas/Tile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: |
+            Either `bulletin:post` is missing, or the author cannot read the
+            namespace the tile points at.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/tiles/{tileId}:
+    parameters:
+      - $ref: '#/components/parameters/TileId'
+
+    get:
+      tags: [Tiles]
+      summary: Read a tile's configuration
+      operationId: getBulletinTile
+      description: |
+        What the tile points at, the prompt somebody wrote for it, how it is
+        currently drawn, and the reason that presentation was chosen. Requires
+        `bulletin:read`.
+
+        This is the configuration, not the contents. Use
+        `GET /bulletin/tiles/{tileId}/data` for what it says.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The tile.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tile: { $ref: '#/components/schemas/Tile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      tags: [Tiles]
+      summary: Change a tile
+      operationId: updateBulletinTile
+      description: |
+        Retarget, retitle, re-prompt, resize or refile a tile. Requires
+        `bulletin:edit`, including on a tile somebody else posted.
+
+        **Changing `source` or `prompt` re-decides the presentation.** Changing
+        only the title does not, because a title cannot change the shape of the
+        data. Either way the tile keeps its id and its place, so the board does
+        not need laying out again.
+
+        A source change is refused when the new source cannot be drawn by the
+        current presentation: a tile drawn as a `document` cannot be repointed
+        at a table. This is a refusal rather than a silent renderer reset,
+        because a reset is a second unrequested edit the caller cannot detect.
+
+        **`pinned` is not settable here.** It rides the pin routes under
+        `bulletin:manage`, so that `bulletin:edit` cannot promote a tile by
+        sending one extra key.
+
+        A content change records who made it, alongside who posted it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                source: { $ref: '#/components/schemas/Source' }
+                prompt:
+                  type: [string, 'null']
+                  description: An empty string clears it, returning the tile to letting the data decide.
+                groupId:
+                  type: [string, 'null']
+                  description: 'Move it to another board. `null` un-groups it.'
+                render: { $ref: '#/components/schemas/Render' }
+                layout:
+                  type: object
+                  properties:
+                    w: { type: integer }
+                    h: { type: integer }
+                refreshSec: { type: integer }
+                actorName: { type: string }
+                actorType: { type: string, enum: [human, ai] }
+      responses:
+        '200':
+          description: The updated tile.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tile: { $ref: '#/components/schemas/Tile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      tags: [Tiles]
+      summary: Remove a tile
+      operationId: deleteBulletinTile
+      description: |
+        Takes the tile off the board. Requires `bulletin:edit`.
+
+        **The data is untouched.** A tile is a pointer, so removing one removes
+        the pointer. The table, file or bucket it addressed is unaffected.
+
+        If the board's page was arranged around this tile, the tile's place
+        remains and renders a short note. The page stays valid; laying the board
+        out again closes it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The tile was removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/tiles/{tileId}/data:
+    parameters:
+      - $ref: '#/components/parameters/TileId'
+
+    get:
+      tags: [Tile data]
+      summary: Read through a tile
+      operationId: getBulletinTileData
+      description: |
+        Resolves the tile's address and returns what it points at. Requires
+        `bulletin:read` **and** `datasource:read` on the namespace behind the
+        tile.
+
+        **This is the gate that matters.** It is evaluated against you, not
+        against whoever posted the tile. Somebody who can list a board can be
+        refused here, and that is the design: it lets a board be shared widely
+        without widening access to data.
+
+        The response shape follows the source. Rows for a table or a query, text
+        for a note, and a short lived signed URL for a file.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: What the tile points at.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  title: { type: string }
+                  shape:
+                    type: string
+                    enum: [rows, text, blob]
+                  columns:
+                    type: array
+                    items: { type: string }
+                  rows:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  text: { type: string }
+                  url:
+                    type: string
+                    description: 'For a file. Signed and short lived: treat it as a credential, not an address.'
+                  fileType: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: You can see this tile and cannot read through it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/tiles/{tileId}/pin:
+    parameters:
+      - $ref: '#/components/parameters/TileId'
+
+    post:
+      tags: [Tiles]
+      summary: Pin a tile
+      operationId: pinBulletinTile
+      description: |
+        Pinned tiles lead their board. Requires `bulletin:manage`, which is a
+        higher grant than editing: pinning decides what everyone opening that
+        board sees first.
+
+        The pin takes effect on the page the next time the board is laid out.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The tile is pinned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tile: { $ref: '#/components/schemas/Tile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      tags: [Tiles]
+      summary: Unpin a tile
+      operationId: unpinBulletinTile
+      description: Removes the pin. Requires `bulletin:manage`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The tile is no longer pinned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tile: { $ref: '#/components/schemas/Tile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/tiles/{tileId}/derive:
+    parameters:
+      - $ref: '#/components/parameters/TileId'
+
+    post:
+      tags: [Presentation]
+      summary: Re-decide how a tile draws
+      operationId: deriveBulletinTile
+      description: |
+        Reads the tile's data again and chooses a presentation for it. Requires
+        `bulletin:edit`.
+
+        **You rarely need this.** Posting a tile and changing its source or
+        prompt already re-derive it. Call this when the shape of the underlying
+        data has changed enough that the stored presentation no longer suits it,
+        for example a table that gained a date column.
+
+        Without `force`, a tile whose inputs have not changed is skipped rather
+        than re-derived. The comparison is over the prompt, the source and the
+        column list. Never over row values: data changing is the normal case,
+        and re-deciding on every change would move the board under whoever is
+        reading it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  description: Re-derive even when the inputs have not changed.
+                instruction:
+                  type: string
+                  description: A one off instruction for this pass. Weaker than the tile's own prompt.
+                actorType: { type: string, enum: [human, ai] }
+      responses:
+        '200':
+          description: |
+            The outcome. `skipped` when nothing had changed and `force` was not
+            set. A `rejected` result means the answer failed the presentation
+            check and the tile was left exactly as it was.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  tileId: { type: string }
+                  render: { $ref: '#/components/schemas/Render' }
+                  skipped: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/groups/{groupId}/derive:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+
+    post:
+      tags: [Presentation]
+      summary: Re-decide a board's stale tiles
+      operationId: deriveBulletinBoard
+      description: |
+        The same pass as `POST /bulletin/tiles/{tileId}/derive`, over every tile
+        on one board. Requires `bulletin:edit`.
+
+        Bounded by staleness: tiles whose inputs still match are skipped unless
+        `force` is set, so the ordinary cost is proportional to what actually
+        changed rather than to the size of the board.
+
+        This does not touch the board's **page**. Nothing moves, so no layout is
+        needed afterwards.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force: { type: boolean }
+                instruction:
+                  type: string
+                  description: Applied to every tile in this pass, as a default. Weaker than any tile's own prompt.
+                actorType: { type: string, enum: [human, ai] }
+      responses:
+        '200':
+          description: How many were re-drawn, skipped, and refused.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  derivedCount: { type: integer }
+                  skippedCount: { type: integer }
+                  rejectedCount: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/board:
+    get:
+      tags: [Pages]
+      summary: Get a board's page
+      operationId: getBulletinPage
+      description: |
+        The current arrangement for a board. Requires `bulletin:read`.
+
+        `html` is a fragment carrying headings, sections and an empty place per
+        tile. It holds no data: fill each place with the corresponding tile's
+        own contents, fetched separately and gated separately.
+
+        `omittedTileCount` counts tiles left off because you cannot read through
+        them. The page is built per reader.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: boardId
+          in: query
+          required: false
+          description: 'Which board. From `GET /bulletin/groups`. Omitted returns the landing board.'
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The page, or an empty result when the board has never been arranged.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  document: { $ref: '#/components/schemas/Page' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/board/generate:
+    post:
+      tags: [Pages]
+      summary: Arrange a board into a page
+      operationId: generateBulletinBoard
+      description: |
+        Writes a new page for a board: the headings, the sections, the order,
+        and which tile gets the width. Requires `bulletin:edit`.
+
+        **Call this when the set of tiles changes**, not to refresh a board.
+        Contents are read live whenever somebody opens it, so a number on the
+        page is current whether the page was arranged this morning or last
+        month. There is never a reason to arrange a board "to refresh it".
+
+        Call it **once** after a run of changes rather than once per tile. Each
+        pass costs a generation and rearranges the page under anybody reading
+        it.
+
+        The previous page is kept and can be rolled back to.
+
+        A refusal is not an error. The output can fail the page check, in which
+        case the response reports the reason and the existing page is left
+        exactly as it was.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                boardId:
+                  type: string
+                  description: 'Which board to arrange. From `GET /bulletin/groups`.'
+                instruction:
+                  type: string
+                  description: |
+                    A house style for this pass: "keep it dense, this is read on
+                    a phone". Weaker than any tile's own prompt, and the two are
+                    kept separate so that the tile's owner wins when they
+                    conflict.
+                actorType: { type: string, enum: [human, ai] }
+      responses:
+        '200':
+          description: The new page, or a refusal with the previous page untouched.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  document: { $ref: '#/components/schemas/Page' }
+                  rejected:
+                    type: object
+                    description: Present when the output failed the page check.
+                    properties:
+                      reason: { type: string }
+                      detail: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/board/versions:
+    get:
+      tags: [Pages]
+      summary: List superseded pages
+      operationId: listBulletinBoardVersions
+      description: |
+        Earlier arrangements of a board, newest first. Requires `bulletin:read`.
+
+        Old versions are pruned, so this is a short recent history rather than a
+        complete one.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: boardId
+          in: query
+          required: false
+          description: 'From `GET /bulletin/groups`.'
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The versions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  versions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        version: { type: integer }
+                        generatedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/board/rollback:
+    post:
+      tags: [Pages]
+      summary: Roll a page back
+      operationId: rollbackBulletinBoard
+      description: |
+        Restores an earlier arrangement. Requires `bulletin:manage`, because it
+        changes what the whole workspace sees.
+
+        Rolling back does not restore tiles. If the page being restored was
+        arranged around a tile that has since been removed, that tile's place
+        renders a short note.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                versionId:
+                  type: string
+                  description: 'From `GET /bulletin/board/versions`.'
+                boardId:
+                  type: string
+                  description: 'From `GET /bulletin/groups`.'
+              required: [versionId]
+      responses:
+        '200':
+          description: The restored page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  document: { $ref: '#/components/schemas/Page' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/groups:
+    get:
+      tags: [Boards]
+      summary: List boards
+      operationId: listBulletinBoards
+      description: |
+        The boards in a workspace, in the order they appear. Requires
+        `bulletin:read`.
+
+        The first board is the landing board for the whole workspace.
+
+        `staleTileCount` counts tiles whose stored presentation no longer
+        matches their prompt, source or columns. It is computed at read time
+        rather than stored.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The boards.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  groups:
+                    type: array
+                    items: { $ref: '#/components/schemas/BoardSummary' }
+                  ungroupedTileCount:
+                    type: integer
+                    description: Tiles filed on no board. A real state, not an error.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [Boards]
+      summary: Create a board
+      operationId: createBulletinBoard
+      description: |
+        Adds a board. Requires `bulletin:edit`.
+
+        A new board joins the end of the order, so creating one never changes
+        what the workspace opens on. It arrives empty and unarranged: post tiles
+        to it, then arrange it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                colour:
+                  type: string
+                  description: Hex. Absent means the default treatment.
+                cadence:
+                  type: string
+                  enum: [manual, daily, weekly, monthly]
+                  description: 'Recorded intent. Nothing acts on it today: there is no scheduler.'
+              required: [name]
+      responses:
+        '201':
+          description: The board was created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  group: { $ref: '#/components/schemas/Board' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/groups/reorder:
+    post:
+      tags: [Boards]
+      summary: Set the order boards appear in
+      operationId: reorderBulletinBoards
+      description: |
+        Rewrites the whole strip. Requires `bulletin:edit`.
+
+        **This changes what the whole workspace opens on**, because the first
+        board is the landing board. It is not a personal view setting.
+
+        Send every board id, in the order you want. Orders are rewritten from
+        zero, so a partial list is not a partial move.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                groupIds:
+                  type: array
+                  description: 'Every board id, in the order wanted. From `GET /bulletin/groups`.'
+                  items: { type: string }
+              required: [groupIds]
+      responses:
+        '200':
+          description: The new order.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  orderedCount: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/groups/{groupId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+
+    get:
+      tags: [Boards]
+      summary: Read a board
+      operationId: getBulletinBoard
+      description: One board, with its tile count and the namespaces its tiles draw from. Requires `bulletin:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The board.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  group: { $ref: '#/components/schemas/BoardSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      tags: [Boards]
+      summary: Rename or restyle a board
+      operationId: updateBulletinBoard
+      description: |
+        Requires `bulletin:edit`. A name cannot be blanked.
+
+        **Order is not settable here.** It rides `POST /bulletin/groups/reorder`,
+        because ordering is a decision about the whole strip rather than about
+        one board.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                colour: { type: string }
+                cadence: { type: string, enum: [manual, daily, weekly, monthly] }
+      responses:
+        '200':
+          description: The updated board.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  group: { $ref: '#/components/schemas/Board' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      tags: [Boards]
+      summary: Delete a board
+      operationId: deleteBulletinBoard
+      description: |
+        Removes the board. Requires `bulletin:edit`.
+
+        **Its tiles survive.** They are un-grouped rather than deleted, and sit
+        on the un-grouped board until they are filed somewhere. A board is an
+        organisational wrapper, not an owner, so tidying up is never a
+        destructive act.
+
+        `ungroupedCount` tells you how many tiles now need a home. The board's
+        page is deleted with it.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The board was deleted and its tiles un-grouped.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  ungroupedCount: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /bulletin/groups/{groupId}/tiles:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+
+    post:
+      tags: [Boards]
+      summary: Move tiles onto a board
+      operationId: assignBulletinTiles
+      description: |
+        Files tiles onto this board. Requires `bulletin:edit`.
+
+        Both boards are affected, so arrange each of them afterwards for the
+        change to appear on their pages. The tiles themselves are unchanged:
+        moving one does not re-decide how it draws.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tileIds:
+                  type: array
+                  description: 'From `GET /bulletin`.'
+                  items: { type: string }
+              required: [tileIds]
+      responses:
+        '200':
+          description: How many moved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  movedCount: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }

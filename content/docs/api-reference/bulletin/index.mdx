@@ -1,0 +1,80 @@
+---
+title: Bulletin
+description: The workspace noticeboard. Tiles hold addresses, not copies.
+---
+
+A tile is an address into a table, a saved query, a file, or a note. Nothing is
+copied into one, so a board reads its sources rather than holding them.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [Bulletin](/docs/bulletin) covers what a board is for and
+  when to reach for one, [Tiles](/docs/bulletin/tiles) covers what a tile can
+  point at, and [Tile prompts](/docs/bulletin/prompts) covers saying how one
+  should read. This page describes the API surface.
+</Callout>
+
+## `workspaceId` is not in the path
+
+Unlike most of this API, the bulletin routes are not nested under a workspace.
+Every operation takes `workspaceId` as a query parameter, or in the body where
+there is one. Omitting it returns `400`.
+
+## Four permissions, and one that is not ours
+
+<Callout>
+  This reference tells you which permission an endpoint needs. It does not
+  explain how roles, policies, and assignments fit together. That model is in
+  [Access control](/docs/access-control).
+</Callout>
+
+| Permission | Covers |
+| --- | --- |
+| `bulletin:read` | Listing tiles and boards, reading a page |
+| `bulletin:post` | Posting a tile |
+| `bulletin:edit` | Changing and removing tiles, boards, and arranging pages |
+| `bulletin:manage` | Pinning, and rolling a page back |
+
+All four are evaluated at the workspace scope.
+
+**A fifth gate runs on two operations, and it is a data plane action rather than
+a bulletin one.** `datasource:read` on the namespace a tile points at:
+
+| Operation | Second gate |
+| --- | --- |
+| `POST /bulletin/tiles` | The **author** must be able to read the source |
+| `GET /bulletin/tiles/{tileId}/data` | The **caller** must be able to read the source |
+
+The second is the one that shapes how a board is shared. `bulletin:read` returns
+tiles and their arrangement and no contents, so a board can be given to a whole
+workspace while what is inside each tile stays gated on the reader's own access.
+See [Bulletin permissions](/docs/bulletin/permissions).
+
+## How the surface is arranged
+
+**Tiles** are the items. Post one with a `source` and, if you want, a `prompt`
+saying how it should read. You do not send a renderer: the presentation is
+worked out from the data.
+
+**Tile data** is a single operation, and it is the only one that returns
+contents.
+
+**Boards** are called groups in the paths. They hold tiles and appear in an
+order, and the first board is the landing board for the whole workspace.
+
+**Pages** are the arrangement written around a board's tiles. Generate one when
+the set of tiles changes, not to refresh a board: contents are read live on
+open.
+
+**Presentation** re-decides how tiles draw after a prompt or source changed.
+Posting and updating already do this, so these two operations are rarely needed.
+
+## Two things that are not here
+
+**Nothing streams.** Live updates do not arrive over HTTP, and there is no
+webhook. A change to the rows behind a tile appears the next time somebody opens
+the board.
+
+**`cadence` does nothing yet.** A board records one, and no scheduler acts on
+it. Setting a board to `weekly` does not arrange it weekly.

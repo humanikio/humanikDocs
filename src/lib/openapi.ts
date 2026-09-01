@@ -56,4 +56,5 @@ export const apis = [
   system('nova', 'nova.yaml'),
   system('calendars', 'calendars.yaml'),
   system('buckets', 'buckets.yaml'),
+  system('bulletin', 'bulletin.yaml'),
 ];
