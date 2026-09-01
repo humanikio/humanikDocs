@@ -1,27 +1,23 @@
 ---
 title: Bulletin permissions
-description: Four grants, split so a board can be shared widely without widening access to data.
+description: Two grants. One is safe to give everybody, and it is the one that matters.
 ---
 
-The bulletin has four permissions, and they are deliberately not one. The split
-lets you hand a board to everybody while keeping the ability to rearrange it,
-and to decide what the whole workspace sees first, in fewer hands.
+The bulletin has two permissions.
 
 | Action | Covers |
 | --- | --- |
-| `bulletin:read` | See the board and its tiles |
-| `bulletin:post` | Put a tile on the board |
-| `bulletin:edit` | Change or remove tiles, create and rename boards, arrange a page |
-| `bulletin:manage` | Pin a tile, and roll a page back to an earlier version |
+| `bulletin:read` | See the board and the tiles on it |
+| `bulletin:manage` | Everything that changes it |
 
-All four sit at the workspace scope. For what an action is, how it is assigned,
-and how a grant is evaluated, see
-[Access control](/docs/access-control). This page says which grant each thing
-needs, not how grants work.
+Both sit at the workspace scope. For what an action is, how it is assigned, and
+how a grant is evaluated, see [Access control](/docs/access-control). This page
+says which grant each thing needs, not how grants work.
 
 ## Seeing a tile is not reading through it
 
-This is the part worth reading twice.
+This is the part worth reading twice, and it is why the read grant can be so
+wide.
 
 `bulletin:read` shows somebody the board: the tiles, their titles, their
 arrangement. It does **not** give them the contents.
@@ -32,42 +28,41 @@ checked against the reader's own `datasource:read` on the
 short note where the contents would be.
 
 <Callout>
-  Because of this split, `bulletin:read` can be granted broadly without
-  widening anybody's reach into your data. A person sees exactly the tiles they
-  could have opened anyway, on a page that tells them what else exists.
+  Because of this split, `bulletin:read` is part of the baseline every member of
+  a tenant holds. A person sees exactly the tiles they could have opened anyway,
+  on a page that tells them what else exists. To close a board to somebody,
+  remove the action in a custom role.
 </Callout>
 
-## Posting and editing are separate on purpose
+## Everything that writes is one grant
 
-`bulletin:post` lets somebody contribute without being able to disturb what is
-already there. It is the grant for a team that should be able to put things up.
+`bulletin:manage` covers posting a tile, changing or removing one, creating,
+renaming, deleting and reordering boards, arranging a board into a page, and
+pinning. Including tiles and boards somebody else made.
 
-`bulletin:edit` covers changing and removing tiles, **including tiles somebody
-else posted**. It also covers creating boards, renaming them, moving tiles
-between them, and arranging a board's page.
+It is one tier rather than several because **nothing under it destroys data**:
+
+- Deleting a board **un-groups** its tiles. They survive and need re-filing.
+- Removing a tile removes a pointer. The table, file or bucket it addressed is
+  untouched.
+- Arranging a page can be rolled back to an earlier version.
+
+Splitting that into contribute, edit, and administer was drawing three
+boundaries around a loss that cannot happen.
+
+Two things under it are still worth knowing before you hand it out, because they
+change what **other people** see rather than what exists:
+
+- **Pinning** promotes a tile to the top of a board for everyone who opens it.
+- **Board order** decides which board the whole workspace lands on.
+
+Neither loses anything, and both are visible to everybody immediately.
 
 When an edit changes a tile's content, the tile records who made the change
 alongside who posted it. The original author stays as the byline, because the
 post is still theirs, and the edit is shown next to it.
 
-## Pinning is above editing
-
-`bulletin:manage` covers pinning, because a pinned tile leads the page for
-everyone who opens that board. Deciding what the workspace sees first is a
-different kind of decision from arranging a page, so it takes a different
-grant.
-
-<Callout type="warn">
-  **Board order does not currently require `bulletin:manage`.** Reordering
-  boards changes which board the whole workspace lands on, and it is presently
-  covered by `bulletin:edit`. If you are handing out `bulletin:edit` widely,
-  know that it includes this.
-</Callout>
-
 ## Editing in the console
-
-Everything above applies the same way in the console as through the API. The
-grant decides what appears.
 
 The console puts every write behind a single **Configure** button, so one grant
 gates all of it:
@@ -76,28 +71,33 @@ gates all of it:
 | --- | --- |
 | Opening the bulletin, switching boards, reloading | `bulletin:read` |
 | Contents inside a tile | `datasource:read` on that tile's namespace |
-| **Configure**, and every tab inside it | `bulletin:edit` |
-| Adding a tile, editing one, removing one | `bulletin:edit` |
-| Creating, renaming, and reordering boards | `bulletin:edit` |
-| Arranging a board's page | `bulletin:edit` |
+| **Configure**, and every tab inside it | `bulletin:manage` |
+| Adding a tile, editing one, removing one | `bulletin:manage` |
+| Creating, renaming, and reordering boards | `bulletin:manage` |
+| Arranging a board's page | `bulletin:manage` |
 
 Somebody with `bulletin:read` alone sees the board and a reload control, and no
 Configure button. The controls are not disabled, they are absent: a person is
 not shown a door they cannot open.
 
+Somebody with neither sees no bulletin at all. The section is skipped rather
+than showing an error about a feature they were never offered.
+
 <Callout type="warn">
-  **`bulletin:post` and `bulletin:manage` are API grants today.** The console
-  has no separate add-a-tile path and no pin control, so somebody holding
-  `bulletin:post` alone sees a read-only board there. Both actions work
-  normally through the API and for AI employees.
+  **There is no pin control in the console.** Pinning works through the API and
+  for AI employees; in the console it is not yet surfaced.
 </Callout>
 
 ## Agents and API keys
 
-An AI employee acting on the bulletin is gated on the same four actions as a
+An AI employee acting on the bulletin is gated on the same two actions as a
 person, evaluated against its own assignments rather than the assignments of
-whoever asked it. An employee without `bulletin:edit` cannot edit a tile
+whoever asked it. An employee without `bulletin:manage` cannot change a tile
 because somebody asked it to.
+
+An office employee holds both by default. Its tools are narrower than its
+grant on purpose: it can read the board and post to it, and arranging or
+deleting is left to a person in the console.
 
 API keys carry grants the same way. See
 [Authentication](/docs/authentication).
@@ -105,7 +105,7 @@ API keys carry grants the same way. See
 ## Related
 
 <Cards>
-  <Card title="Access Control (IAM)" href="/docs/access-control">
+  <Card title="Access control" href="/docs/access-control">
     Roles, actions, assignments, and how a grant is evaluated.
   </Card>
   <Card title="Namespaces" href="/docs/namespaces">

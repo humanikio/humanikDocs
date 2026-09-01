@@ -350,9 +350,9 @@ paths:
       summary: Post a tile
       operationId: createBulletinTile
       description: |
-        Puts a tile on the board. Requires `bulletin:post`.
+        Puts a tile on the board. Requires `bulletin:manage`.
 
-        **Two gates run, not one.** Besides `bulletin:post`, a tile pointing at
+        **Two gates run, not one.** Besides `bulletin:manage`, a tile pointing at
         a namespace is refused unless the author also holds `datasource:read` on
         that namespace. Without that check, posting would be a way to mint a
         readable view of data the poster was never entitled to, since the read
@@ -408,7 +408,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           description: |
-            Either `bulletin:post` is missing, or the author cannot read the
+            Either `bulletin:manage` is missing, or the author cannot read the
             namespace the tile points at.
           content:
             application/json:
@@ -453,7 +453,7 @@ paths:
       operationId: updateBulletinTile
       description: |
         Retarget, retitle, re-prompt, resize or refile a tile. Requires
-        `bulletin:edit`, including on a tile somebody else posted.
+        `bulletin:manage`, including on a tile somebody else posted.
 
         **Changing `source` or `prompt` re-decides the presentation.** Changing
         only the title does not, because a title cannot change the shape of the
@@ -465,9 +465,9 @@ paths:
         at a table. This is a refusal rather than a silent renderer reset,
         because a reset is a second unrequested edit the caller cannot detect.
 
-        **`pinned` is not settable here.** It rides the pin routes under
-        `bulletin:manage`, so that `bulletin:edit` cannot promote a tile by
-        sending one extra key.
+        **`pinned` is not settable here.** It rides its own routes, so pinning
+        stays a deliberate act rather than a field somebody sets in passing
+        while editing a tile.
 
         A content change records who made it, alongside who posted it.
       parameters:
@@ -516,7 +516,7 @@ paths:
       summary: Remove a tile
       operationId: deleteBulletinTile
       description: |
-        Takes the tile off the board. Requires `bulletin:edit`.
+        Takes the tile off the board. Requires `bulletin:manage`.
 
         **The data is untouched.** A tile is a pointer, so removing one removes
         the pointer. The table, file or bucket it addressed is unaffected.
@@ -604,9 +604,11 @@ paths:
       summary: Pin a tile
       operationId: pinBulletinTile
       description: |
-        Pinned tiles lead their board. Requires `bulletin:manage`, which is a
-        higher grant than editing: pinning decides what everyone opening that
-        board sees first.
+        Pinned tiles lead their board. Requires `bulletin:manage`.
+
+        Worth knowing what it does: every other write changes one tile, and this
+        changes what everyone opening that board sees first, until somebody
+        undoes it.
 
         The pin takes effect on the page the next time the board is laid out.
       parameters:
@@ -656,7 +658,7 @@ paths:
       operationId: deriveBulletinTile
       description: |
         Reads the tile's data again and chooses a presentation for it. Requires
-        `bulletin:edit`.
+        `bulletin:manage`.
 
         **You rarely need this.** Posting a tile and changing its source or
         prompt already re-derive it. Call this when the shape of the underlying
@@ -713,7 +715,7 @@ paths:
       operationId: deriveBulletinBoard
       description: |
         The same pass as `POST /bulletin/tiles/{tileId}/derive`, over every tile
-        on one board. Requires `bulletin:edit`.
+        on one board. Requires `bulletin:manage`.
 
         Bounded by staleness: tiles whose inputs still match are skipped unless
         `force` is set, so the ordinary cost is proportional to what actually
@@ -795,7 +797,7 @@ paths:
       operationId: generateBulletinBoard
       description: |
         Writes a new page for a board: the headings, the sections, the order,
-        and which tile gets the width. Requires `bulletin:edit`.
+        and which tile gets the width. Requires `bulletin:manage`.
 
         **Call this when the set of tiles changes**, not to refresh a board.
         Contents are read live whenever somebody opens it, so a number on the
@@ -975,7 +977,7 @@ paths:
       summary: Create a board
       operationId: createBulletinBoard
       description: |
-        Adds a board. Requires `bulletin:edit`.
+        Adds a board. Requires `bulletin:manage`.
 
         A new board joins the end of the order, so creating one never changes
         what the workspace opens on. It arrives empty and unarranged: post tiles
@@ -1020,7 +1022,7 @@ paths:
       summary: Set the order boards appear in
       operationId: reorderBulletinBoards
       description: |
-        Rewrites the whole strip. Requires `bulletin:edit`.
+        Rewrites the whole strip. Requires `bulletin:manage`.
 
         **This changes what the whole workspace opens on**, because the first
         board is the landing board. It is not a personal view setting.
@@ -1087,7 +1089,7 @@ paths:
       summary: Rename or restyle a board
       operationId: updateBulletinBoard
       description: |
-        Requires `bulletin:edit`. A name cannot be blanked.
+        Requires `bulletin:manage`. A name cannot be blanked.
 
         **Order is not settable here.** It rides `POST /bulletin/groups/reorder`,
         because ordering is a decision about the whole strip rather than about
@@ -1125,7 +1127,7 @@ paths:
       summary: Delete a board
       operationId: deleteBulletinBoard
       description: |
-        Removes the board. Requires `bulletin:edit`.
+        Removes the board. Requires `bulletin:manage`.
 
         **Its tiles survive.** They are un-grouped rather than deleted, and sit
         on the un-grouped board until they are filed somewhere. A board is an
@@ -1160,7 +1162,7 @@ paths:
       summary: Move tiles onto a board
       operationId: assignBulletinTiles
       description: |
-        Files tiles onto this board. Requires `bulletin:edit`.
+        Files tiles onto this board. Requires `bulletin:manage`.
 
         Both boards are affected, so arrange each of them afterwards for the
         change to appear on their pages. The tiles themselves are unchanged:

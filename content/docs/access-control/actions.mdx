@@ -84,7 +84,7 @@ granted at the workspace above it to cover every office in it.
 </Accordion>
 </Accordions>
 
-## IAM
+## Iam
 
 | Action | Allows | Usually written at |
 | --- | --- | --- |
@@ -438,9 +438,11 @@ granted at the workspace above it to cover every office in it.
 | `datasource:manage` | Create and change data namespaces, sources and subscriptions. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `datasource:read` (7)">
+<Accordion title="Endpoints that need `datasource:read` (9)">
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
+- [Post a tile](/docs/api-reference/bulletin/tiles/createBulletinTile)
 - [Get a bucket](/docs/api-reference/buckets/buckets/getBucket)
+- [Read through a tile](/docs/api-reference/bulletin/tile-data/getBulletinTileData)
 - [Get a file](/docs/api-reference/buckets/files/getObject)
 - [List buckets](/docs/api-reference/buckets/buckets/listBuckets)
 - [List files](/docs/api-reference/buckets/files/listObjects)
@@ -607,10 +609,36 @@ granted at the workspace above it to cover every office in it.
 
 | Action | Allows | Usually written at |
 | --- | --- | --- |
-| `bulletin:read` | View the workspace board and its tiles. It does not grant the contents of any tile: reading through one still needs datasource:read on the namespace it points at, so this can be handed out broadly without widening anyone’s reach. | `workspace` |
-| `bulletin:post` | Put a tile on the board. Contributing without being able to rearrange what is already there. | `workspace` |
-| `bulletin:edit` | Change or remove tiles, and create and rename boards. | `workspace` |
-| `bulletin:manage` | Administer the board: pin tiles, and set the order boards appear in. Pinning and ordering decide what the whole workspace sees first, which is why they sit above editing. | `workspace` |
+| `bulletin:read` | See the workspace board and the tiles on it. It does not grant the contents of any tile: reading through one still needs datasource:read on the namespace it points at, so this can be handed out broadly without widening anyone's reach. It is part of the tenant-member baseline for that reason. | `workspace` |
+| `bulletin:manage` | Everything that changes the board: posting a tile, editing or removing one, creating, renaming, deleting and reordering boards, arranging a board into a page, and pinning. One tier rather than several because nothing here destroys data. Deleting a board un-groups its tiles, and removing a tile removes a pointer, never the table or file behind it. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `bulletin:read` (7)">
+- [Read a board](/docs/api-reference/bulletin/boards/getBulletinBoard)
+- [Get a board's page](/docs/api-reference/bulletin/pages/getBulletinPage)
+- [Read a tile's configuration](/docs/api-reference/bulletin/tiles/getBulletinTile)
+- [Read through a tile](/docs/api-reference/bulletin/tile-data/getBulletinTileData)
+- [List boards](/docs/api-reference/bulletin/boards/listBulletinBoards)
+- [List superseded pages](/docs/api-reference/bulletin/pages/listBulletinBoardVersions)
+- [List the tiles on a bulletin](/docs/api-reference/bulletin/tiles/listBulletinTiles)
+</Accordion>
+<Accordion title="Endpoints that need `bulletin:manage` (14)">
+- [Move tiles onto a board](/docs/api-reference/bulletin/boards/assignBulletinTiles)
+- [Create a board](/docs/api-reference/bulletin/boards/createBulletinBoard)
+- [Post a tile](/docs/api-reference/bulletin/tiles/createBulletinTile)
+- [Delete a board](/docs/api-reference/bulletin/boards/deleteBulletinBoard)
+- [Remove a tile](/docs/api-reference/bulletin/tiles/deleteBulletinTile)
+- [Re-decide a board's stale tiles](/docs/api-reference/bulletin/presentation/deriveBulletinBoard)
+- [Re-decide how a tile draws](/docs/api-reference/bulletin/presentation/deriveBulletinTile)
+- [Arrange a board into a page](/docs/api-reference/bulletin/pages/generateBulletinBoard)
+- [Pin a tile](/docs/api-reference/bulletin/tiles/pinBulletinTile)
+- [Set the order boards appear in](/docs/api-reference/bulletin/boards/reorderBulletinBoards)
+- [Roll a page back](/docs/api-reference/bulletin/pages/rollbackBulletinBoard)
+- [Unpin a tile](/docs/api-reference/bulletin/tiles/unpinBulletinTile)
+- [Rename or restyle a board](/docs/api-reference/bulletin/boards/updateBulletinBoard)
+- [Change a tile](/docs/api-reference/bulletin/tiles/updateBulletinTile)
+</Accordion>
+</Accordions>
 
 ## Browser
 
@@ -780,10 +808,6 @@ Usually that means they gate a console-only surface. See
 - `surface:read`
 - `surface:edit`
 - `surface:manage`
-- `bulletin:read`
-- `bulletin:post`
-- `bulletin:edit`
-- `bulletin:manage`
 - `device:use`
 
 ## Where to go next

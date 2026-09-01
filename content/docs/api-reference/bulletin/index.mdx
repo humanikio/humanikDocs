@@ -21,7 +21,7 @@ Unlike most of this API, the bulletin routes are not nested under a workspace.
 Every operation takes `workspaceId` as a query parameter, or in the body where
 there is one. Omitting it returns `400`.
 
-## Four permissions, and one that is not ours
+## Two permissions, and one that is not ours
 
 <Callout>
   This reference tells you which permission an endpoint needs. It does not
@@ -32,13 +32,12 @@ there is one. Omitting it returns `400`.
 | Permission | Covers |
 | --- | --- |
 | `bulletin:read` | Listing tiles and boards, reading a page |
-| `bulletin:post` | Posting a tile |
-| `bulletin:edit` | Changing and removing tiles, boards, and arranging pages |
-| `bulletin:manage` | Pinning, and rolling a page back |
+| `bulletin:manage` | Everything that writes |
 
-All four are evaluated at the workspace scope.
+Both are evaluated at the workspace scope. `bulletin:read` is part of the
+baseline every tenant member holds, because it carries no contents.
 
-**A fifth gate runs on two operations, and it is a data plane action rather than
+**A third gate runs on two operations, and it is a data plane action rather than
 a bulletin one.** `datasource:read` on the namespace a tile points at:
 
 | Operation | Second gate |
