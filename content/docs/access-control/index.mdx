@@ -41,13 +41,45 @@ assign it narrowly.
 
 ## The resource hierarchy
 
-```
-console                          ← a sibling root, not the top of the tree
-workspace/{id}
-  ├── office/{id}
-  ├── namespace/{id}
-  └── browser/{id}
-```
+<svg viewBox="0 0 720 316" className="w-full h-auto my-6" role="img" aria-label="Two separate resource roots: console on the left, and workspace with its nested resources on the right. No grant crosses between them.">
+  <title>The resource hierarchy</title>
+
+  <text x="8" y="16" fontSize="11" letterSpacing="1.2" fill="var(--color-fd-muted-foreground)">TWO ROOTS, NOT ONE TREE</text>
+
+  <rect x="8" y="36" width="184" height="66" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="28" y="64" fontSize="14" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--color-fd-foreground)">console</text>
+  <text x="28" y="86" fontSize="12" fill="var(--color-fd-muted-foreground)">organisation level</text>
+
+  <line x1="192" y1="69" x2="312" y2="69" stroke="var(--color-fd-border)" strokeWidth="1.5" strokeDasharray="4 4" />
+  <rect x="238" y="57" width="28" height="24" fill="var(--color-fd-background)" />
+  <text x="252" y="75" fontSize="17" textAnchor="middle" fill="var(--color-fd-muted-foreground)">✕</text>
+  <text x="252" y="100" fontSize="11" textAnchor="middle" fill="var(--color-fd-muted-foreground)">no grant crosses</text>
+
+  <rect x="312" y="36" width="400" height="66" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="332" y="64" fontSize="14" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--color-fd-foreground)">workspace/{'{id}'}</text>
+  <text x="332" y="86" fontSize="12" fill="var(--color-fd-muted-foreground)">everything a team works in</text>
+
+  <line x1="336" y1="102" x2="336" y2="286" stroke="var(--color-fd-border)" strokeWidth="1.5" />
+
+  <g fontSize="13" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--color-fd-foreground)">
+    <line x1="336" y1="130" x2="360" y2="130" stroke="var(--color-fd-border)" strokeWidth="1.5" />
+    <text x="370" y="135">office/{'{id}'}</text>
+    <line x1="336" y1="168" x2="360" y2="168" stroke="var(--color-fd-border)" strokeWidth="1.5" />
+    <text x="370" y="173">namespace/{'{id}'}</text>
+    <line x1="336" y1="206" x2="360" y2="206" stroke="var(--color-fd-border)" strokeWidth="1.5" />
+    <text x="370" y="211">browser/{'{id}'}</text>
+    <line x1="336" y1="244" x2="360" y2="244" stroke="var(--color-fd-border)" strokeWidth="1.5" />
+    <text x="370" y="249">project/{'{id}'}</text>
+    <line x1="336" y1="286" x2="360" y2="286" stroke="var(--color-fd-border)" strokeWidth="1.5" />
+    <text x="370" y="291">calendar/{'{id}'}</text>
+  </g>
+
+  <text x="8" y="150" fontSize="12" fill="var(--color-fd-muted-foreground)">A grant at</text>
+  <text x="8" y="170" fontSize="12" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--color-fd-foreground)">workspace/W1</text>
+  <text x="8" y="190" fontSize="12" fill="var(--color-fd-muted-foreground)">reaches every row</text>
+  <text x="8" y="208" fontSize="12" fill="var(--color-fd-muted-foreground)">on the right, and</text>
+  <text x="8" y="226" fontSize="12" fill="var(--color-fd-muted-foreground)">never the box above.</text>
+</svg>
 
 **A parent covers its descendants.** `workspace/W1` in a statement also grants on
 `workspace/W1/office/O3`. The same rule applies to assignment boundaries, so the
@@ -59,6 +91,63 @@ two stay consistent.
   own tier, deliberately. This is why organisation level administration cannot be
   reached by widening a workspace role.
 </Callout>
+
+## Which resource a request is about
+
+A request carries an identity and names an action. It does not simply state the
+resource. That has to be established first, because a permission checked correctly
+against the wrong resource is not a check at all.
+
+How it is established depends on where a resource records the workspace it belongs to.
+
+<svg viewBox="0 0 720 268" className="w-full h-auto my-6" role="img" aria-label="Two kinds of resource. Offices and group chats are addressed through their workspace. Browsers, namespaces, calendars and cloud projects are allocated to a workspace by a field on their own record, which is read rather than taken from the request.">
+  <title>How a resource's workspace is established</title>
+
+  <text x="8" y="16" fontSize="11" letterSpacing="1.2" fill="var(--color-fd-muted-foreground)">WHERE A RESOURCE RECORDS ITS WORKSPACE</text>
+
+  <rect x="8" y="34" width="342" height="168" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="30" y="62" fontSize="14" fontWeight="600" fill="var(--color-fd-foreground)">Addressed through the workspace</text>
+  <text x="30" y="88" fontSize="12.5" fill="var(--color-fd-muted-foreground)">An office is stored beneath the workspace</text>
+  <text x="30" y="108" fontSize="12.5" fill="var(--color-fd-muted-foreground)">that owns it, so its id alone is not a</text>
+  <text x="30" y="128" fontSize="12.5" fill="var(--color-fd-muted-foreground)">complete name.</text>
+  <text x="30" y="158" fontSize="12.5" fontWeight="600" fill="var(--color-fd-foreground)">A wrong workspace reaches nothing.</text>
+  <text x="30" y="182" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--color-fd-muted-foreground)">offices · group chats</text>
+
+  <rect x="370" y="34" width="342" height="168" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="392" y="62" fontSize="14" fontWeight="600" fill="var(--color-fd-foreground)">Allocated by a field</text>
+  <text x="392" y="88" fontSize="12.5" fill="var(--color-fd-muted-foreground)">The id is unique across the organisation,</text>
+  <text x="392" y="108" fontSize="12.5" fill="var(--color-fd-muted-foreground)">and the workspace can change without</text>
+  <text x="392" y="128" fontSize="12.5" fill="var(--color-fd-muted-foreground)">the record moving.</text>
+  <text x="392" y="158" fontSize="12.5" fontWeight="600" fill="var(--color-fd-foreground)">The workspace is read from the record.</text>
+  <text x="392" y="176" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--color-fd-muted-foreground)">browsers · namespaces</text>
+  <text x="392" y="192" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--color-fd-muted-foreground)">calendars · cloud projects</text>
+
+  <line x1="8" y1="228" x2="712" y2="228" stroke="var(--color-fd-border)" />
+  <text x="8" y="252" fontSize="12.5" fill="var(--color-fd-muted-foreground)">Either way, a workspace named in the request never decides which resource the permission check runs against.</text>
+</svg>
+
+**Some resources are addressed through their workspace.** An office is stored beneath
+the workspace that owns it, so an office id on its own is not a complete name. Naming
+an office with the wrong workspace does not reach a different office. It reaches
+nothing.
+
+**Others are allocated to a workspace by a field on their own record.** A browser, a
+data namespace, a calendar and a Humanik Cloud project each have an id that is unique
+across the whole organisation, and the workspace they sit in can change without the
+record moving. For these, the workspace is read from the record itself, and any
+workspace supplied in the request is ignored.
+
+<Callout type="warn">
+  This is the property to rely on when reasoning about isolation. Holding a role in one
+  workspace does not let you act on a resource in another by naming your own workspace
+  in the request. The resource's own record decides which workspace it belongs to, and
+  the permission check runs against that.
+</Callout>
+
+If the record cannot be found, the request is refused rather than falling back to the
+workspace named by the caller. One consequence is worth knowing when integrating: an id
+that does not exist in your organisation returns `403`, not `404`. A not-found response
+that could be told apart from a refusal would let a caller discover which ids are real.
 
 ## How a decision is made
 
@@ -163,6 +252,8 @@ start here.
 
 - A deny returns immediately and cannot be overridden by a later allow.
 - No assignments means deny.
+- For any resource that can be moved between workspaces, its workspace is read from its
+  own record, never from the request.
 - A resource pattern covers its descendants, in both statements and boundaries.
 - `console` is never an ancestor of a workspace.
 - Only navigation reads may use the ancestor rule.
