@@ -90,6 +90,36 @@ refused. An office can hold several numbers, with one marked primary, and only
 the primary receives inbound. Allocating to an office records the workspace
 allocation at the same time.
 
+#### Assigning a number to Nova
+
+A number can answer for an office, or it can reach each member's own assistant.
+Not both. These switch it.
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `POST` | `/twilio/phone-numbers/{phoneNumberSid}/nova` | `tenant:manage` @ `console` |
+| `DELETE` | `/twilio/phone-numbers/{phoneNumberSid}/nova` | `tenant:manage` @ `console` |
+| `GET` | `/twilio/workspaces/{workspaceId}/nova-numbers` | `phone:read` @ workspace |
+
+`POST` takes `{ "workspaceId": "..." }` and assigns the number to that
+workspace's Nova. The number must be able to receive SMS.
+
+<Callout type="warn">
+  **`POST` removes the office allocations this number had.** A number delivers
+  inbound to one target, so assigning it to Nova takes it from whoever held it,
+  and the response names what was removed. The reverse is also true: allocating a
+  Nova assigned number to an office takes it off Nova. Neither direction asks
+  first, so confirm before calling.
+</Callout>
+
+Assigning sits at console scope alongside buying and releasing, because it
+changes what an organization asset does. The `GET` sits at workspace scope
+instead, because it only reports what a workspace was given and is what the
+workspace's own Nova settings read.
+
+What actually happens to a text once it arrives, and why an unverified sender
+gets no reply, is in [Texting Nova](/docs/nova/texting).
+
 #### Configuring a number
 
 Per number settings sit at console scope, because the number is an organization

@@ -1,0 +1,83 @@
+---
+title: Running as a user
+description: How a task that nobody is watching still runs with one person's permissions.
+---
+
+Most work on HumanikOS happens because someone is sitting there. They sign in,
+they ask for something, and the platform checks what they are allowed to do using
+the roles attached to that session.
+
+Some work happens when nobody is sitting there. A scheduled task fires overnight.
+A text message arrives at one of your numbers. There is no session to read
+permissions from, and the work still has to run as somebody, because an assistant
+with no person behind it has no model to run on, no permissions to act with, and
+nobody to bill.
+
+Principal synthesis is how that gap is closed. The platform rebuilds the same
+identity a sign in would have produced, checks it, and refuses if it does not
+hold up.
+
+## What actually happens
+
+Given a tenant, a workspace and a user, the platform does two things before any
+work starts:
+
+1. **Loads that user's role assignments**, the same read a signed in request
+   performs.
+2. **Checks they may drive the assistant in that workspace**, using the same
+   policy engine that evaluates every other request.
+
+If the check passes, the work runs with exactly those assignments. Every
+permission check inside the run then behaves as it would have if the person had
+asked in the app.
+
+If the check fails, nothing runs. There is no partial mode and no reduced
+fallback.
+
+<Callout>
+  **This is the same rule as opening the assistant in the app.** Anyone who can
+  use it while signed in can reach it through a scheduled task or a text message.
+  Anyone who cannot, cannot. There is no separate permission to grant, and no
+  setting that widens one path without widening the other.
+</Callout>
+
+## Two questions, and both must pass
+
+It helps to keep these apart, because they fail differently and they are checked
+by different things.
+
+| Question | Answered by |
+| --- | --- |
+| Is this request genuinely from who it claims? | The trigger. A signed webhook, or the control plane that owns your schedules |
+| May that person drive the assistant here? | Principal synthesis, described above |
+
+The second question never covers for the first. A trigger that cannot prove who
+it is speaking for does not get to pick a user, no matter what the permissions
+say.
+
+## Where it applies today
+
+<Cards>
+  <Card title="Scheduled tasks" href="/docs/nova/scheduled-tasks" description="The user is whoever created the schedule. It runs with their permissions, on their budget, every time it fires." />
+  <Card title="Texting Nova" href="/docs/nova/texting" description="The user is worked out from the number the message came from, matched against verified profile numbers in your organization." />
+</Cards>
+
+## The sharp edges
+
+**The permissions are read when the work runs, not when it was set up.** Revoke
+someone's access and their scheduled tasks stop working the next time they fire.
+That is deliberate: a schedule created last year should not outlive the
+permissions it was created under. It also means a schedule can start failing
+without anyone editing it.
+
+**The work is attributed to that user.** It appears in their history, and it
+spends against their budget. A scheduled task that someone else created on their
+behalf still counts as theirs.
+
+**Scope is a workspace, never the console.** Console level access has nothing for
+an assistant to operate, so a task cannot be set up against it.
+
+**The tenant owner always passes.** Owners are not subject to role checks
+anywhere on the platform, and this is no exception. If you are testing whether a
+restriction works, test it with a member account rather than the owner account,
+or it will appear to allow everything.

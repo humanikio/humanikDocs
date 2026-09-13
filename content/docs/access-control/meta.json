@@ -1,5 +1,13 @@
 {
   "title": "Access Control (IAM)",
   "root": true,
-  "pages": ["index", "workspaces", "roles", "actions", "assignments", "service-accounts"]
+  "pages": [
+    "index",
+    "workspaces",
+    "roles",
+    "actions",
+    "assignments",
+    "service-accounts",
+    "running-as-a-user"
+  ]
 }

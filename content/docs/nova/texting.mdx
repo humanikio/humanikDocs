@@ -1,0 +1,108 @@
+---
+title: Texting Nova
+description: Assign a phone number to Nova, and reach your own assistant from your handset.
+---
+
+A phone number in your organization can be given to Nova instead of to an office.
+Text that number from your phone, and your own Nova answers: your model, your
+permissions, your budget. The conversation also appears in your normal Nova chat,
+so you can pick it up in the app afterwards.
+
+This is the assistant, not a receptionist. If you want a number that answers your
+customers, allocate it to an office instead. See
+[Phone](/docs/phone).
+
+## Assigning a number
+
+In the console, go to **Assets → Phone Numbers**, open a number, and use the
+**Assignment** tab. The Nova section there shows the workspace that owns the
+number and a button to switch it.
+
+<Callout type="warn">
+  **A number can be given to Nova or an office, not both.** This is the same rule
+  that lets a number receive inbound for only one office. Switching removes the
+  previous assignment, and the console tells you exactly what it is about to
+  remove before you confirm.
+</Callout>
+
+The number must be able to receive SMS. A voice only number cannot be assigned.
+
+The same switch is available over the API, under
+[Phone numbers and email](/docs/api-reference/phone-and-email).
+
+Once assigned, the number appears under **Assets** in that workspace's Nova
+settings, where members can see it without console access.
+
+## Who gets an answer
+
+Not everyone who texts the number. The number identifies **you**, and it does
+that by matching the number you are texting from against the phone number on your
+profile.
+
+Four things must all be true:
+
+| | |
+| --- | --- |
+| **You are in the organization that owns the number** | People outside it are not matched |
+| **Your profile phone number matches the one you texted from** | Set it in **Settings → Profile** |
+| **That number has been verified** | You confirm it with a code sent by text |
+| **You can use Nova in that workspace** | The same permission as opening Nova in the app |
+
+If any of them fails, nothing runs and you get no reply. Silence is deliberate:
+answering an unrecognised number would mean answering as somebody.
+
+<Callout>
+  **Verifying your number is the step people miss.** Setting a phone number on
+  your profile is not the same as verifying it. Until you have confirmed it with
+  a code, texts from that handset are not recognised, and the failure looks
+  identical to the number not being assigned at all.
+</Callout>
+
+### Two people cannot share a number
+
+If two people in your organization have the same number on their profiles, texts
+from it are refused rather than answered as one of them. Pick one, and remove it
+from the other profile.
+
+## What a reply looks like
+
+Nova answers with a fresh text message, not as a reply attached to yours. It
+often takes longer than an ordinary text: a request that needs Nova to go and do
+something can run for a minute or more, and the answer arrives when the work
+finishes.
+
+Answers are written for a phone, so they are shorter than the same answer in the
+app. Ask in the app when you want the long version.
+
+## Costs and limits
+
+A Nova run started by text spends exactly as one started in the app: against your
+budget, in your workspace, on whichever model you have chosen.
+
+If your organization is out of credit, or your budget for the period is spent,
+you get a text saying so rather than silence.
+
+## Opting out
+
+**STOP, START and HELP work on a Nova number, exactly as they do on any other
+number of ours**, and they are handled before anything else. Texting STOP stops
+Nova texting you. This is required of every number that sends text messages and
+it cannot be switched off.
+
+## The sharp edges
+
+**Anyone who knows your number can send a message that looks like it came from
+you.** Caller ID is not proof of identity, on any platform. Two things limit what
+that is worth: the reply goes to the real handset rather than to whoever sent the
+message, so no information comes back to them, and every exchange appears in your
+normal Nova chat, where you will see work you did not ask for. Treat an
+unexpected conversation in your history as worth investigating.
+
+**The number does not answer calls.** Assigning it to Nova covers text messages.
+A call to the same number is not answered by Nova.
+
+**Attachments are not supported yet.** Send text.
+
+**Your profile number is also used for call forwarding.** Changing it changes
+both, and changing it clears your verification, so you will need to confirm the
+new number before texting works again.

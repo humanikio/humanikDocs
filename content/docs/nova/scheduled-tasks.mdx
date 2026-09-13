@@ -1,0 +1,151 @@
+---
+title: Scheduled tasks
+description: Give Nova standing work, running with your permissions when nobody is watching.
+---
+
+A scheduled task is a prompt Nova runs on a schedule. Check the overnight queue
+every morning. Summarise what changed in the CRM each Friday. Wake an office
+before the working day starts.
+
+It runs as you, with your permissions and on your budget, whether or not you are
+signed in.
+
+## Creating one
+
+You do not create these in a settings screen. You ask Nova, in conversation, and
+approve what it proposes.
+
+<Steps>
+
+<Step>
+
+### Describe the standing work
+
+Tell Nova what you want done and when. Plain language is enough: "every weekday
+at 7am, check which offices failed overnight and tell me".
+
+</Step>
+
+<Step>
+
+### Approve the card
+
+Nova does not create the schedule itself. It shows you a card with the exact
+prompt it intends to save and the exact schedule it will run on, and waits.
+
+Read the prompt before approving. It becomes a standing instruction executed with
+your permissions, so it is worth being as literal as you would be with an
+instruction to a colleague who cannot ask a follow up question.
+
+</Step>
+
+<Step>
+
+### Manage it afterwards
+
+Your scheduled tasks are listed in your Nova settings, where you can rename,
+reschedule, disable, run one now, or delete it.
+
+</Step>
+
+</Steps>
+
+<Callout>
+  **There is no endpoint that creates one, deliberately.** Every scheduled task
+  exists because a person approved a card Nova posted in conversation. An endpoint
+  that made one directly would be a second door into the same room with no
+  approval behind it. The API can list, update, delete and run them: see
+  [Scheduled tasks](/docs/api-reference/nova/scheduled-tasks/listNovaCrons).
+</Callout>
+
+## Schedules
+
+Three kinds:
+
+| Kind | Means |
+| --- | --- |
+| **At** | Once, at a specific time |
+| **Every** | Repeating on an interval |
+| **Cron** | A cron expression, with a timezone |
+
+## Whose task is it
+
+**Yours.** A scheduled task belongs to the person who created it, and that is a
+real boundary rather than a display convenience.
+
+You see and manage your own. You do not see other members' tasks, and they do not
+see yours. This matters because the prompt text usually describes what someone is
+working on, and because the task fires with that person's full permissions.
+
+<Callout>
+  **Workspace administrators can see every scheduled task in the workspace, read
+  only.** Finding a task somebody else scheduled that is behaving badly is a real
+  operational need. Seeing one does not allow editing or deleting it.
+</Callout>
+
+## How permissions are applied
+
+Nothing is stored at creation time and replayed later. Each time the task fires,
+your role assignments are loaded fresh and checked before any work starts. The
+mechanism is described in
+[Running as a user](/docs/access-control/running-as-a-user).
+
+The consequence worth planning around: **a task stops working when the
+permissions behind it are removed.** If someone's access is narrowed, or they
+leave, their scheduled tasks begin failing at their next run. Nothing rewrites or
+reassigns them, because the platform cannot know who should inherit a standing
+instruction written by somebody else.
+
+If a task matters to the business rather than to one person, it is worth knowing
+whose account it is running on.
+
+## Choosing what a scheduled run uses
+
+Scheduled runs can use a different model from your chat.
+
+This is worth setting. The two are chosen against different constraints: in chat
+you are waiting, so speed matters, and a model running on your own hardware is
+attractive because the conversation stays there. A task firing at 3am has nobody
+waiting, your laptop is probably closed, and what matters is that the run is
+capable enough to finish a long chain of work unattended.
+
+Set both in [Models](/docs/models). If you set no separate model for scheduled
+runs, they use your chat model.
+
+## Running one now
+
+Running a task off schedule queues it. It does not run in the moment you press
+the button: the scheduler picks it up on its next pass, a few seconds later. The
+API says the same thing by answering `202`, which means queued rather than
+finished.
+
+A disabled task is not run this way, and the API returns `409`. Enable it first.
+Running something you switched off reads as a defect, and it would also make the
+scheduler compute a next run for a task meant to be dormant.
+
+## Costs
+
+A scheduled run spends exactly as a chat run does, against your budget, in your
+workspace, on whichever model applies.
+
+Because nobody is watching, this is the place where a badly scoped prompt is most
+expensive. A task that says "review everything" will do so, every time it fires.
+Set a budget for the workspace in [Spend](/docs/spend).
+
+## The sharp edges
+
+**The prompt is a standing instruction, not a question.** It runs with no one
+there to correct it. Write it to be unambiguous a year from now.
+
+**Failures are recorded, not announced.** Each task shows its last run, its status
+and its error if it had one. Check it after creating one, rather than assuming a
+task that was accepted is a task that works.
+
+**Deleting a workspace deletes its scheduled tasks.**
+
+**A task cannot be scheduled against console level access.** It belongs to a
+workspace, because a workspace is where there is something to operate.
+
+**Asking for a task that is not yours returns "not found", not "forbidden".** The
+two answer identically on purpose: telling you a task exists but belongs to a
+colleague would turn the id into a way to discover whose automation exists.

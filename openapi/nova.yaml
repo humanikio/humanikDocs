@@ -40,6 +40,8 @@ tags:
     description: The voice catalogue, voice selection, and spoken conversation.
   - name: Preferences
     description: Per-user model and canvas choices.
+  - name: Scheduled tasks
+    description: Standing work Nova runs on a schedule, with the permissions of whoever created it.
   - name: Preview ground
     description: A throwaway chat for trying personality and voice changes.
 
@@ -54,6 +56,17 @@ components:
         signed-in user's session. Whichever you use, Nova inherits its roles.
 
   parameters:
+    CronIdPath:
+      name: cronId
+      in: path
+      required: true
+      description: |
+        The scheduled task. IDs come from
+        [List scheduled tasks](/docs/api-reference/nova/scheduled-tasks/listNovaCrons).
+      schema:
+        type: string
+        examples: [cron_9f3b21]
+
     WorkspaceIdQuery:
       name: workspaceId
       in: query
@@ -80,6 +93,23 @@ components:
                 success: false
                 error: workspaceId is required
 
+    CronNotFound:
+      description: |
+        No scheduled task with that id, or it belongs to somebody else.
+
+        The two answer identically on purpose. A `403` would confirm that a
+        guessed id is real and belongs to a colleague, which would turn this
+        endpoint into a way to discover whose automation exists.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notFound:
+              value:
+                success: false
+                error: No scheduled task found with that id.
+
     Unauthorized:
       description: The key is missing, unknown, inactive, or expired.
       content:
@@ -104,6 +134,82 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+    NovaCronSchedule:
+      type: object
+      description: |
+        When the task runs. Exactly one shape, chosen by `kind`.
+      oneOf:
+        - type: object
+          required: [kind, at]
+          properties:
+            kind: { type: string, const: at }
+            at:
+              type: string
+              format: date-time
+              description: Runs once, at this moment, then stops.
+        - type: object
+          required: [kind, everyMs]
+          properties:
+            kind: { type: string, const: every }
+            everyMs:
+              type: integer
+              description: Milliseconds between runs.
+            anchorMs:
+              type: integer
+              description: Optional epoch milliseconds to count the interval from.
+        - type: object
+          required: [kind, expr]
+          properties:
+            kind: { type: string, const: cron }
+            expr:
+              type: string
+              description: A cron expression.
+              example: '0 7 * * 1-5'
+            tz:
+              type: string
+              description: IANA timezone the expression is read in.
+              example: America/Toronto
+
+    NovaCron:
+      type: object
+      properties:
+        cronId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        enabled:
+          type: boolean
+          description: A disabled task is never fired, and cannot be run on demand either.
+        schedule:
+          oneOf:
+            - $ref: '#/components/schemas/NovaCronSchedule'
+            - type: 'null'
+        prompt:
+          type: string
+          description: |
+            The instruction the woken cycle runs. It executes with the owner's
+            permissions and with nobody watching, so it is a standing instruction
+            rather than a question.
+        nextRunAtMs:
+          type: integer
+          nullable: true
+          description: Epoch milliseconds of the next scheduled fire.
+        lastRunAtMs:
+          type: integer
+          nullable: true
+        lastStatus:
+          type: string
+          enum: [ok, error, skipped]
+        lastError: { type: string }
+        lastDurationMs: { type: integer }
+        ownerUserId:
+          type: string
+          description: Whose task this is. Present so an administrator listing can show an owner.
+        isOwn:
+          type: boolean
+          description: |
+            True when the caller owns it. False rows are visible only to a
+            workspace administrator, and are read only.
+
     Error:
       type: object
       properties:
@@ -1875,3 +1981,234 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
+
+  /nova/crons:
+    get:
+      operationId: listNovaCrons
+      summary: List scheduled tasks
+      tags: [Scheduled tasks]
+      description: |
+        The caller's own scheduled tasks in this workspace.
+
+        **A task belongs to the person who created it.** You do not see other
+        members' tasks and they do not see yours. That is a real boundary rather
+        than a display choice: the prompt text usually describes what somebody is
+        working on, and the task fires with that person's full permissions.
+
+        **Workspace administrators see every task in the workspace**, read only,
+        with `viewingAll` set to `true` and `isOwn` marking which rows are theirs.
+        Finding a task somebody else scheduled that is misbehaving is a real
+        operational need; being able to edit it is not.
+
+        **There is no create endpoint, deliberately.** Every scheduled task exists
+        because a person approved a card Nova posted in conversation. Ask Nova for
+        the standing work you want and approve what it proposes.
+
+        **Permission:** `nova:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  crons:
+                    type: array
+                    items: { $ref: '#/components/schemas/NovaCron' }
+                  viewingAll:
+                    type: boolean
+                    description: |
+                      True when the caller holds `workspace:manage` and the list
+                      therefore covers everybody. False for an ordinary member.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+        '502':
+          description: The scheduler could not be reached.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /nova/crons/{cronId}:
+    patch:
+      operationId: updateNovaCron
+      summary: Update a scheduled task
+      tags: [Scheduled tasks]
+      description: |
+        Rename, reschedule, enable, disable, or rewrite the prompt.
+
+        Send only the fields you are changing. Sending none returns `400`.
+
+        **You can only change your own.** A task belonging to somebody else
+        returns `404`, the same answer as a task that does not exist, so an id
+        cannot be used to discover whether a colleague has automation.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`, plus ownership.
+        The `workspace:manage` override widens reading only, never writing.
+      parameters:
+        - $ref: '#/components/parameters/CronIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceId]
+              properties:
+                workspaceId: { type: string }
+                name: { type: string, description: Trimmed before saving. }
+                description: { type: string }
+                enabled: { type: boolean }
+                schedule: { $ref: '#/components/schemas/NovaCronSchedule' }
+                prompt:
+                  type: string
+                  description: |
+                    The standing instruction. Trimmed before saving. Rewriting it
+                    changes what runs from the next fire onward.
+            examples:
+              pause:
+                summary: Switch a task off without deleting it
+                value:
+                  workspaceId: ws_7f2a
+                  enabled: false
+              reschedule:
+                summary: Move it to weekday mornings
+                value:
+                  workspaceId: ws_7f2a
+                  schedule: { kind: cron, expr: '0 7 * * 1-5', tz: America/Toronto }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  cron: { $ref: '#/components/schemas/NovaCron' }
+        '400':
+          description: |
+            `workspaceId` is missing, or no changeable field was supplied.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                noChanges:
+                  value: { success: false, error: No changes supplied. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/CronNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+        '502':
+          description: The scheduler could not be reached.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+    delete:
+      operationId: deleteNovaCron
+      summary: Delete a scheduled task
+      tags: [Scheduled tasks]
+      description: |
+        Removes it permanently. To stop a task temporarily, set `enabled` to
+        false instead.
+
+        **You can only delete your own.** Somebody else's returns `404`.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`, plus ownership.
+      parameters:
+        - $ref: '#/components/parameters/CronIdPath'
+        - $ref: '#/components/parameters/WorkspaceIdQuery'
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/CronNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+        '502':
+          description: The scheduler could not be reached.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /nova/crons/{cronId}/trigger:
+    post:
+      operationId: triggerNovaCron
+      summary: Run a scheduled task now
+      tags: [Scheduled tasks]
+      description: |
+        Queues the task to run off schedule.
+
+        **`202` means queued, not finished.** The scheduler picks it up on its
+        next pass, a few seconds later, and the cycle itself then runs for as long
+        as the work takes. Do not present this as a completed run.
+
+        A **disabled** task is not run this way and returns `409`. Running
+        something the owner switched off reads as a defect, and it would also make
+        the scheduler compute a next run for a task meant to be dormant.
+
+        This spends money and starts an unattended cycle with the owner's
+        permissions, so it requires ownership as well as the route permission.
+
+        **Permission:** `nova:manage` @ `workspace/{workspaceId}`, plus ownership.
+      parameters:
+        - $ref: '#/components/parameters/CronIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceId]
+              properties:
+                workspaceId: { type: string }
+      responses:
+        '202':
+          description: Queued for the scheduler's next pass.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  queued: { type: boolean, const: true }
+                  nextRunAtMs:
+                    type: integer
+                    nullable: true
+                    description: When the scheduler now intends to fire it.
+                  triggeredAtMs:
+                    type: integer
+                    description: When the request was accepted.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/CronNotFound' }
+        '409':
+          description: The task is disabled.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                disabled:
+                  value:
+                    success: false
+                    error: This task is disabled. Enable it before running it.
+        '500': { $ref: '#/components/responses/ServerError' }
+        '502':
+          description: The scheduler could not be reached.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }

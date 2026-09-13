@@ -2728,8 +2728,10 @@ paths:
       - name: integrationId
         in: path
         required: true
+        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
         schema:
           type: string
+          examples: [int_7d3a1f]
     post:
       tags: [Integrations]
       summary: Mark integration failures as reviewed

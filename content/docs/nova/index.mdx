@@ -1,0 +1,44 @@
+---
+title: Nova
+description: Your own assistant inside HumanikOS, and the ways to reach it.
+---
+
+Nova is the assistant in your console and workspaces. You describe what you want
+and it operates HumanikOS: waking offices, handing them work, reading how
+something is configured, building an automation, changing access.
+
+This section covers the ways to reach it that are not the chat window.
+[The API reference](/docs/api-reference/nova) covers its endpoints, and
+[Models](/docs/models) covers what it runs on.
+
+## Nova is per person, not per workspace
+
+This is the thing to understand before anything else on these pages.
+
+An office is one agent that answers for the whole business. Nova is not. There is
+no single Nova behind a workspace: each person gets their own, with their own
+model, their own permissions, their own memory and their own budget.
+
+That is why every way of reaching Nova has to answer one question first: **which
+person is this?** A message with no identifiable person behind it cannot run,
+because there is nothing to run it as.
+
+<Cards>
+  <Card title="Texting Nova" href="/docs/nova/texting" description="Assign a phone number to Nova and text it from your own handset." />
+  <Card title="Scheduled tasks" href="/docs/nova/scheduled-tasks" description="Give Nova work to do on a schedule, running with your permissions when nobody is watching." />
+</Cards>
+
+## How permissions work in every case
+
+The same rule everywhere: **Nova acts as you.**
+
+It holds no identity of its own, no roles and no credentials. Every action it
+takes is taken with your role assignments, checked by the same policy engine that
+checks a request you make yourself. There is no privileged path, and nothing Nova
+can reach that you could not reach directly.
+
+When the trigger is a chat message you typed, your permissions come from your
+session. When it is a text message or a scheduled task, there is no session, so
+they are reconstructed and checked before the work starts. That mechanism is
+described in
+[Running as a user](/docs/access-control/running-as-a-user).
