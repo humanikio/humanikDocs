@@ -33,36 +33,72 @@ The same switch is available over the API, under
 Once assigned, the number appears under **Assets** in that workspace's Nova
 settings, where members can see it without console access.
 
-## Who gets an answer
+## Every person has to add their own number first
 
-Not everyone who texts the number. The number identifies **you**, and it does
-that by matching the number you are texting from against the phone number on your
-profile.
+<Callout type="warn">
+  **Assigning the number is only half of it.** Nova works out who is texting by
+  matching the sender against the mobile number on that person's own profile.
+  Anyone who has not added and confirmed theirs gets **no reply at all**, and
+  nothing explains why. This is the step people miss.
+</Callout>
+
+Each member does this themselves, in their own workspace:
+
+<Steps>
+
+<Step>
+
+### Open Settings then Profile
+
+In your workspace, go to **Settings → Profile**. The first card is your mobile
+number.
+
+</Step>
+
+<Step>
+
+### Add your number and save
+
+Enter it and press **Save**. A number can be on **one account only** across your
+organization: if a colleague already has it, the save is refused and names them.
+
+</Step>
+
+<Step>
+
+### Confirm it with a code
+
+Saving is not the same as confirming. Press **Confirm with a code**, and we text
+a six digit code to that handset. Enter it and the number is confirmed.
+
+Saving a number always clears its confirmation, so a number you change has to be
+confirmed again. Call forwarding keeps working either way; only texting Nova
+needs the confirmation.
+
+</Step>
+
+</Steps>
+
+## Who gets an answer
 
 Four things must all be true:
 
 | | |
 | --- | --- |
 | **You are in the organization that owns the number** | People outside it are not matched |
-| **Your profile phone number matches the one you texted from** | Set it in **Settings → Profile** |
-| **That number has been verified** | You confirm it with a code sent by text |
+| **Your profile number matches the one you texted from** | Settings → Profile |
+| **That number is confirmed** | The code step above |
 | **You can use Nova in that workspace** | The same permission as opening Nova in the app |
 
 If any of them fails, nothing runs and you get no reply. Silence is deliberate:
 answering an unrecognised number would mean answering as somebody.
 
-<Callout>
-  **Verifying your number is the step people miss.** Setting a phone number on
-  your profile is not the same as verifying it. Until you have confirmed it with
-  a code, texts from that handset are not recognised, and the failure looks
-  identical to the number not being assigned at all.
-</Callout>
-
 ### Two people cannot share a number
 
-If two people in your organization have the same number on their profiles, texts
-from it are refused rather than answered as one of them. Pick one, and remove it
-from the other profile.
+Saving a number a colleague already has is refused, and the message names them.
+On older accounts that were set up before this rule, a shared number means texts
+from it are refused rather than answered as one of the two. Remove it from one
+profile.
 
 ## What a reply looks like
 
@@ -103,6 +139,6 @@ A call to the same number is not answered by Nova.
 
 **Attachments are not supported yet.** Send text.
 
-**Your profile number is also used for call forwarding.** Changing it changes
-both, and changing it clears your verification, so you will need to confirm the
-new number before texting works again.
+**Your profile number is also used for call forwarding.** It is one field, so
+changing it changes both. Forwarding works whether or not the number is
+confirmed; texting Nova does not.
