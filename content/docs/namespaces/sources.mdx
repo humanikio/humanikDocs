@@ -48,6 +48,11 @@ is captured so you can point its fields at your columns in the next step.
 **Switch the sending system to the Live URL.** Rows now arrive.
 </Step>
 
+<Step>
+**Check the Live tab.** The source's Payloads page, then Live, lists every payload
+the Live URL received and whether it became a row.
+</Step>
+
 </Steps>
 
 ## The two addresses
@@ -70,9 +75,11 @@ with than one with none.
 ## One shape per source
 
 A source expects payloads that all look the same, because the key mapping is a
-single fixed list of field-to-column pairs. It is not a rule the platform
-enforces so much as a consequence of how mapping works: a payload arriving in a
-different shape does not error, it just maps badly.
+single fixed list of field-to-column pairs. A payload in a different shape that
+still carries some of the mapped fields maps partially: those columns fill and
+the rest are left out. A payload that carries **none** of them is refused at the
+Live URL with a `422`, so a system sending the wrong shape finds out instead of
+believing it delivered.
 
 If a second system sends a different shape, **give it its own source**. Two
 sources can write to the same table, each with its own mapping. That is the
@@ -100,8 +107,10 @@ surprise people:
 empty, it is not written at all, and the column keeps whatever default it has.
 So a mapping that declares seven columns may well produce a record with three.
 
-**The mapping does no validation.** It moves values; it does not check them, and
-it does not reject a payload for having the wrong shape. If you need values
+**The mapping checks shape, not values.** It moves values; it does not clean or
+check them. The one thing it refuses is a payload in which none of the mapped
+paths are present, described in
+[What the Live URL answers](#what-the-live-url-answers). If you need values
 cleaned, checked, or filtered, that is
 [Transform on ingest](/docs/namespaces/transform).
 
@@ -110,6 +119,69 @@ cleaned, checked, or filtered, that is
   it came from alongside the mapped columns, so a mapping you get wrong today
   can be corrected and reapplied later without the original being lost.
 </Callout>
+
+## What the Live URL answers
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| `200` with `{}` | Received and queued. It becomes a row a moment later | Nothing. If a row does not appear, look under **Payloads → Live** |
+| `422` | None of the mapped fields were found, or the source has no key mapping | Send the mapped fields at the top level of the JSON body. Resending it unchanged gets the same answer |
+| `404` | No source has this address | Check the URL |
+| `429` | Too many requests to this address | Wait the number of seconds in `Retry-After`, then resend |
+
+A `422` explains itself:
+
+```json
+{
+  "error": "Payload not mappable",
+  "reason": "no-mapped-values",
+  "message": "None of this route's mapped fields were found in the payload. ...",
+  "routeId": "abc123def456ghi78",
+  "ingestId": "0b6f…",
+  "receivedKeys": ["event", "customer"],
+  "expectedKeys": ["customer_id", "email"]
+}
+```
+
+`receivedKeys` are the top-level field names you sent, never their values.
+`expectedKeys` are the paths the mapping reads. The most common cause is wrapping
+the fields in another object, as above: the mapping reads `customer_id`, and the
+payload only has it inside `customer`.
+
+A payload that carries **some** of the mapped fields is accepted. The Test URL
+never refuses a payload for its shape; it exists to capture new ones.
+
+<Callout type="warn">
+  **A `200` means received, not stored.** Storing happens a moment later, and a
+  payload can still fail at that point: the source may be turned off, or the
+  transform may reject the record. Those outcomes are listed under
+  **Payloads → Live**, not returned to the sender.
+</Callout>
+
+## Seeing what arrived
+
+A source's **Payloads** page has two tabs.
+
+| Tab | What it shows |
+| --- | --- |
+| **Test** | Payloads captured by the Test URL, for building the key mapping |
+| **Live** | Every payload the Live URL received, with what happened to it |
+
+Each live payload has a status:
+
+| Status | What happened |
+| --- | --- |
+| **Stored** | It became a row |
+| **Filtered** | The transform dropped it on purpose, so no row was written |
+| **Rejected** | It was not accepted: nothing in it matched the mapping, or the source is turned off |
+| **Failed** | It was accepted but could not be stored |
+
+Rejected and failed payloads carry the reason. Open one to see the headers and
+body it arrived with, and use **Use for mapping** to build or fix the key mapping
+from exactly what the sending system sent.
+
+Live payloads are kept for **30 days**, then deleted automatically. A payload
+larger than 256 KB is listed without its body.
 
 ## Importing a spreadsheet
 
@@ -126,10 +198,13 @@ what someone importing a backlog wants. Turn it on deliberately when it is.
 - **It does not deduplicate.** The same record sent twice becomes two rows.
   Clearing rows that block a unique constraint is done from the table's
   Duplicates page.
-- **It does not check the payload against your table.** See the mapping note
-  above.
-- **It does not retry.** A payload the sending system fails to deliver is gone.
-  Retrying is that system's responsibility.
+- **It does not check values against your table.** Beyond refusing a payload
+  with none of the mapped fields, types and formats are not checked. See the
+  mapping note above.
+- **It does not retry for the sender.** A payload the sending system fails to
+  deliver is gone, and resending is that system's responsibility. A payload that
+  reached the Live URL but was not stored is listed under **Payloads → Live**
+  with the reason; nothing re-sends it for you.
 
 ## Where to go next
 

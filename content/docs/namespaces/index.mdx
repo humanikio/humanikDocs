@@ -86,10 +86,12 @@ are removed, and the stored files are deleted with them.
 
 - **It does not give you database credentials.** Every read and write is
   mediated by the platform.
-- **It does not check an arriving payload against your table.** A source can map
-  incoming field names onto your columns, but it does not reject a payload for
-  having the wrong shape. A [transform](/docs/namespaces/transform) is where you
-  clean or refuse a record on the way in.
+- **It does not check an arriving payload's values against your table.** A
+  source maps incoming field names onto your columns and refuses a payload that
+  carries none of them, but it does not check types or formats. A
+  [transform](/docs/namespaces/transform) is where you clean or refuse a record on
+  the way in. Every live payload and its outcome is listed on the source's
+  [Payloads page](/docs/namespaces/sources#seeing-what-arrived).
 - **It does not remove duplicates.** If a system sends the same record twice, you
   get two rows.
 - **It does not limit how much you store.** Nothing caps the number of tables,
