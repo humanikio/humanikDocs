@@ -120,6 +120,61 @@ cleaned, checked, or filtered, that is
   can be corrected and reapplied later without the original being lost.
 </Callout>
 
+## Getting an example payload
+
+The key mapping is the payload contract: every mapped path is a field the
+sending system has to put in the body, exactly where the mapping reads it. Rather
+than working that out by hand, ask for the body the source expects:
+
+```bash
+curl "https://api.humanik.io/api/v1/namespaces/$NAMESPACE_ID/sources/$SOURCE_ID/sample-payload?workspaceId=$WORKSPACE_ID" \
+  -H "Authorization: Bearer $HUMANIK_API_KEY"
+```
+
+It answers with the JSON body, the source's Test and Live URLs, and a
+ready-to-run `curl` for each, with the `Content-Type` header already set. Nova
+uses the same thing, so asking it "what do I send to this source?" gets you the
+same body.
+
+**Use it** when you hand a sending system the body to integrate against, before
+you send anything to the Test or Live URL, and whenever a payload comes back with
+a `422`.
+
+**Where fields go.** A path with no dot is a top-level field, so a mapping of
+`customer_id` and `email` means a flat body. A dotted path nests
+(`metadata.phone` is `{ "metadata": { "phone": … } }`), and a number in a path
+is a position in a list (`items.0.sku` is `{ "items": [ { "sku": … } ] }`).
+
+**The values are placeholders**, chosen from each column's type so the example
+maps and stores without error:
+
+| Column type | Placeholder |
+| --- | --- |
+| Text | `""` |
+| Number | `0` |
+| True/false | `false` |
+| Timestamp | The current time |
+| Date | Today |
+| UUID | `00000000-0000-0000-0000-000000000000` |
+| JSON | `[]` or `{}` |
+
+An empty string is not used for every type on purpose. In a number column it
+becomes empty, which a required column refuses; in a true/false column it quietly
+becomes `false`; and in a timestamp or UUID column the row cannot be written at
+all. Replace the placeholders with real values before sending anything you want
+to keep.
+
+Add `&values=snapshot` to fill in the values from the payload the mapping was
+built from instead. That payload can be a real customer's details, so only do it
+when you need to.
+
+<Callout>
+  **Send the body as JSON with `Content-Type: application/json`.** A JSON body
+  sent as plain text is not read, and the Live URL answers `422` with the reason
+  `not-an-object`. That reason means the body was not read, not that the fields
+  are wrong.
+</Callout>
+
 ## What the Live URL answers
 
 | Status | Meaning | What to do |
