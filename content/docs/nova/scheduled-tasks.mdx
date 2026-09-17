@@ -112,6 +112,23 @@ capable enough to finish a long chain of work unattended.
 Set both in [Models](/docs/models). If you set no separate model for scheduled
 runs, they use your chat model.
 
+**The setting is yours, in one workspace.** It applies to the tasks you created,
+in the workspace where you set it. A task always runs as the person who created
+it, so it uses that person's setting. Changing yours does not change what a
+colleague's tasks run on, even when you can see their tasks.
+
+### When the model is on your own machine
+
+If a scheduled run is set to use a machine of yours and that machine is off, or
+it is on but the run fails, the run finishes on the platform default model
+instead and is billed to credits. Nova is told this happened and is instructed
+to say so in its report, and to skip, not fake, any step that needed that
+machine specifically, such as reading its files.
+
+**Chat does not do this.** In a live conversation a failing machine shows an
+error, because choosing your own machine is a choice about where the conversation
+goes, and you are there to fix it.
+
 ## Running one now
 
 Running a task off schedule queues it. It does not run in the moment you press

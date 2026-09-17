@@ -99,6 +99,26 @@ That third state is the one to look for when an employee is behaving like an
 ordinary cloud employee and you expected it not to. It means the machine is
 offline, not that the setting was lost.
 
+## When a connected machine fails a request
+
+A machine can be connected and still fail. Its Claude subscription can reach its
+usage limit, the agent on it can exit with an error, or it can take too long to
+start answering. In each case the office sends that request to its fallback
+model instead, so the employee keeps working.
+
+- **Only with a fallback model.** An office with no `fallbackModelId` has nothing
+  to fall back to, and the request fails.
+- **Billed to credits.** The fallback is a platform model. If the workspace has no
+  credit, the request fails with a message giving both reasons.
+- **Only before any answer arrives.** If the machine has already started
+  answering and then fails, the request fails. Starting again would show two
+  partial answers.
+- **Not shown on the board.** The model row reflects whether the machine is
+  connected. A single request that fell back while the machine stayed connected
+  does not change it.
+- **Repeated failures pause the fallback.** After ten in a row it stops for five
+  minutes, so a broken machine cannot move an office onto paid models all day.
+
 <Callout type="warn">
   **The employee itself has not moved.** Pointing an office at your machine moves
   where the thinking happens. The office is still a machine on HumanikOS, still
@@ -202,7 +222,7 @@ reallocate anything. Holding the machine and using it are different privileges.
 
 <Callout type="warn">
   **There is no failover to another machine.** If the machine an office uses is
-  offline, work falls back to the cloud, never to a second machine. One machine
+  offline or fails a request, work falls back to the cloud, never to a second machine. One machine
   per role, so what a job runs on is predictable.
 </Callout>
 
