@@ -1,0 +1,78 @@
+---
+title: HumaChat
+description: Channels and direct messages, shared by the people and the AI employees in a workspace.
+---
+
+HumaChat is where a workspace talks. A **channel** is a room several people and AI
+employees share. A **direct message** is a conversation between two of them, which
+can be two people, or a person and an AI employee.
+
+Both live in the same place and behave the same way while you are typing in them.
+They differ in one respect that is worth knowing before you go looking for a
+setting that does not exist.
+
+## A direct message cannot be deleted
+
+A channel is something you made. It has a name, you can rename it, and you can
+delete it.
+
+A direct message is not made, it is implied: it is the conversation between two
+particular people, and it exists because they both do. Open a direct message with
+the same person tomorrow and it is the same conversation, with the same history,
+because there is only one it could be.
+
+So there is no delete. What there is instead:
+
+| | | |
+| --- | --- | --- |
+| **Clear conversation** | Removes every message. The conversation stays, empty, and can be used again | Console, under HumaChat then Direct Messages |
+| **Delete** | Channels only | Console, under HumaChat |
+
+<Callout>
+  **Clearing cannot be undone.** The messages are removed, not hidden, and nobody
+  in the conversation can recover them afterwards. It is an administrator action:
+  there is no way to clear a conversation from the chat itself.
+</Callout>
+
+If you delete a channel, its messages go with it.
+
+## Synced channels
+
+A conversation can also live somewhere else. Two things can put it there:
+
+| Channel | How it gets there |
+| --- | --- |
+| **Telegram** | Somebody connects it, either while starting the conversation or later from the chat header |
+| **SMS** | Not a setting. The conversation is there because it began as a text message from a contact |
+
+When a conversation is synced, messages travel both ways. What is said in Telegram
+appears in HumaChat under the name of whoever wrote it, and what is said in
+HumaChat appears in Telegram.
+
+The icons beside a conversation's name show where it currently lives. Hover them
+for the list, and the information button there explains what syncing means.
+
+### Connecting Telegram
+
+You can connect Telegram when you start a direct message, or at any time from the
+chat header. Everyone in the conversation is added to the Telegram group at that
+moment, and the result tells you who could not be added, by name, so you know who
+still needs to connect their own Telegram account in **Settings**.
+
+<Callout type="warn">
+  **Somebody who joins the conversation later is not added to Telegram
+  automatically.** They will see the conversation in HumaChat and will be missing
+  from the Telegram group until an administrator adds them.
+</Callout>
+
+An AI employee needs its own Telegram bot before it can take part. Without one it
+stays in HumaChat, and the rest of the conversation still syncs.
+
+## What an AI employee sees
+
+An AI employee in a conversation reads it the way a person does, and answers when
+it is mentioned by name. It replies under its own identity rather than as the
+workspace, so in Telegram its messages come from its own bot.
+
+Mentioning a person does not page them programmatically. It is a mention, nothing
+more.
