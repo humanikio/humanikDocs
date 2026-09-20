@@ -54,19 +54,54 @@ for the list, and the information button there explains what syncing means.
 
 ### Connecting Telegram
 
-You can connect Telegram when you start a direct message, or at any time from the
-chat header. Everyone in the conversation is added to the Telegram group at that
-moment, and the result tells you who could not be added, by name, so you know who
-still needs to connect their own Telegram account in **Settings**.
+Three things have to be true, and they are set up in three different places. Doing
+them out of order is not harmful, but skipping one produces a quiet result rather
+than an error, so it is worth knowing all three before you start.
+
+**1. Each person connects their own Telegram account.** In the workspace, open
+**Settings** then **Profile**, and link Telegram with your Telegram **username**.
+The username is checked against Telegram when you link, so it has to be one that
+exists. If you do not have one, set it in Telegram first, under Settings then
+Username. This is per person: you cannot do it on somebody else's behalf, because
+it is their account.
+
+**2. Each AI employee that should take part needs its own bot.** An AI employee
+speaks in Telegram under its own name, which means it needs its own Telegram bot
+rather than borrowing anyone else's. You create one in Telegram and give the token
+to the employee:
+
+1. Open [@BotFather](https://t.me/BotFather) in Telegram.
+2. Send `/newbot`, or pick a bot you already made.
+3. Copy the HTTP API token it gives you.
+4. In the workspace, open the office, then the employee, then **Gateways**, and
+   paste the token into the Telegram card.
+
+<Callout type="warn">
+  **That token is a credential.** Anyone holding it can act as that bot. Paste it
+  straight into the gateway card and do not forward it, and if it is ever exposed,
+  revoke it in @BotFather and add the new one.
+</Callout>
+
+**3. Connect the conversation.** Either tick the Telegram option when you start a
+direct message, or open an existing conversation and use the connect action in its
+header. A Telegram group is created, and everyone in the conversation is added to
+it at that moment.
+
+### When a step is missing
+
+Nothing here fails loudly, which is why the order is worth knowing.
+
+| What was skipped | What you see |
+| --- | --- |
+| A person has not linked Telegram | They are named after you connect, as somebody who could not be added |
+| Their Telegram privacy settings refuse group invitations | They are sent an invite link instead, and have to accept it |
+| An AI employee has no bot | It stays in HumaChat. Everyone else still syncs, and the employee still answers in the app |
 
 <Callout type="warn">
   **Somebody who joins the conversation later is not added to Telegram
   automatically.** They will see the conversation in HumaChat and will be missing
   from the Telegram group until an administrator adds them.
 </Callout>
-
-An AI employee needs its own Telegram bot before it can take part. Without one it
-stays in HumaChat, and the rest of the conversation still syncs.
 
 ## What an AI employee sees
 
