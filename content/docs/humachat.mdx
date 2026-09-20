@@ -36,6 +36,26 @@ So there is no delete. What there is instead:
 
 If you delete a channel, its messages go with it.
 
+## Who can read a conversation
+
+A channel is readable by the people in it. A direct message is readable by the
+two people in it. Being in the workspace is not enough on its own, and neither
+is holding a role that mentions chat. You are in the conversation or you are
+not.
+
+That is checked in three places, because there are three ways to reach a
+conversation: the API, the live view in the app, and an AI employee's tools when
+you ask one to read something.
+[The membership layer](/docs/access-control#some-resources-add-a-second-layer)
+describes how it works.
+
+Two things sit outside it, and both are worth knowing before you rely on this.
+
+| | |
+| --- | --- |
+| **An administrator can be granted the ability to read any conversation in the workspace** | It is a separate permission that no ordinary role includes, it has to be granted on purpose, and every read it allows is recorded |
+| **A conversation with a customer is not member scoped** | A thread that began as a text message from a contact has no members to list, so it stays readable by the people in your account who can read conversations |
+
 ## Synced channels
 
 A conversation can also live somewhere else. Two things can put it there:
@@ -111,3 +131,15 @@ workspace, so in Telegram its messages come from its own bot.
 
 Mentioning a person does not page them programmatically. It is a mention, nothing
 more.
+
+### What it can reach
+
+An employee's credential is scoped to the workspace it belongs to, so it cannot
+reach a conversation in another workspace or in another account under any
+circumstances.
+
+Inside its own workspace the boundary is wider than a person's. An employee is
+added to conversations and works in them like a colleague, but its reach is not
+narrowed to the conversations it is a member of the way yours is. Treat an AI
+employee as able to read the workspace you put it in, and use separate
+workspaces where that matters.

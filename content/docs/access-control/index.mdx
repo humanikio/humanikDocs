@@ -8,8 +8,22 @@ Access control answers one question, the same way every time:
 > May this identity perform this action on this resource?
 
 The word that matters is *same*. People and machines go through one engine, with
-one policy language, evaluated identically. There is no shortcut path for
+one policy language, evaluated the same way. There is no shortcut path for
 machines, and no separate system to learn for them.
+
+That is one system and one policy language, not one set of permissions. A
+machine is scoped by its own identity to the office or browser it belongs to,
+and cannot hold organisation level access at all. What it shares with a person
+is the model, the vocabulary and the evaluator.
+
+Three consequences are worth knowing before the detail, because each is the
+opposite of what most people assume:
+
+| | |
+| --- | --- |
+| **An AI employee is an identity, not a session** | It holds role assignments in the same form a person does, and every action it takes is attributable to it rather than to a shared platform credential |
+| **Machines are governed more strictly than the account owner** | The engine has exactly one shortcut and a machine can never reach it. [See below](#machines-are-governed-more-strictly-not-less) |
+| **A machine usually cannot name the resource it acts on** | Endpoints that act on a machine's behalf resolve the target from its credential rather than from the request, so it cannot ask for something it does not own |
 
 ## Four primitives
 
@@ -244,6 +258,50 @@ Where a second layer exists, **both must pass**, and the membership layer is
 deliberately stricter. The browser one refuses even the tenant owner. Some blast
 radiuses are large enough to want explicit membership rather than access by
 virtue of owning the tenant.
+
+### Membership is a list, not a role
+
+A role is granted at a boundary and covers everything under it. Membership is
+the opposite shape: one entry per resource, naming one identity. Holding
+`groupchat:read` across a workspace says you may read conversations. It does not
+say you are in this one, and only the membership list answers that.
+
+You are a member because you were added. There is no inherited form of it and no
+shortcut: the person who created a channel is written into its list like anybody
+else.
+
+### Every way in checks it
+
+A conversation or a browser can be reached three ways, and the check is applied
+at all three.
+
+| How it is read | Where the check runs |
+| --- | --- |
+| The API | On the request, before the handler |
+| The app, which subscribes for live updates | In the database rules |
+| An AI employee's tools, when you ask one to look something up | On the tool call |
+
+The second row is the one to notice. It does not pass through the API at all, so
+a check written only on the API would leave the surface most people read through
+every day ungoverned.
+
+### Reading past membership is a separate permission, and it is recorded
+
+Some work needs it. `groupchat:read:all` exists for that. No ordinary role
+carries it, it has to be granted deliberately, and every read it permits is
+written to the platform log with the identity that made it.
+
+It has no equivalent in the database rules, on purpose. Anything that reads past
+membership therefore goes through the API, which is the one place the decision
+can be recorded.
+
+<Callout>
+  **A conversation with one of your customers has no membership list.** The
+  other side is a contact rather than a user of your account, so there is nobody
+  to add. Those conversations stay readable by the people in your account who
+  can read conversations at all. Member scoping them would hide every customer
+  conversation from everyone.
+</Callout>
 
 ## Invariants
 
