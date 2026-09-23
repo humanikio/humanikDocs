@@ -68,6 +68,34 @@ backend:
 Widening it is a deliberate, local decision. `Write`, `Edit` and `Bash` are all
 available; none of them is on unless you put it there.
 
+### Three limits, and none can widen another
+
+The ceiling is the one that lives on your machine, and it is the one most people
+focus on. It is not the only one. Work reaching an enrolled machine passes three
+separate boundaries, held by three different parties.
+
+| Limit | Held by | Decides |
+| --- | --- | --- |
+| **The ceiling** | You, in a file on this machine | What may be done **to this machine** |
+| **The allocation** | An administrator, in the console | Which workspace may use this machine at all, and which employee it is attached to |
+| **The employee's permissions** | The permission system | What the employee may reach **in the office**, with the office's own credentials |
+
+They compose, and they do not leak into each other.
+
+Widening the ceiling does not give the employee more access to your company's
+data, because that is the third row. Granting the employee a broader role does
+not let it do more on your laptop, because that is the first row. And an
+administrator allocating a machine to an office is granting the office the right
+to think there, not the right to act outside what the ceiling already allows.
+
+<Callout>
+  **The allocation is a human action and it is deliberately narrow.** An
+  administrator points an office at a machine and grants it the credentials that
+  office needs. That is the whole of it. There is no field in the allocation that
+  names a tool, a directory or a permission mode, so no amount of administrative
+  access on our side changes what your machine will do.
+</Callout>
+
 ## Where an agent can reach
 
 Four surfaces, and they are not equivalent. Knowing which is which is the

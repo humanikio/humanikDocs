@@ -63,18 +63,21 @@ Listing returns only the last four characters of each secret, alongside
 no recent use is a candidate for removal, and a key with unexpected use is worth
 investigating.
 
-## Revocation takes up to five minutes
+## Revocation takes effect on the next request
 
-<Callout type="warn">
-  Deleting or deactivating a key does not stop it immediately. Validated keys are
-  cached for **five minutes**, so a revoked key can keep authenticating until the
-  cache expires.
+Deleting a key, or deactivating it, stops it on the very next call. There is no
+validation cache to wait out.
+
+Every authenticated request resolves the key against stored state at the moment
+it arrives, so a key that was valid a second ago and has since been revoked is
+refused rather than honoured. Deactivating is the reversible half of this and
+deleting is the permanent half, and both land immediately.
+
+<Callout>
+  **This is the control to reach for on a leaked credential.** Revoke first.
+  Rotation is how you replace the key afterwards, not the thing standing between
+  a leak and its use.
 </Callout>
-
-This is a deliberate trade. Every machine to machine call in the platform
-validates against this path, and the cache protects it. For a leaked credential,
-five minutes is the number that matters, so treat rotation as the primary control
-and revocation as the follow up.
 
 ## Authentication failures
 

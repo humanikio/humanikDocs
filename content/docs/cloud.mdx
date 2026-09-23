@@ -1,10 +1,17 @@
 ---
 title: Where offices run
-description: The machines behind your AI employees, and what they cost while awake.
+description: The machines behind your AI employees, how they sleep and resume, and what they cost while awake.
 ---
 
 Every office runs on a machine. Understanding when that machine exists, and when
 it does not, is most of what you need to reason about performance and cost.
+
+The arrangement is unusual and it is worth naming before the detail. **The unit
+of compute here is an employee, not a request and not a replica.** A machine
+belongs to one employee, holds that employee's filesystem and credentials, and
+scales on its own. A workspace with forty employees is forty independent
+machines, each sleeping and waking on its own schedule, and none of them is
+holding a slot for any of the others.
 
 ## An office is a service
 
@@ -14,6 +21,11 @@ its own environment, its own secrets, and its own view of your data.
 That is why an office can be resized, given an idle timeout, inspected while
 running, and read for logs. It is also why two offices cannot see each other's
 credentials: they are not in the same place.
+
+It is also why the size of a workspace is not a capacity question you have to
+plan. Nothing is shared between employees, so adding one does not take anything
+away from another, and an employee that is busy does not slow down an employee
+that is idle.
 
 ## Sleeping is the normal state
 
@@ -26,8 +38,24 @@ employee that is not working costs nothing to run.**
                          └──────────  work arrives  ────────┘
 ```
 
-Nothing is lost when it sleeps. Its configuration, its data and its conversations
-are not on the machine.
+Nothing is lost when it sleeps. Its configuration, its data and its
+conversations are not on the machine.
+
+### Waking is a restore, not a fresh start
+
+This is the part that makes sleeping worth doing, and it is more than the
+machine coming back.
+
+An office's filesystem is captured and stored, and its configuration and
+conversation live off the machine entirely. So waking is a restore: the
+filesystem comes back, the configuration changes made since the snapshot are
+applied on top, and the conversation is rehydrated before the agent starts.
+
+The practical consequence is the one customers notice. **An employee that wakes
+on Thursday still has what it did on Monday.** A repository it cloned is still
+cloned. A file it left itself is still there. A conversation that stopped
+mid-thread continues rather than beginning again. The machine not existing for a
+week is not an event the employee experiences.
 
 ### The first request after sleeping waits
 
@@ -59,8 +87,13 @@ So the controls are structural rather than a ceiling:
 | **Size** | A smaller machine costs less for every second it is awake |
 | **Idle timeout** | A shorter one means fewer seconds awake |
 
-An office left running with a long timeout is the usual explanation for a compute
-bill nobody expected. Nothing will stop it, and nothing will warn you.
+Because each employee carries its own size and its own timeout, these are per
+employee decisions rather than one setting for the account. An office that
+handles inbound calls during business hours and one that runs a nightly
+reconciliation want opposite answers, and they can have them.
+
+An office left running with a long timeout is the usual explanation for a
+compute bill nobody expected. Nothing will stop it, and nothing will warn you.
 
 You can also stop one directly with
 [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine),
@@ -74,7 +107,7 @@ that machine lives.
 | Changing | Applies |
 | --- | --- |
 | Skills | Immediately |
-| Model provider, secrets, integrations, protocols | At the next restart |
+| Model provider, framework, secrets, integrations, protocols | At the next restart |
 
 <Callout type="warn">
   **Restarting means replacing the machine, not rebooting it.**
@@ -85,6 +118,10 @@ that machine lives.
 </Callout>
 
 There is no gap in service while that happens.
+
+You do not have to remember which changes are waiting. When something has been
+changed and not yet applied, the console says so and names the specific changes,
+with a control to apply them.
 
 ## What else runs here
 
@@ -108,6 +145,11 @@ responsible for a single employee without giving them the whole account.
 ## Where to go next
 
 <Cards>
+  <Card
+    title="Frameworks and models"
+    href="/docs/frameworks"
+    description="What runs on the machine, and why it is a swappable part."
+  />
   <Card
     title="Humanik Cloud API"
     href="/docs/api-reference/cloud"

@@ -137,6 +137,32 @@ apart from the right to operate the employee.
   you should usually stay on the office route.
 </Callout>
 
+## Two employees can run different software
+
+The machine is yours to size. What runs on it is also yours to choose, and the
+choice is made per employee rather than once for the account.
+
+| | Chosen per |
+| --- | --- |
+| **The agent framework** | Office |
+| **The model** | Office, and per person for Nova |
+
+So one workspace can hold an employee running on a small model for triage, an
+employee running on the strongest model you have for customer facing work, and
+an employee thinking on a machine in your own building, all at the same time.
+They are separate machines, so they do not have to agree about anything.
+
+The agent itself is an open source project we track rather than own, which is
+what makes it replaceable. What you connect to an employee is stored as data and
+compiled into whatever format its runtime reads, so it survives a change of
+runtime.
+
+<Callout>
+  Both choices are read at boot, like most office configuration. Changing either
+  one applies on the next restart. See
+  [Frameworks and models](/docs/frameworks).
+</Callout>
+
 ## Employees are identities, not sessions
 
 Because an office authenticates as itself, an AI employee is a first class
@@ -156,6 +182,11 @@ See [Access Control (IAM)](/docs/access-control).
 ## Where to go next
 
 <Cards>
+  <Card
+    title="Frameworks and models"
+    href="/docs/frameworks"
+    description="What runs inside an office, and what survives a change."
+  />
   <Card
     title="Models"
     href="/docs/models"

@@ -1,11 +1,84 @@
 ---
 title: Introduction
-description: The HumanikOS API lets you create and operate AI employees from your own code.
+description: HumanikOS gives every AI employee its own machine, its own identity, and one place to run all of them.
 ---
 
-The HumanikOS API is an HTTP interface to the same control plane the console
-uses. It creates offices, dispatches work, reads and writes the data plane,
-manages contacts and calendars, and drives cloud browsers.
+HumanikOS is the infrastructure an AI agent needs in order to hold a job.
+
+You name an employee and real infrastructure appears: an isolated machine with
+its own filesystem and terminal, its own identity in the permission system, its
+own vault, and its own explicit list of what it may reach. It sleeps when there
+is no work and wakes with its state intact. One workspace runs all of them.
+
+## What you actually get
+
+```
+   Workspace
+     ├─ People              your colleagues, with roles
+     ├─ AI employees        one machine each, each an identity
+     │    ├─ its own filesystem, terminal and vault
+     │    ├─ the integrations, skills and rules you attach
+     │    └─ a framework and a model, chosen per employee
+     └─ Shared resources    data, browsers, calendars, numbers, addresses
+```
+
+People and AI employees sit in **one permission system**, granted access the
+same way and evaluated by the same engine. There is no separate model to learn
+for the machines, and no privileged path for them.
+
+<Callout>
+  **AI employees are governed more strictly than the account owner.** The
+  permission engine has exactly one shortcut, and it is reserved for the owner of
+  the account. A machine identity can never satisfy it, so every decision a
+  machine makes walks the full policy chain with no exemption available to it.
+</Callout>
+
+## Four things an employee needs, and the platform builds all four
+
+**Its own machine.** Two employees are two machines, not two processes with a
+tenant column. One cannot read another's files, reach another's credentials, or
+use another's tools, because there is no shared surface on which it could.
+
+**Its own identity.** An employee holds role assignments in the same form a
+person does. It can be scoped to a single table and nothing else, or given a
+workspace wide role, and you move it between those whenever you like.
+
+**A workspace with the tools already in it.** A customer record system, a phone
+number it answers by call and by text, an email address on your own domain,
+calendars and booking, file storage it can search by meaning, a team chat where
+people and AI employees are in the same thread, and schedules. Every one of them
+is optional. Connect the systems you already run instead, and nothing is
+replaced, moved or switched off.
+
+**A connection to anything else.** Describe a system your business uses. The
+platform reads its documentation, works out how to use it, collects the
+credentials without them ever entering a conversation, and proves the connection
+with a real authenticated call before saying it works.
+
+## Your employees do not have to run our agent
+
+The agent inside an office is an open source project we track rather than own,
+and it is a swappable part. The model it thinks on is a separate choice, made per
+employee, and it can run on our account, on your own vendor account, or on
+hardware you own with no vendor involved at all.
+
+What you connect is stored as data and compiled into whatever format the
+employee's runtime reads, so changing the runtime does not mean rewiring what
+you connected.
+
+<Cards>
+  <Card title="Frameworks and models" href="/docs/frameworks" description="What runs inside an office, and what survives a change." />
+  <Card title="Offices and employees" href="/docs/offices-and-employees" description="The machine, and everything that attaches to it." />
+</Cards>
+
+---
+
+## The API
+
+Everything above is reachable from your own code. The HumanikOS API is an HTTP
+interface to the same control plane the console uses. It creates offices,
+dispatches work, reads and writes the data plane, manages contacts and
+calendars, and drives cloud browsers.
 
 Every route is mounted under a single version prefix:
 
@@ -13,7 +86,7 @@ Every route is mounted under a single version prefix:
 /api/v1
 ```
 
-## Before you start
+### Before you start
 
 You need two things:
 
@@ -21,18 +94,24 @@ You need two things:
 2. A **service account API key**, which starts with `hsk_`. See
    [Authentication](/docs/authentication).
 
-## What the API covers
-
-The public surface is scoped to what a service account key can reach. Console
-only routes, webhook receivers, and internal service routes sit outside it and
-are not documented here.
+A service account is a machine identity in your account, governed by the same
+permission system as everyone else. Granting it a role is the same act as
+granting one to a colleague, which is what makes it possible to run a whole
+workspace of people and AI employees from your own code without a second
+authorisation model.
 
 <Cards>
   <Card title="Quickstart" href="/docs/quickstart" description="Make your first authenticated request." />
   <Card title="Authentication" href="/docs/authentication" description="Service account keys, scoping, and permissions." />
 </Cards>
 
-## Conventions used throughout
+### What the API covers
+
+The public surface is scoped to what a service account key can reach. Console
+only routes, webhook receivers, and internal service routes sit outside it and
+are not documented here.
+
+### Conventions used throughout
 
 Every response is wrapped in an envelope, every request can carry a correlation
 ID, and rate limits are applied per tenant. Those behaviours are identical on
@@ -43,7 +122,7 @@ every endpoint, so they are documented once rather than repeated:
   <Card title="Rate limits" href="/docs/rate-limits" description="Limits, headers, and retry behaviour." />
 </Cards>
 
-## Versioning
+### Versioning
 
 `v1` is the only version and has never been revised. New fields and new
 endpoints are added without a version change, so a client must ignore response

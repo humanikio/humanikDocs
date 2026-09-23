@@ -1,0 +1,205 @@
+---
+title: Frameworks and models
+description: What runs inside an office, why it is a swappable part, and what survives a change.
+---
+
+An office is a machine. What runs on that machine is two separate choices, and
+both are made per employee rather than once for the account.
+
+| | What it is | Chosen |
+| --- | --- | --- |
+| **The framework** | The agent program that decides what to do and calls tools | Per office |
+| **The model** | What that agent thinks on | Per office, and per person for Nova |
+
+Two employees in the same workspace can run different frameworks on different
+models at the same time, and neither knows the other exists. They are two
+machines.
+
+## The agent is a part, not the product
+
+Most AI products in this category are built the other way round. The agent is the
+thing they made, and everything else exists to serve it. That makes the agent
+impossible to replace, because replacing it would mean replacing the product.
+
+Here the agent is an open source project, tracked as an upstream dependency and
+run unmodified. What we build is everything around it: the machine, the identity,
+the credentials, the data access, the channels, the schedule, the supervision and
+the billing.
+
+<Callout>
+  **The rule the codebase follows is never fork, always inject.** The framework's
+  source is not modified. Platform context arrives through extension points the
+  framework already exposes, which is why it can keep tracking upstream.
+</Callout>
+
+## The platform supplies the environment
+
+An agent that you simply start on a machine has to be told everything, and it
+inherits whatever the machine already had. That is the opposite of what happens
+here.
+
+A parent process builds the environment and then starts the agent inside it. The
+agent does not inherit the parent's environment, it receives one that was
+assembled for it.
+
+| What the agent gets | Where it comes from |
+| --- | --- |
+| Integration credentials | The vault, resolved at boot and injected under the names each skill declares |
+| Data access | The namespaces allocated to this office, and nothing else |
+| Its identity | Its own service account, minted when the office was created |
+| Skills | Written to disk in the shape its framework reads |
+| Channels and schedules | Restored at boot from configuration |
+| The model | Reached through a proxy on the machine's own loopback address |
+
+Two of those are worth pulling out, because they are what make the arrangement
+safe rather than merely tidy.
+
+**Capability follows credential.** Secrets are injected under names that match
+each skill's declared requirement, so connecting a system is what makes that
+system's skill appear to the employee. Nobody writes a skill per customer, and
+nothing separately tells the agent what it can do.
+
+**The model key is not in the agent.** The parent resolves the key and starts a
+proxy on the machine's loopback address, then points the framework's model
+configuration at it. The agent makes ordinary local calls and the proxy attaches
+the key. So the key is not in the agent's configuration, its memory, its logs or
+its error traces.
+
+<Callout type="warn">
+  **This is a precise claim, not a broad one.** Managed connector tokens and the
+  model key never reach the agent. Credentials for integrations you create
+  directly are injected as environment variables, so the agent does hold those.
+  Both facts matter and we state them separately rather than rounding the pair
+  up into "it has no credentials".
+</Callout>
+
+## Only one band of the boot is framework specific
+
+An office boots through a fixed sequence. Reading it in order shows how little of
+it depends on what runs inside.
+
+```
+   restore the filesystem from a snapshot          shared
+   apply the configuration changes since then      shared
+   translate configuration into the framework's    ← the only
+     own files and settings                          framework
+                                                     specific band
+   restore workspace files                         shared
+   inject platform context                         shared
+   restore the conversation                        shared
+   resolve the model key, start the proxy          shared
+   start the agent                                 shared
+   restore schedules                               shared
+   report healthy, begin supervision               shared
+```
+
+State restore, credential injection, session hydration, supervision, scheduling,
+health reporting and sleep are identical no matter what is running. Adding a
+framework means writing the translation band and the call that starts it. It
+inherits everything else.
+
+<Callout type="warn">
+  **Adding a framework is engineering work we do, not a setting you change.** The
+  claim here is architectural: the agent was never the product, so it can be
+  replaced. It is not a switch in the console.
+</Callout>
+
+## What survives a change
+
+This is the half that matters commercially, and it is the reason the
+architecture is worth anything to you rather than only to us.
+
+An integration is stored as **data**: a host, an authentication scheme, a
+reference to a credential, and a list of endpoints. The instructions an employee
+reads are **compiled from that record** into whatever format its framework
+expects.
+
+```
+   integration record  ──compiled──▶  instructions the framework reads
+   (host, auth, secret                (one shape today, a different
+    reference, endpoints)              shape for a different runtime)
+```
+
+So what you connected is not wired to one runtime. Change the framework and the
+connection still resolves, because the connection was never expressed in the old
+framework's language.
+
+See [Creating an integration](/docs/integrations/creating) for how a connection
+is made, and [Skills](/docs/integrations/skills) for the document that gets
+compiled.
+
+## What runs today
+
+**OpenClaw is the framework in production.** It is an open source agent project,
+vendored unmodified, on a permissive licence. Every office you create today runs
+on it.
+
+A second open source framework has been brought up on the same boot pipeline and
+is in testing. It is not available to choose yet, and we would rather say that
+than list it as an option.
+
+## Choosing the model
+
+The model is the other half of the choice and it moves independently. An office
+can run on platform credit, on your own vendor account, or on hardware you own,
+and the same workspace can hold employees doing all three.
+
+<Cards>
+  <Card
+    title="Models"
+    href="/docs/models"
+    description="The four layers, and why choosing a model is choosing who pays."
+  />
+  <Card
+    title="Choosing a model"
+    href="/docs/models/choosing-a-model"
+    description="Per person, per office, and when a smaller model is the better answer."
+  />
+  <Card
+    title="Bring your own compute"
+    href="/docs/models/your-own-compute"
+    description="Running the thinking on a machine you own."
+  />
+</Cards>
+
+## The sharp edges
+
+**Both choices are read at boot.** Changing an office's framework or its model
+does nothing to a running employee. The office keeps what it started with until
+it restarts, and restarting replaces the machine rather than rebooting it. See
+[Where offices run](/docs/cloud).
+
+**An office cannot change its own.** The agent has a filesystem and a shell, and
+files that would alter the next boot are removed from the workspace at startup
+and as they appear at runtime. An instruction injected into a running employee
+cannot survive a restart. That closes persistence. It is not a claim about
+prompt injection generally.
+
+**Nova is not an office.** Nova runs on platform servers and is not one of these
+machines. It coordinates offices rather than living in one. See
+[Nova](/docs/nova).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="The machine these choices are made on."
+  />
+  <Card
+    title="Where offices run"
+    href="/docs/cloud"
+    description="Sleeping, waking, resizing, and what a restart actually does."
+  />
+  <Card
+    title="Integrations and secrets"
+    href="/docs/integrations"
+    description="What gets compiled, and where the credentials live."
+  />
+  <Card
+    title="Connect your own machine"
+    href="/docs/devices"
+    description="Running the thinking on hardware you own, under a ceiling you set."
+  />
+</Cards>

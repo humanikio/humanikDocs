@@ -1043,8 +1043,8 @@ paths:
         Mints a replacement credential. Requires `browser:manage` and
         membership, manager bypass allowed.
 
-        The new key is returned **once**. The old one keeps working for up to
-        five minutes while the validation cache expires.
+        The new key is returned **once**. The old one stops working on its next
+        use, so put the new key in place before you cycle.
       responses:
         '200':
           description: The new key. Capture it now.

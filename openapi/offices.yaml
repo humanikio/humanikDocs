@@ -618,9 +618,8 @@ paths:
         pointing at it, which is useful when reusing or investigating the
         machine and a cost leak otherwise.
 
-        Deleting an office also removes the API keys issued to it. A key revoked
-        this way can still authenticate for up to five minutes while the
-        validation cache expires.
+        Deleting an office also removes the API keys issued to it. Each of those
+        keys stops working on its next use.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
         - name: keepNexusService
@@ -2019,8 +2018,8 @@ paths:
       description: |
         Requires `office:manage`.
 
-        Revocation is not immediate. A deleted key can keep authenticating for
-        up to five minutes while the validation cache expires.
+        Revocation takes effect on the next request. A deleted key is refused the
+        next time it is presented.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2044,8 +2043,8 @@ paths:
 
         The new key is **returned once**. It is not retrievable afterwards.
 
-        The old key keeps working for up to five minutes while the validation
-        cache expires, so a cycle is not an instant cut off.
+        The old key stops working on its next use, so a cycle is an immediate cut
+        off. Put the new key in place before you cycle.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:

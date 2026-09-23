@@ -1,27 +1,40 @@
 ---
 title: Creating an integration
-description: Two ways to connect software to an employee, and when each one is the right choice.
+description: Describe the software you use and the platform connects it, or declare the endpoints yourself.
 ---
 
 [Integrations and secrets](/docs/integrations) covers what an integration is: a host, an
 authentication scheme, a credential reference, and a list of endpoints that become tools.
 
-This page is about getting one made. There are three routes to the same object, and the choice
-comes down to one question: **do you want named tools, or just a working connection?**
+This page is about getting one made, and for most software the answer is that you describe it
+in plain language and the platform does the rest.
+
+**Say what you use. Nova works out what the software is, reads its live documentation, works
+out how it authenticates, collects the credential without it ever entering the conversation,
+and registers the connection.** Ask it to go one step further and it will fire a real
+authenticated request and check the answer before it writes anything down, so what the employee
+ends up reading is proven rather than plausible.
+
+Nothing about that requires you to have the API documentation open, and nothing about it is
+console only. The same thing runs from a prompt sent to the API, which is how a connection gets
+made while you are provisioning offices from your own code.
+
+The one thing it does not do is declare an endpoint list, and that is the reason the second
+route exists.
 
 ## The short answer
 
-| | Declare it yourself | Ask Nova in the console | Drive Nova from the API |
+| | Ask Nova in the console | Drive Nova from the API | Declare it yourself |
 | --- | --- | --- | --- |
-| **You provide** | Base URL, auth type, every endpoint | The name of the software, and a credential | The same, as a prompt |
-| **Interface** | [`POST /offices/{officeId}/integrations`](/docs/api-reference/offices/integrations/createOfficeIntegration) | A conversation | [`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle) |
-| **Takes** | One call | A few minutes | A few minutes |
-| **Endpoints are** | Exactly what you declared | Not declared. Reached by path | The same |
-| **Best when** | You have the API docs open | You want it connected without reading them | You are provisioning offices programmatically |
+| **You provide** | The name of the software, and a credential | The same, as a prompt | Base URL, auth type, every endpoint |
+| **Interface** | A conversation | [`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle) | [`POST /offices/{officeId}/integrations`](/docs/api-reference/offices/integrations/createOfficeIntegration) |
+| **Takes** | A few minutes | A few minutes | One call |
+| **Endpoints are** | Not declared. Reached by path | The same | Exactly what you declared |
+| **Best when** | You want it connected without reading the docs | You are provisioning offices programmatically | You have the API docs open |
 
-The two routes answer different questions. Nova is the fast way to get connected: it works out
-what the software is, what it needs to authenticate, and collects the credential safely.
-Declaring it yourself is the only way to get **named tools**.
+The routes answer different questions. Nova is the fast way to get connected. Declaring it
+yourself is the only way to get **named tools**, and the two combine: let Nova set up the
+connection and the credential, then add the endpoints afterwards.
 
 <Callout type="warn">
   **Nova does not declare endpoints.** It creates the connection, not the endpoint list. An
@@ -38,80 +51,11 @@ Declaring it yourself is the only way to get **named tools**.
 </Callout>
 
 <Callout>
-  **Nova is not console only.** The third column is the same workflow as the second, started
+  **Nova is not console only.** The second column is the same workflow as the first, started
   with an API call instead of a message box. Nova acts as the caller who sent the prompt, under
   that caller's roles, so it can create nothing you could not have created yourself. See
   [How Nova is permissioned](/docs/api-reference/nova#how-nova-is-permissioned).
 </Callout>
-
-## Declaring it yourself
-
-Create the integration with its endpoints in place:
-
-```json
-{
-  "name": "Acme Billing",
-  "baseUrl": "https://api.acme.com",
-  "authType": "bearer",
-  "credentials": { "API_KEY": "sk_live_..." },
-  "tools": [
-    {
-      "toolName": "acme_get_invoice",
-      "description": "Fetch one invoice by id",
-      "method": "GET",
-      "path": "/v1/invoices/{invoiceId}",
-      "enabled": true,
-      "parameters": {
-        "invoiceId": {
-          "type": "string",
-          "required": true,
-          "in": "path",
-          "description": "The invoice id"
-        }
-      }
-    }
-  ]
-}
-```
-
-`credentials` is required unless `authType` is `none`. The values go straight into the office
-vault as a secret group and the integration is linked to it by reference, so one call sets up
-the connection, the credential and the endpoints together. The employee can call
-`acme_get_invoice` by name on its next boot.
-
-To point an integration at a credential that already exists instead, use
-[`POST /offices/{officeId}/integrations/{integrationId}/secret-refs`](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef).
-
-Adding or changing endpoints later is a
-[`PATCH`](/docs/api-reference/offices/integrations/updateOfficeIntegration) on the integration.
-The skill is rewritten from the updated record automatically, and the employee picks the tools
-up on its next boot.
-
-<Callout type="warn">
-  **`tools` replaces the whole array. It does not merge.** Send the full set you want, because
-  endpoints are declared as a set and a merge would leave no way to remove one. Omit the field
-  to leave the existing endpoints alone.
-</Callout>
-
-<Callout type="warn">
-  **Every parameter needs an `in`.** It says where the value goes on the wire: `path`, `query`,
-  `header`, or `body`. A parameter without one is rejected with a `400` naming the field, rather
-  than stored. A stored one would be dropped when the request was built: the call would go out
-  missing that value and nothing would report it.
-</Callout>
-
-### Endpoints are the part that matters
-
-An integration with no endpoints declared still works. It holds a credential and a host, and
-the employee reaches it with `hos_integration_request`, supplying a path itself. See
-[Integration skills](/docs/integrations/skills#the-two-ways-an-employee-calls-an-integration).
-
-But nothing has told the employee what paths exist. Its skill is written from the integration
-record, so with no endpoints to describe, the best it can offer is a plausible guess at what an
-API of that kind usually looks like, marked as unconfirmed.
-
-Declaring endpoints is what turns that into named tools with documented arguments. It is the
-single highest value thing you can put in an integration.
 
 ## Having Nova build it
 
@@ -245,6 +189,75 @@ Confirming a "create invoice" endpoint would mean creating an invoice.
 So an integration can end up part proven: its reads confirmed, its writes documented but
 untested. That is worth knowing when you read a skill, and it is the reason the stamp is worth
 trusting where it appears.
+
+## Declaring it yourself
+
+Create the integration with its endpoints in place:
+
+```json
+{
+  "name": "Acme Billing",
+  "baseUrl": "https://api.acme.com",
+  "authType": "bearer",
+  "credentials": { "API_KEY": "sk_live_..." },
+  "tools": [
+    {
+      "toolName": "acme_get_invoice",
+      "description": "Fetch one invoice by id",
+      "method": "GET",
+      "path": "/v1/invoices/{invoiceId}",
+      "enabled": true,
+      "parameters": {
+        "invoiceId": {
+          "type": "string",
+          "required": true,
+          "in": "path",
+          "description": "The invoice id"
+        }
+      }
+    }
+  ]
+}
+```
+
+`credentials` is required unless `authType` is `none`. The values go straight into the office
+vault as a secret group and the integration is linked to it by reference, so one call sets up
+the connection, the credential and the endpoints together. The employee can call
+`acme_get_invoice` by name on its next boot.
+
+To point an integration at a credential that already exists instead, use
+[`POST /offices/{officeId}/integrations/{integrationId}/secret-refs`](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef).
+
+Adding or changing endpoints later is a
+[`PATCH`](/docs/api-reference/offices/integrations/updateOfficeIntegration) on the integration.
+The skill is rewritten from the updated record automatically, and the employee picks the tools
+up on its next boot.
+
+<Callout type="warn">
+  **`tools` replaces the whole array. It does not merge.** Send the full set you want, because
+  endpoints are declared as a set and a merge would leave no way to remove one. Omit the field
+  to leave the existing endpoints alone.
+</Callout>
+
+<Callout type="warn">
+  **Every parameter needs an `in`.** It says where the value goes on the wire: `path`, `query`,
+  `header`, or `body`. A parameter without one is rejected with a `400` naming the field, rather
+  than stored. A stored one would be dropped when the request was built: the call would go out
+  missing that value and nothing would report it.
+</Callout>
+
+### Endpoints are the part that matters
+
+An integration with no endpoints declared still works. It holds a credential and a host, and
+the employee reaches it with `hos_integration_request`, supplying a path itself. See
+[Integration skills](/docs/integrations/skills#the-two-ways-an-employee-calls-an-integration).
+
+But nothing has told the employee what paths exist. Its skill is written from the integration
+record, so with no endpoints to describe, the best it can offer is a plausible guess at what an
+API of that kind usually looks like, marked as unconfirmed.
+
+Declaring endpoints is what turns that into named tools with documented arguments. It is the
+single highest value thing you can put in an integration.
 
 ## After it exists
 

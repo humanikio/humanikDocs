@@ -77,26 +77,39 @@ Grant that exact pair rather than widening a role. See
 
 ## Sections
 
-Grouped by what the thing is. **Native products** are software we built that an
-AI employee operates directly, and they are the reason this is an operating
-system rather than a connector. Integrations reach the customer's existing stack
-across a boundary we do not own.
+Eleven systems, 368 documented operations, grouped by what the thing is.
+**Native products** are software we built that an AI employee operates directly,
+and they are the reason this is an operating system rather than a connector.
+Integrations reach the customer's existing stack across a boundary we do not
+own.
+
+### Foundation
 
 <Cards>
   <Card
     title="Workspaces"
     href="/docs/api-reference/workspaces"
-    description="Where every workspaceId comes from. 13 operations."
+    description="Where every workspaceId comes from, and spending limits. 13 operations."
   />
+  <Card
+    title="Files and buckets"
+    href="/docs/api-reference/buckets"
+    description="Documents an employee can store, move and search by meaning. 13 operations."
+  />
+</Cards>
+
+### Native products
+
+<Cards>
   <Card
     title="Offices"
     href="/docs/api-reference/offices"
-    description="The workplace one AI employee runs on. 79 operations."
+    description="The workplace one AI employee runs on. 86 operations."
   />
   <Card
     title="CRM"
     href="/docs/api-reference/crm"
-    description="Contacts, conversations, and deals. 36 operations."
+    description="Contacts, conversations, and deals. 45 operations."
   />
   <Card
     title="Browsers"
@@ -106,27 +119,37 @@ across a boundary we do not own.
   <Card
     title="Workflows"
     href="/docs/api-reference/workflows"
-    description="Deterministic automations that call AI employees. 16 operations."
+    description="Deterministic automations that call AI employees. 19 operations."
   />
   <Card
     title="Nova"
     href="/docs/api-reference/nova"
-    description="The assistant that operates the platform for you. 34 operations."
+    description="The assistant that operates the platform for you. 38 operations."
   />
   <Card
     title="Calendars"
     href="/docs/api-reference/calendars"
-    description="Scheduling across providers, shared with employees. 35 operations."
+    description="Scheduling across providers, shared with employees. 41 operations."
+  />
+  <Card
+    title="Bulletin"
+    href="/docs/api-reference/bulletin"
+    description="Boards and tiles that read their own data live. 21 operations."
+  />
+</Cards>
+
+### Platform
+
+<Cards>
+  <Card
+    title="Humanik Cloud"
+    href="/docs/api-reference/cloud"
+    description="The compute platform offices run on. 18 operations."
   />
   <Card
     title="Billing"
     href="/docs/api-reference/billing"
     description="Credit, usage history, and compute cost. 13 operations."
-  />
-  <Card
-    title="Humanik Cloud"
-    href="/docs/api-reference/cloud"
-    description="The compute platform offices run on. 18 operations."
   />
   <Card
     title="Access Control (IAM)"
