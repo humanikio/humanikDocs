@@ -1,4 +1,9 @@
 {
   "title": "Nova",
-  "pages": ["index", "texting", "scheduled-tasks"]
+  "pages": [
+    "index",
+    "texting",
+    "scheduled-tasks",
+    "changing-access"
+  ]
 }

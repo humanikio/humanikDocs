@@ -92,14 +92,37 @@ Two questions, in this order:
 A common mistake is picking a narrow role and then assigning it at the workspace
 root, which quietly grants it everywhere inside.
 
+## Admin-level roles
+
+A role is admin-level when it can manage access control (`iam:manage`). Whoever
+holds one can create any role or policy and assign any role to anyone, including
+themselves. In practice, holding an admin-level role is close to owning the account.
+
+The built-in admin-level roles are Console Admin, IAM Manager and Full Admin. A
+custom role becomes admin-level as soon as one of its policies grants managing
+access control. The IAM pages mark these roles with an **Admin-level** badge.
+
+The permission system treats them like any other role: anyone who can manage access
+control can assign one on the IAM pages. The control is **who holds them**, so keep
+that list short.
+
+<Callout type="warn">
+  **Only a person can give out an admin-level role.** Nova can prepare other access
+  changes for you to approve, but it will not grant, create or assign anything that
+  can manage access control. It can remove an admin-level role, because that lowers
+  access. See [Changing access with Nova](/docs/nova/changing-access).
+</Callout>
+
 ## Forking a built-in
 
 When a built-in is close but not right, copy it into a custom role rather than
 trying to work around it.
 
-In the console, go to **Organization → IAM → Roles**, open the built-in you want
-to start from, and create a new role carrying the policies you want. Custom roles
-live in your tenant and resolve after built-ins.
+In the console, go to **Organization → IAM → Roles** and create a new role. Choose
+the built-in you want under **Start from**: its policies are copied into the new
+role, and you add or remove from there. The page shows what the role can do, in
+plain words, as you change it. Custom roles live in your tenant and resolve after
+built-ins.
 
 <Callout>
   Prefer forking over stacking. Assigning two roles to cover a gap works, but the
@@ -124,4 +147,7 @@ Deny statements are evaluated first and win outright. Use them to carve an
 exception out of a broad allow, and remember that they do not constrain the
 tenant owner.
 
-Policies are managed under **Organization → IAM → Policies**.
+Policies are managed under **Organization → IAM → Policies**. The editor shows
+each area, such as Contacts or Billing, at None, View, Use or Manage, and writes
+the statements for you. A policy that uses deny, or applies different statements in
+different places, opens in **Advanced**, which shows the statements themselves.

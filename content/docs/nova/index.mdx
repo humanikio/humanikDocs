@@ -26,6 +26,7 @@ because there is nothing to run it as.
 <Cards>
   <Card title="Texting Nova" href="/docs/nova/texting" description="Assign a phone number to Nova, then text it, or send it a photo or a file, from your own handset." />
   <Card title="Scheduled tasks" href="/docs/nova/scheduled-tasks" description="Give Nova work to do on a schedule, running with your permissions when nobody is watching." />
+  <Card title="Changing access" href="/docs/nova/changing-access" description="Let Nova prepare role and policy changes for you to approve. It never grants admin-level access." />
 </Cards>
 
 ## How permissions work in every case
@@ -42,3 +43,7 @@ session. When it is a text message or a scheduled task, there is no session, so
 they are reconstructed and checked before the work starts. That mechanism is
 described in
 [Running as a user](/docs/access-control/running-as-a-user).
+
+Changes to access itself follow one more rule. Nova can prepare them for you to
+approve, but it never grants a role that can manage access control. Only a person
+can give that out. See [Changing access with Nova](/docs/nova/changing-access).

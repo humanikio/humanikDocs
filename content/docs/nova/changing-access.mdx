@@ -1,0 +1,107 @@
+---
+title: Changing access with Nova
+description: What Nova can change about who has access, what it will never change, and how you approve it.
+---
+
+In the console, you can ask Nova to change who has access to what. Nova does not
+make the change itself. It prepares it, shows it to you on a card, and the change is
+made only when you approve it.
+
+<Callout>
+  **Nova never grants admin-level access.** A role that can manage access control
+  can grant any role to anyone, so only a person can give it out, on the IAM pages.
+  This is checked by the platform, not left to the assistant. See
+  [what Nova will never do](#what-nova-will-never-do).
+</Callout>
+
+## What Nova can prepare
+
+- **Give a role** to one or more people, in one or more places. For example, the
+  viewer role in one workspace.
+- **Take a role away** from someone.
+- **Give someone one role and remove everything else they hold.** For example,
+  "view only in the Humanik workspace, and nothing else". The card lists every role
+  that will be removed.
+- **Create a custom role or policy**, when no existing role fits the request.
+
+Nova looks for an existing role before it creates anything. When it does create a
+policy, it describes the access in the same terms as the policy editor: each area,
+such as Contacts or Billing, at view, use or manage. It does not write individual
+permission names.
+
+Everything for one request goes on one card. A request that would change nothing,
+because the people already have exactly that access, gets no card. Nova tells you
+instead.
+
+## What Nova will never do
+
+A role is **admin-level** when it can manage access control. Anyone who holds one
+can grant any role to anyone, including themselves, so holding it is close to
+owning the account. The built-in admin-level roles are Console Admin, IAM Manager
+and Full Admin. A custom role that includes managing access control is admin-level
+too. See [Roles](/docs/access-control/roles#admin-level-roles).
+
+Nova will not:
+
+- give anyone an admin-level role
+- create a role or a policy that includes managing access control
+- put managing access control into a new policy for any area
+
+If you ask for any of these, Nova tells you it has to be done by a person, and
+links to the IAM pages. A person who can manage access control can then assign it
+there directly.
+
+**Removing** an admin-level role is different. It lowers access, so Nova can
+prepare it, and the card marks the role as admin-level.
+
+<Callout type="warn">
+  This limit is enforced by the platform. A proposal that contains admin-level
+  access is refused before a card is created, and checked again at the moment you
+  approve. Changing how you phrase the request does not change the result.
+</Callout>
+
+## Approving a change
+
+The card lists each change in plain words, including every role that will be
+removed. Nothing changes until you tap **Approve**. Replying "yes" in the chat does
+not approve it: the card stays open until it is tapped or dismissed.
+
+The card also warns you when a change:
+
+- applies to the **whole account**, which includes workspaces created later
+- would remove **your own** ability to manage access control. Once that is
+  approved you cannot undo it yourself. The account owner or another admin would
+  have to.
+
+When you approve, the change is made **with your permissions**, and everything is
+checked again at that moment. You must still hold `iam:manage` at `console`, and the
+roles, policies and people on the card must still exist. If anything is no longer
+valid, nothing is changed and Nova tells you why.
+
+The parts are applied in this order: a new policy, then a new role, then the roles
+being given, then the roles being removed. Giving before removing means a person
+moved to a narrower role is never left with no access in between. If one part
+fails, Nova reports exactly which parts were done.
+
+## Who can ask
+
+The person asking needs two things: permission to use Nova, and `iam:manage` at
+`console`. How roles, policies and assignments fit together is explained in
+[Access control](/docs/access-control).
+
+## From a text message or a scheduled task
+
+Nova can prepare an access change when you [text it](/docs/nova/texting) or from a
+[scheduled task](/docs/nova/scheduled-tasks). The card waits in the app, and it is
+approved the same way: by tapping it there.
+
+## When a change takes effect
+
+The platform reads a person's roles on every request, so an approved change applies
+from their next request. A Nova task that is already running keeps the permissions
+it started with.
+
+## Not available from chat yet
+
+Editing or deleting an existing role or policy. Use the IAM pages in the console for
+those.
