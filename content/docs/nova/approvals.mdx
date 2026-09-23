@@ -1,0 +1,100 @@
+---
+title: What Nova asks you to approve
+description: Which of Nova's actions wait for your approval, how you give it in the app, by text and from a scheduled task, and what Nova does without asking.
+---
+
+Nova acts as you. For most requests it does the work as soon as you ask: it sends
+the message, updates the record, runs the workflow. A small number of actions are
+different. Nova prepares them and then waits for you to approve.
+
+This page lists those actions and explains how approval works in each place you can
+reach Nova.
+
+## Most work does not wait
+
+When you ask Nova to do something ordinary, such as send a message, edit a contact
+or wake an office, it does it with your permissions and tells you what it did. There
+is no separate approval step.
+
+Nova is instructed to check with you before a step that is hard to undo, such as a
+delete, and it usually does. That is an instruction Nova follows, not a lock. If
+you want an action to be impossible for someone, remove the permission from their
+role. See [Access control](/docs/access-control).
+
+## What waits for your approval
+
+For the actions below, Nova cannot do the work itself. It shows you a card, and the
+action happens only when the card is approved.
+
+| Action | In the app | By text message | From a scheduled task |
+| --- | --- | --- | --- |
+| **Create a scheduled task** | A card. Tap **Approve** | Created straight away (see below) | A card waits in the app |
+| **Change access** (roles, policies, who holds them) | A card. Tap **Approve** | A card waits in the app | A card waits in the app |
+| **Save credentials** for an integration | A secure form in the app | Not possible by text | The form waits in the app |
+| **Add your own model provider key** | A secure form in the app | Not possible by text | The form waits in the app |
+
+Credentials and keys are never typed into a chat or a text message. The form writes
+them straight to secure storage, and Nova does not see them.
+
+## Approving in the app
+
+The card shows exactly what will happen. For a scheduled task that is the full
+instruction and the schedule. For an access change it is every role given and every
+role removed.
+
+**Tap Approve or Dismiss on the card itself.** For a scheduled task or an access
+change, replying "yes" in the chat does not approve it. The card stays open, and
+Nova tells you it is still waiting.
+
+When you approve, the action is done as you, with your permissions at that moment.
+An access change is checked again in full at that point: if you no longer hold the
+permission, nothing changes and Nova tells you why. See
+[Changing access](/docs/nova/changing-access).
+
+If the action fails and nothing was changed, the card stays open so you can try
+again. If part of it was done, the card closes so nothing is done twice, and Nova
+tells you which parts happened.
+
+Some cards are general questions, such as confirming a plan or choosing between
+options. You can answer those by tapping, or by replying in your own words.
+
+## Approving by text message
+
+A text message cannot show a card. When you [text Nova](/docs/nova/texting):
+
+- **A scheduled task you ask for is created straight away.** Your text is the
+  request, so there is nothing further to approve. This applies to one time and
+  repeating tasks alike.
+- **Anything else that needs approval waits in the app.** Nova tells you so, and the
+  end of its reply names what is waiting.
+- **Credentials and keys cannot be added by text.** Nova tells you to use the app.
+
+When a scheduled task is created from a text, the reply always ends with a line
+naming it and how to remove it, for example:
+
+```
+Done: Schedule: Weekly report. Text "cancel Weekly report" to remove it.
+```
+
+<Callout type="warn">
+  **If that line arrives for a task you did not ask for, cancel it.** Anyone who
+  knows your number can send a message that looks like it came from you. The reply
+  still goes to your real phone, which is why it always names what was created.
+  Then check your list of scheduled tasks in your Nova settings.
+</Callout>
+
+## Approvals from a scheduled task
+
+A [scheduled task](/docs/nova/scheduled-tasks) runs when nobody is watching. If it
+prepares something that needs approval, the card waits in the app until you tap it.
+Nothing is approved on your behalf.
+
+A scheduled task cannot approve its own cards, and it cannot create another
+scheduled task without you. If a task that runs often asks for the same kind of
+approval again, the new card replaces its older open one, so only the latest is waiting.
+
+## Related
+
+- [Texting Nova](/docs/nova/texting): setting up a number and confirming your own
+- [Scheduled tasks](/docs/nova/scheduled-tasks): what they are and how to manage them
+- [Changing access](/docs/nova/changing-access): what Nova can and cannot change about access

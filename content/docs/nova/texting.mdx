@@ -136,6 +136,18 @@ Sending a photo costs the same as sending a message.
 If a document ever does get through, Nova reads PDFs and plain text files. Treat
 that as luck rather than something to rely on.
 
+## Approvals by text
+
+A text message cannot show an approval card, so a few things work differently:
+
+- **A scheduled task you ask for is created straight away.** The end of the reply
+  names it and tells you how to remove it.
+- **Anything else that needs approval waits in the app**, and the end of the reply
+  names what is waiting.
+- **Credentials and model provider keys cannot be added by text.** Use the app.
+
+The full list is in [What Nova asks you to approve](/docs/nova/approvals).
+
 ## Costs and limits
 
 A Nova run started by text spends exactly as one started in the app: against your
@@ -159,6 +171,11 @@ that is worth: the reply goes to the real handset rather than to whoever sent th
 message, so no information comes back to them, and every exchange appears in your
 normal Nova chat, where you will see work you did not ask for. Treat an
 unexpected conversation in your history as worth investigating.
+
+This also means a message that looks like yours can create a scheduled task,
+because those are created straight away by text. The reply to your real phone
+always names the task and how to remove it. If one arrives that you did not ask
+for, cancel it.
 
 **The number does not answer calls.** Assigning it to Nova covers text messages.
 A call to the same number is not answered by Nova.

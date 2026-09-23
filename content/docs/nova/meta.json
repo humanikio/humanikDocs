@@ -2,6 +2,7 @@
   "title": "Nova",
   "pages": [
     "index",
+    "approvals",
     "texting",
     "scheduled-tasks",
     "changing-access"

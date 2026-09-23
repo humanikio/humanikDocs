@@ -12,8 +12,9 @@ signed in.
 
 ## Creating one
 
-You do not create these in a settings screen. You ask Nova, in conversation, and
-approve what it proposes.
+You do not create these in a settings screen. You ask Nova, in conversation. In the
+app you then approve what it proposes. By text message, asking is the approval (see
+below).
 
 <Steps>
 
@@ -37,6 +38,13 @@ Read the prompt before approving. It becomes a standing instruction executed wit
 your permissions, so it is worth being as literal as you would be with an
 instruction to a colleague who cannot ask a follow up question.
 
+**Asking by text message.** When you ask for a scheduled task in a text to Nova,
+there is no card to tap. Nova creates it straight away, because your text is the
+request. This applies to one time and repeating tasks alike. The reply ends with a
+line naming what was set up and how to remove it: text "cancel" and the task's name.
+If that line ever arrives for something you did not ask for, cancel it and check your
+list of scheduled tasks. See [What Nova asks you to approve](/docs/nova/approvals).
+
 </Step>
 
 <Step>
@@ -52,9 +60,10 @@ reschedule, disable, run one now, or delete it.
 
 <Callout>
   **There is no endpoint that creates one, deliberately.** Every scheduled task
-  exists because a person approved a card Nova posted in conversation. An endpoint
-  that made one directly would be a second door into the same room with no
-  approval behind it. The API can list, update, delete and run them: see
+  exists because a person asked Nova for it: by approving a card in the app, or by
+  asking in a text from their verified phone. A scheduled task cannot create another
+  one by itself. An endpoint that made one directly would be a second way in with no
+  person behind it. The API can list, update, delete and run them: see
   [Scheduled tasks](/docs/api-reference/nova/scheduled-tasks/listNovaCrons).
 </Callout>
 
