@@ -239,9 +239,15 @@ components:
         linkAutoCreateContact:
           type: boolean
           description: |
-            Whether a booking creates or matches a CRM contact for the person who
-            booked. Defaults to true. Set false when you would rather an
-            automation decide, using a booking as its trigger.
+            Whether a booking may create a CRM contact for the person who
+            booked. Defaults to true.
+
+            The booker is matched by phone number first, then by email. With
+            this on, a booker who matches nobody becomes a new contact holding
+            both. With it off, an existing contact is **still matched and
+            attached**; only the create is skipped, so a first-time booker
+            arrives with no contact and an automation can create one. See
+            [Booking links](/docs/calendars/booking-links#the-person-who-booked-becomes-a-contact).
         status:
           type: string
           enum: [active, archived, deleted]
@@ -2131,6 +2137,12 @@ paths:
         **Only `email` is validated.** Questions the link marks as required are
         enforced by the booking page, not by this endpoint, so a direct caller
         can omit them.
+
+        **The booker is attached to a contact** in the calendar's workspace,
+        matched by phone number (any answered question of type `phone`), then
+        email, and created when nothing matches and the calendar's
+        `linkAutoCreateContact` allows it. See
+        [Booking links](/docs/calendars/booking-links#the-person-who-booked-becomes-a-contact).
 
         **Keep `manageToken`.** It is the only way back to this booking, and it
         is not recoverable from any other endpoint. Rarely, the appointment is

@@ -119,6 +119,105 @@ deliberate, so a day held open with a placeholder still takes bookings.
   it to a later slot the same day is refused. Moving it to another day works.
 </Callout>
 
+## The questions on the page
+
+Every booking page asks for a **name** and an **email address**, and both are
+always required. They cannot be removed: the email is where the invitation goes,
+and the name titles the appointment.
+
+A new link also asks two optional questions, which you can edit or remove:
+
+| Question | Type | Required |
+| --- | --- | --- |
+| Phone | Phone | No |
+| Additional notes | Long text | No |
+
+Under **Booking questions** you can add your own. Each one is short text, long
+text, phone, or a dropdown, and each can be marked required.
+
+Answers go to three places:
+
+- **The appointment itself.** Every answer except name and email is written into
+  the event description as `Label: answer`, so you see it in Google or Outlook.
+- **Automations started by the booking.** Every answer is available by its
+  question key.
+- **The booking record**, which is what the booker's reschedule and cancel page
+  reads.
+
+Answers are **not** saved onto the contact, apart from the name, email and phone
+described below.
+
+<Callout type="warn">
+  **Required questions are enforced by the booking page, not by the API.** A
+  direct call to [Book a slot](/docs/api-reference/calendars/public-booking/bookSlot)
+  only has to include an email. If an automation depends on an answer, check that
+  it is there.
+</Callout>
+
+## The person who booked becomes a contact
+
+When someone books, the booking is attached to a contact in the calendar's
+workspace. This is controlled on the calendar, not the link: **Manage**, then
+**Details**, then **Auto-create a contact on booking**. It is on by default.
+
+With it on, the booker is resolved in this order:
+
+<Steps>
+
+<Step>
+**A one-time link minted for a contact** always attaches to that contact.
+Nothing is looked up.
+</Step>
+
+<Step>
+**Otherwise, by phone number**, if the page asked for one and the booker gave
+it. Any question of type Phone counts, not only the default one.
+</Step>
+
+<Step>
+**Then by email address.**
+</Step>
+
+<Step>
+**If nothing matches, a new contact is created** with the booker's name, email
+and phone number together.
+</Step>
+
+</Steps>
+
+A contact that is matched **gains whichever of phone or email it was missing**,
+so after one booking the person can be found by both. Two things are never done
+automatically, because each would move a conversation onto the wrong record:
+
+- A contact that already has a different email or phone keeps it. The new one is
+  not added over the top.
+- A phone number or email that already belongs to a different contact is not
+  taken from it. Two records that turn out to be one person are left for you to
+  combine.
+
+**With the setting off**, the booking still happens and an existing contact is
+still matched and attached. The only difference is that no new contact is
+created, so a first-time booker arrives with no contact and an automation can
+create one instead.
+
+## Bookings and automations
+
+A booking starts the automations on **the calendar its link belongs to**, once,
+the moment it is made.
+
+The appointment is written to a real account, and that account can also be bound
+to other calendars, for example a shared inbox that several teams watch. The
+same meeting then appears on those calendars too. It shows there like any other
+event, and **it does not start their automations** or create contacts in their
+workspaces. The booking has one home.
+
+<Callout>
+  **This applies to bookings made through a link.** An event someone adds
+  directly in Google or Outlook has no link, so each calendar it appears on
+  treats it as its own, and each one's automations start. Those events carry no
+  answers and no phone number, so the attendee is matched by email only.
+</Callout>
+
 ## What the booker sees afterwards
 
 Under **After booking** you choose one of two things.
