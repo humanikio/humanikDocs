@@ -1060,34 +1060,42 @@ paths:
       summary: Delete a workflow
       tags: [Workflows]
       description: |
-        Removes the workflow and every event subscription derived from it, in
-        one batch. Once this returns, no new run can start from its triggers.
+        Removes the workflow and every event subscription derived from it. Once
+        this returns, no new run can start from its triggers.
 
-        **What is not removed.** Version snapshots, run history, and the
-        compiled graph are left in place rather than cascaded. They become
-        unreachable through this API, since every route to them is nested under
-        a workflow that no longer exists.
+        **Runs waiting in the workflow are cancelled.** Every run that is
+        `waiting` or `pending` is marked `cancelled` with the reason "Workflow
+        deleted", and its scheduled wake is removed, so a reminder or follow-up
+        that was due later is not sent. The count is returned as
+        `runsCancelled`.
 
-        **Runs already in flight are not cancelled.** A run suspended at a wait
-        node resumes on schedule and continues from where it stopped. Check
-        [List runs](/docs/api-reference/workflows/runs/listWorkflowRuns) for
-        anything in `running` or `waiting` before deleting, if that matters to
-        you.
+        **A run that is executing at that moment is not interrupted.** It
+        finishes the steps it is on. If it reaches a wait, the wait ends the run
+        instead of resuming it later.
+
+        **What is kept.** Run records stay, marked `cancelled`, as history.
+        Version snapshots are kept too. Both become unreachable through this
+        API, since every route to them is nested under a workflow that no
+        longer exists.
 
         **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
       responses:
         '200':
-          description: Deleted. No body beyond the success flag.
+          description: Deleted, with the number of waiting runs that were cancelled.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, const: true }
+                  runsCancelled:
+                    type: integer
+                    description: Runs that were `waiting` or `pending` and are now `cancelled`.
               examples:
                 deleted:
                   value:
                     success: true
+                    runsCancelled: 3
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
