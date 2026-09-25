@@ -56,8 +56,15 @@ steps can use them without asking again:
   key `notes` gives you `{{trigger.form.notes}}`
 - `{{trigger.bookingLinkName}}` for the page it came through
 
-These are the natural inputs to **Find Contact** and **If/Else**: look the
-person up by `{{trigger.bookerEmail}}`, then branch on an answer they gave.
+A page can ask for an email, a phone number, or both, so either
+`{{trigger.bookerEmail}}` or `{{trigger.bookerPhone}}` can be empty. When the
+calendar creates contacts for bookings, `{{trigger.contactId}}` is already the
+person who booked, matched by phone and then email, so later steps can use it
+directly. Otherwise, use whichever of the two the page asks for as the input to
+**Find Contact**, then branch on an answer with **If/Else**.
+
+A booker who gave only a phone number receives no calendar invitation. A
+**Send SMS** step is the way to send them the details.
 
 An appointment created directly in Google or Outlook has none of this, because
 nobody filled a form in. A custom question also resolves empty on a page that
