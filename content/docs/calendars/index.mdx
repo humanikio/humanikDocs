@@ -88,10 +88,49 @@ Two consequences worth planning for:
   container, its members and its bindings. The appointments stay where they were
   written.
 
-<Callout>
-  **A broken connection stays broken.** If an account's authorisation fails,
-  syncing will not repair it. Rebind the account.
-</Callout>
+## When a new meeting starts an automation
+
+Opening a calendar always shows its accounts as they are now. Automations work
+differently: a meeting starts the automations on a calendar once the platform has
+noticed it, and how soon that happens depends on how the meeting was made.
+
+| How the meeting was made | When it starts the calendar's automations |
+| --- | --- |
+| Booked through a [booking link](/docs/calendars/booking-links) | Immediately |
+| Added directly in Google or Outlook | Within 30 minutes |
+| Added directly, and someone opens the calendar before then | When the calendar is opened |
+| Added directly, and someone presses **Sync** on the calendar | Straight away |
+| Already on the account when you bound it | Never. Binding an account does not replay what was already there |
+| Already over by the time it is noticed | Never |
+
+### An account bound to several calendars
+
+The same Google or Outlook calendar can be bound to more than one calendar here,
+for example a shared inbox that three teams each watch.
+
+**A meeting added directly in Google or Outlook appears on every one of them,
+and starts each calendar's automations.** Three calendars mean three sets of
+automations for the same meeting. The Sources tab marks an account that is bound
+elsewhere with "Also on N other calendars".
+
+A booking made through a booking link is different. It belongs to the calendar
+its link is on, and only that calendar's automations start. The copies on the
+other calendars show the meeting and do nothing else.
+
+## When a connection fails
+
+If an account stops syncing, new meetings on it stop reaching the calendar. The
+Sources tab shows what happened:
+
+| Status | Means | What to do |
+| --- | --- | --- |
+| **Active** | Syncing normally | Nothing |
+| **Retrying** | The last sync failed, usually because of an outage at the provider. It is retried after 30 minutes, 1 hour, 2 hours, 4 hours, and then every 6 hours | Usually nothing. Press **Sync** to try straight away |
+| **Reconnect needed** | The provider refused the connection, for example because access was revoked | Remove the account and add it again |
+
+Admins who can manage the calendar are
+[notified](/docs/notifications#calendar-sync-alerts) when an account needs
+reconnecting, or when it has failed three times in a row.
 
 ## Where to go next
 
@@ -115,5 +154,10 @@ Two consequences worth planning for:
     title="Workflows"
     href="/docs/workflows"
     description="A booking can start a deterministic sequence."
+  />
+  <Card
+    title="Notifications"
+    href="/docs/notifications"
+    description="Who is told when an account stops syncing, and why."
   />
 </Cards>

@@ -103,7 +103,12 @@ custom role becomes admin-level as soon as one of its policies grants managing
 access control. The IAM pages mark these roles with an **Admin-level** badge.
 
 The platform decides which roles are admin-level, in one place. The IAM pages, the
-role summary and Nova all read that same answer, so they always agree.
+role summary, Nova and [notifications](/docs/notifications) all read that same
+answer, so they always agree.
+
+Admin-level roles also decide who receives operational alerts, such as a calendar
+account that stopped syncing. They go to admins whose admin role reaches the
+resource in question, so an admin of one workspace is not alerted about another.
 
 The permission system treats them like any other role: anyone who can manage access
 control can assign one on the IAM pages. The control is **who holds them**, so keep

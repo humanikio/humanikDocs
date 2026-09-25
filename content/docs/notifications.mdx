@@ -1,0 +1,129 @@
+---
+title: Notifications
+description: The bell in the console, what puts something in it, and how access control decides who is told.
+---
+
+A **notification** is an item in the bell at the top of the console. It pings
+when it arrives, shows a short summary, and takes you to the thing it is about
+when you click it.
+
+Notifications belong to a workspace. You see a workspace's notifications while
+you are working in it, and each one is about something inside that workspace: a
+chat, an office, a calendar.
+
+<Callout>
+  **Notifications are shown in the console only.** Nothing is sent by email or
+  text message yet, so an alert reaches you the next time you open the console.
+</Callout>
+
+## What sends a notification
+
+| You are told when | Who is told | Clicking it opens |
+| --- | --- | --- |
+| Someone sends you a private message | The other person in the conversation | The conversation |
+| A message arrives in a group chat you are in | Every person in the chat except the sender | The chat |
+| An office's integration call fails | People who can read that office | The office's logs, filtered to that integration |
+| A calendar account stops syncing | Admins who can manage that calendar | The calendar's Sources tab |
+
+In a group chat, a message from an AI employee notifies the people in the chat
+the same way a person's message does.
+
+## Who is told is decided by access control
+
+Chats have a member list, and being in a chat is what lets you read it, so chat
+notifications go to the members.
+
+Everything else has no member list. Telling the whole account would reach people
+who cannot open the thing, and a hand-kept list goes out of date the moment
+someone's role changes. So each of these notifications names an
+[action](/docs/access-control/actions) on a resource, and the recipients are
+exactly the people whose roles allow that action on that resource.
+
+**If you could not open the page a notification links to, you are not sent it.**
+The check is the same one that decides whether you can open that page, so the
+two cannot disagree, and nobody has to maintain a list.
+
+| Notification | Action | Resource | Audience |
+| --- | --- | --- | --- |
+| Integration call failed | `office:read` | The office | Everyone who qualifies |
+| Calendar account stopped syncing | `calendar:manage` | The calendar | Admins only |
+
+### Everyone who qualifies, or admins only
+
+A notification is sent to one of two audiences.
+
+**Everyone who qualifies** is every person whose roles allow the action on the
+resource. It suits information anyone entitled to the resource should have. An
+integration failure goes to everyone who can read the office, because they can
+read the logs it links to, even if fixing the integration needs more access than
+they have.
+
+**Admins only** narrows that to people holding an
+[admin-level role](/docs/access-control/roles#admin-level-roles), and it is the
+admin role itself that must allow the action on the resource. Someone who is an
+admin of one workspace and an ordinary member of another is not treated as an
+admin of the second. This audience suits operational alerts: something is broken
+and a person who runs the account should look at it. A sync problem is not worth
+interrupting every member who can read the calendar.
+
+The account owner always qualifies. Service accounts are never sent
+notifications, because nothing reads them. A single notification reaches at most
+50 people.
+
+## How often you are told
+
+Each kind of notification is limited in its own way, so a busy chat or a failing
+account does not bury everything else.
+
+| Notification | How often |
+| --- | --- |
+| Private message | Once per message |
+| Group chat | Once per chat until you read it. Later messages update the same notification and add to its count without pinging again. Reading the chat starts a new cycle |
+| Integration call failed | Once per failed call. An integration that keeps failing keeps notifying |
+| Calendar account stopped syncing | Once per outage, described below |
+
+### Calendar sync alerts
+
+A calendar's bound Google or Outlook account can stop syncing. New meetings on
+that account then stop reaching the calendar, and meetings added directly in
+Google or Outlook stop starting its automations.
+
+| What went wrong | What happens | When admins are told |
+| --- | --- | --- |
+| The provider refused the connection, for example because access was revoked | The account is marked **Reconnect needed** and is not retried, because only binding it again can fix it | At once |
+| Anything else, such as an outage at the provider | The account is marked **Retrying** and tried again after 30 minutes, 1 hour, 2 hours, 4 hours, and then every 6 hours | After the third failure in a row, about three and a half hours in |
+
+You are told once per outage. When the account syncs again it is back to normal,
+and if it fails again later, that is a new outage and admins are told again. A
+short outage that fixes itself on the next retry never sends anything.
+
+See [Calendars and booking](/docs/calendars#when-a-connection-fails) for what to
+do when you receive one.
+
+## Reading and clearing
+
+In the bell you can open a notification, which marks it read, remove one with its
+cross, mark everything read, or clear everything. The unread count and the sound
+follow what is still unread.
+
+There are no per-type settings yet, so a notification cannot be muted.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Actions"
+    href="/docs/access-control/actions"
+    description="Every action, and what it lets a role do."
+  />
+  <Card
+    title="Roles"
+    href="/docs/access-control/roles"
+    description="Built-in roles, custom roles, and which ones are admin-level."
+  />
+  <Card
+    title="Calendars and booking"
+    href="/docs/calendars"
+    description="Bound accounts, syncing, and what to do when one fails."
+  />
+</Cards>
