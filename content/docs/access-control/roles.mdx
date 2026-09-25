@@ -102,6 +102,9 @@ The built-in admin-level roles are Console Admin, IAM Manager and Full Admin. A
 custom role becomes admin-level as soon as one of its policies grants managing
 access control. The IAM pages mark these roles with an **Admin-level** badge.
 
+The platform decides which roles are admin-level, in one place. The IAM pages, the
+role summary and Nova all read that same answer, so they always agree.
+
 The permission system treats them like any other role: anyone who can manage access
 control can assign one on the IAM pages. The control is **who holds them**, so keep
 that list short.
