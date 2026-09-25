@@ -23,7 +23,7 @@ chat, an office, a calendar.
 | Someone sends you a private message | The other person in the conversation | The conversation |
 | A message arrives in a group chat you are in | Every person in the chat except the sender | The chat |
 | An office's integration call fails | People who can read that office | The office's logs, filtered to that integration |
-| A calendar account stops syncing | Admins who can manage that calendar | The calendar's Sources tab |
+| A calendar account fails to sync | Admins who can manage that calendar | The calendar's Sources tab |
 
 In a group chat, a message from an AI employee notifies the people in the chat
 the same way a person's message does.
@@ -46,7 +46,7 @@ two cannot disagree, and nobody has to maintain a list.
 | Notification | Action | Resource | Audience |
 | --- | --- | --- | --- |
 | Integration call failed | `office:read` | The office | Everyone who qualifies |
-| Calendar account stopped syncing | `calendar:manage` | The calendar | Admins only |
+| Calendar account failed to sync | `calendar:manage` | The calendar | Admins only |
 
 ### Everyone who qualifies, or admins only
 
@@ -80,7 +80,7 @@ account does not bury everything else.
 | Private message | Once per message |
 | Group chat | Once per chat until you read it. Later messages update the same notification and add to its count without pinging again. Reading the chat starts a new cycle |
 | Integration call failed | Once per failed call. An integration that keeps failing keeps notifying |
-| Calendar account stopped syncing | Once per outage, described below |
+| Calendar account failed to sync | Every failure, grouped into one notification per account, described below |
 
 ### Calendar sync alerts
 
@@ -88,14 +88,16 @@ A calendar's bound Google or Outlook account can stop syncing. New meetings on
 that account then stop reaching the calendar, and meetings added directly in
 Google or Outlook stop starting its automations.
 
-| What went wrong | What happens | When admins are told |
-| --- | --- | --- |
-| The provider refused the connection, for example because access was revoked | The account is marked **Reconnect needed** and is not retried, because only binding it again can fix it | At once |
-| Anything else, such as an outage at the provider | The account is marked **Retrying** and tried again after 30 minutes, 1 hour, 2 hours, 4 hours, and then every 6 hours | After the third failure in a row, about three and a half hours in |
+| What went wrong | What happens |
+| --- | --- |
+| The provider refused the connection, for example because access was revoked | The account is marked **Reconnect needed** and is not retried, because only binding it again can fix it |
+| Anything else, such as an outage at the provider | The account is marked **Retrying** and tried again after 30 minutes, 1 hour, 2 hours, 4 hours, and then every 6 hours |
 
-You are told once per outage. When the account syncs again it is back to normal,
-and if it fails again later, that is a new outage and admins are told again. A
-short outage that fixes itself on the next retry never sends anything.
+**Admins are told about every failure.** Failures of the same account are grouped
+into one notification: each new failure updates it with the latest error and adds
+to its count, shown as "N failures". It pings when it first arrives, and again
+for the next failure after you have read it, so an account retried every few
+hours does not fill the bell.
 
 See [Calendars and booking](/docs/calendars#when-a-connection-fails) for what to
 do when you receive one.
