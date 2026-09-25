@@ -1745,10 +1745,15 @@ paths:
                     **replaces** the default set of name, email, phone and notes
                     rather than adding to it, so include the ones you still want.
 
-                    > **`required` is not enforced when a booking is made.** It
-                    > marks a field required on the page, and a request that
-                    > omits it is still accepted. Validate anything you depend on
-                    > yourself.
+                    **The set must be bookable, or the request is refused with
+                    `400`.** A `name` question must be present and required.
+                    There must be an `email` question (key `email`) or a
+                    question of type `phone`, and at least one of them must be
+                    required. Keys must be unique, and a `select` needs options.
+
+                    Without an `email` question the booker gets no calendar
+                    invitation, because the invitation is sent to that
+                    address.
                   properties:
                     fields:
                       type: array
@@ -2106,7 +2111,7 @@ paths:
                         enum: [meet, teams, none]
                       form:
                         type: object
-                        description: The questions to ask. `name` and `email` are always present.
+                        description: The questions to ask. `name` is always present, with an email or phone question or both.
         '404': { $ref: '#/components/responses/LinkNotFound' }
         '410': { $ref: '#/components/responses/LinkUnavailable' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -2134,9 +2139,12 @@ paths:
         one booking; the loser gets `410`. If the provider write then fails, the
         link is released rather than burnt.
 
-        **Only `email` is validated.** Questions the link marks as required are
-        enforced by the booking page, not by this endpoint, so a direct caller
-        can omit them.
+        **Answers are validated against the link's questions.** A required
+        answer that is missing, an email or phone number that is not valid, a
+        `select` value that is not an option, or an answer over 2000 characters
+        is refused with `400`, and the message names the question. **An email or
+        a phone number must be given.** Keys that are not questions on the link
+        are ignored.
 
         **The booker is attached to a contact** in the calendar's workspace,
         matched by phone number (any answered question of type `phone`), then
@@ -2167,8 +2175,9 @@ paths:
                   type: object
                   additionalProperties: true
                   description: |
-                    Answers keyed by question key. `email` is required. `name` is
-                    asked by every page and used to title the appointment.
+                    Answers keyed by question key. `name` is required on every
+                    page and titles the appointment. At least one of `email` or
+                    a phone answer is required, depending on what the page asks.
                   examples:
                     - name: Ada Lovelace
                       email: ada@example.com

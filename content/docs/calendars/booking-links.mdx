@@ -121,16 +121,28 @@ deliberate, so a day held open with a placeholder still takes bookings.
 
 ## The questions on the page
 
-Every booking page asks for a **name** and an **email address**, and both are
-always required. They cannot be removed: the email is where the invitation goes,
-and the name titles the appointment.
+Every booking page asks for a **name**, and it is always required: it titles the
+appointment.
 
-A new link also asks two optional questions, which you can edit or remove:
+A new link also asks these, which you can edit or remove:
 
 | Question | Type | Required |
 | --- | --- | --- |
+| Email | Email | Yes |
 | Phone | Phone | No |
 | Additional notes | Long text | No |
+
+**Every page must be able to reach the person who books.** It has to ask for an
+email address or a phone number, and at least one of them must be required. A
+link that breaks this is refused when you save it, in the console and through
+the API.
+
+<Callout type="warn">
+  **Without an email question, the booker gets no calendar invitation.** The
+  invitation is sent to their email address, so a phone-only booker has only
+  the confirmation page and its reschedule link. Your own calendar event is
+  created as usual. An automation can text them the details instead.
+</Callout>
 
 Under **Booking questions** you can add your own. Each one is short text, long
 text, phone, or a dropdown, and each can be marked required.
@@ -147,12 +159,10 @@ Answers go to three places:
 Answers are **not** saved onto the contact, apart from the name, email and phone
 described below.
 
-<Callout type="warn">
-  **Required questions are enforced by the booking page, not by the API.** A
-  direct call to [Book a slot](/docs/api-reference/calendars/public-booking/bookSlot)
-  only has to include an email. If an automation depends on an answer, check that
-  it is there.
-</Callout>
+Answers are checked when the booking is made, on the page and again by the API:
+required questions must be answered, an email or phone number must be valid, a
+dropdown answer must be one of its options, and each answer is limited to 2000
+characters. Answers to questions the page does not ask are ignored.
 
 ## The person who booked becomes a contact
 
