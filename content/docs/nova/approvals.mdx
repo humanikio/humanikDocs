@@ -29,7 +29,10 @@ action happens only when the card is approved.
 | Action | In the app | By text message | From a scheduled task |
 | --- | --- | --- | --- |
 | **Create a scheduled task** | A card. Tap **Approve** | Created straight away (see below) | A card waits in the app |
-| **Change access** (roles, policies, who holds them) | A card. Tap **Approve** | A card waits in the app | A card waits in the app |
+| **Change access** (roles, policies, who holds them) | A card. Tap **Approve** | Reply with the one time code, or tap in the app | A card waits in the app |
+| **Create a website** | A form. Fill it in and save | Reply with the one time code, or finish it in the app | The form waits in the app |
+| **Apply hierarchy changes** | A card. Apply or reject each change | Reply with the one time code to apply all of them, or choose in the app | A card waits in the app |
+| **Save an ingest transform** | A card. Choose what happens on a failure, then save | Reply with the one time code to save it as proposed, or choose in the app | A card waits in the app |
 | **Save credentials** for an integration | A secure form in the app | Not possible by text | The form waits in the app |
 | **Add your own model provider key** | A secure form in the app | Not possible by text | The form waits in the app |
 
@@ -65,6 +68,17 @@ A text message cannot show a card. When you [text Nova](/docs/nova/texting):
 - **A scheduled task you ask for is created straight away.** Your text is the
   request, so there is nothing further to approve. This applies to one time and
   repeating tasks alike.
+- **Some approvals can be given with a one time code:** an access change, a new
+  website, hierarchy changes and an ingest transform. The end of Nova's reply names
+  the request and gives a six digit code. Reply `YES` and the code to approve it, or
+  use the card in the app.
+- **A code approves exactly what Nova proposed.** In the app you can adjust some of
+  these first: type the website's name and address, apply only some hierarchy
+  changes, or choose what a transform does on a failure. By text, the website is
+  created only if Nova filled in both its name and address, all pending hierarchy
+  changes are applied, and the transform is saved with the failure behaviour Nova
+  proposed. A website created by text is not assigned to an office; do that in the
+  app.
 - **Anything else that needs approval waits in the app.** Nova tells you so, and the
   end of its reply names what is waiting.
 - **Credentials and keys cannot be added by text.** Nova tells you to use the app.
@@ -75,6 +89,20 @@ naming it and how to remove it, for example:
 ```
 Done: Schedule: Weekly report. Text "cancel Weekly report" to remove it.
 ```
+
+A code looks like this at the end of a reply:
+
+```
+Waiting in the app for you: Give Sam the Sales role.
+To approve "Give Sam the Sales role" by text, reply YES 482913 (works once, for 10 minutes).
+```
+
+The code works once, for ten minutes, and only for that one request. A newer request
+replaces it. After five wrong attempts it stops working, and the card can still be
+approved in the app. A plain "yes" without the code does not approve anything.
+
+The code exists because it is sent only to your phone. Replying with it proves the
+reply came from the phone that received it.
 
 <Callout type="warn">
   **If that line arrives for a task you did not ask for, cancel it.** Anyone who
