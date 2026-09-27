@@ -51,17 +51,25 @@ anything else looks at the message.
 | Someone texts | What happens |
 | --- | --- |
 | `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END`, `REVOKE`, `OPTOUT` | They are marked opted out, and get a confirmation saying so |
-| `START`, `YES`, `UNSTOP` | The opt out is cleared, and they get a confirmation |
+| `START` or `UNSTOP`, when they are opted out | The opt out is cleared, and they get a confirmation |
 | `HELP` or `INFO` | They get your help text, or a default that names STOP |
 
-Matching runs on the first word, so "STOP please" counts. Short messages are also
-read for plain language, so "please stop", "opt me out" and "take me off" are
-honoured as well. That second check applies only to messages of six words or
-fewer, because a longer message that happens to contain the word "stop" is a
-sentence rather than an instruction.
+**A keyword counts only when it is the whole message.** Case and punctuation are
+ignored, so `Stop` and `stop.` count, but "stop the delivery", "cancel my 3pm" and
+"yes please" are ordinary messages and reach the employee. This is the same rule
+Twilio applies. A short request to stop that is the whole message is also honoured:
+"please stop", "opt me out", "take me off your list", "stop texting me".
+
+`START` and `UNSTOP` only do something for a person who is opted out. From anyone
+else they are ordinary words. `YES` is not an opt in keyword by default, because it
+is the most common word in any reply.
 
 A keyword match ends there: the message does not reach the employee and nothing
 else replies to it.
+
+**A longer request to stop reaches the employee.** For example: "thanks, but please
+stop texting me about this". The employee records the opt out on the contact, and
+the person gets the same confirmation text as for `STOP`.
 
 You can change which words count as opting out or back in. `HELP` and `INFO` are
 fixed, because carrier rules require them.
