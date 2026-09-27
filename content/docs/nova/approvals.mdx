@@ -69,9 +69,9 @@ A text message cannot show a card. When you [text Nova](/docs/nova/texting):
   request, so there is nothing further to approve. This applies to one time and
   repeating tasks alike.
 - **Some approvals can be given with a one time code:** an access change, a new
-  website, hierarchy changes and an ingest transform. The end of Nova's reply names
-  the request and gives a six digit code. Reply `YES` and the code to approve it, or
-  use the card in the app.
+  website, hierarchy changes and an ingest transform. Right after Nova's reply you
+  get a separate text from the same number with a six digit code. Reply with the
+  code to approve it, or use the card in the app.
 - **A code approves exactly what Nova proposed.** In the app you can adjust some of
   these first: type the website's name and address, apply only some hierarchy
   changes, or choose what a transform does on a failure. By text, the website is
@@ -90,12 +90,13 @@ naming it and how to remove it, for example:
 Done: Schedule: Weekly report. Text "cancel Weekly report" to remove it.
 ```
 
-A code looks like this at the end of a reply:
+The code comes in its own text, written by Humanik rather than by Nova, like this:
 
 ```
-Waiting in the app for you: Give Sam the Sales role.
-To approve "Give Sam the Sales role" by text, reply YES 482913 (works once, for 10 minutes).
+Humanik approval code: 482913 for "Give Sam the Sales role". Reply with this code to approve. It works once, for 10 minutes. Humanik will never ask you for it any other way.
 ```
+
+You can reply with the code on its own, or with `YES` in front of it.
 
 The code works once, for ten minutes, and only for that one request. A newer request
 replaces it. After five wrong attempts it stops working, and the card can still be
