@@ -1884,6 +1884,11 @@ paths:
         **Changes apply to future bookings only.** Anything already booked keeps
         the terms it was booked under.
 
+        **Each field you send replaces the stored value whole.** Fields you do
+        not send are left as they are. Send the complete `workingHours` week: a
+        weekday you leave out has no hours and cannot be booked. `dateOverrides`
+        works the same way, so send every date you want to keep.
+
         **Permission:** `calendar:manage` @ `calendar/{calendarId}`
       requestBody:
         required: true
@@ -1892,7 +1897,7 @@ paths:
             schema:
               type: object
               additionalProperties: true
-              description: The fields to change, in the shape create accepts.
+              description: The fields to change, in the shape create accepts. Each one replaces the stored value whole.
       responses:
         '200':
           description: Updated.
