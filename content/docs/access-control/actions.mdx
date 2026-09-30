@@ -133,11 +133,12 @@ granted at the workspace above it to cover every office in it.
 - [List budgets](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets)
 - [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces)
 </Accordion>
-<Accordion title="Endpoints that need `workspace:manage` (7)">
+<Accordion title="Endpoints that need `workspace:manage` (8)">
 - [Create a workspace](/docs/api-reference/workspaces/workspaces/createWorkspace)
 - [Create a budget](/docs/api-reference/workspaces/budgets/createWorkspaceBudget)
 - [Delete a workspace](/docs/api-reference/workspaces/workspaces/deleteWorkspace)
 - [Delete a budget](/docs/api-reference/workspaces/budgets/deleteWorkspaceBudget)
+- [Update a scheduled task](/docs/api-reference/nova/scheduled-tasks/updateNovaCron)
 - [Rename a workspace](/docs/api-reference/workspaces/workspaces/updateWorkspace)
 - [Update a budget](/docs/api-reference/workspaces/budgets/updateWorkspaceBudget)
 - [Set the timezone](/docs/api-reference/workspaces/workspaces/updateWorkspaceTimeConfig)
@@ -392,10 +393,19 @@ granted at the workspace above it to cover every office in it.
 
 | Action | Allows | Usually written at |
 | --- | --- | --- |
-| `secrets:read` | See which credentials exist for an office or browser. Never their values. | `office` |
+| `secrets:list` | See which credentials exist for an office, browser or account: secret and field names. Never their values. | `office` |
+| `secrets:read` | Reveal a credential's value. Also allows everything secrets:list does. | `office` |
 | `secrets:write` | Add, change and remove credentials injected at startup. | `office` |
 
 <Accordions>
+<Accordion title="Endpoints that need `secrets:list` (6)">
+- [List fields](/docs/api-reference/browsers/environment-secrets/listBrowserSecretFields)
+- [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets)
+- [List field names](/docs/api-reference/offices/environment-secrets/listOfficeSecretFields)
+- [List secret groups](/docs/api-reference/offices/environment-secrets/listOfficeSecrets)
+- [Read a field](/docs/api-reference/browsers/environment-secrets/readBrowserSecretField)
+- [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
+</Accordion>
 <Accordion title="Endpoints that need `secrets:read` (6)">
 - [List fields](/docs/api-reference/browsers/environment-secrets/listBrowserSecretFields)
 - [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets)
@@ -502,7 +512,7 @@ granted at the workspace above it to cover every office in it.
 | `nova:manage` | Send prompts to the assistant, and change model and personality settings. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `nova:read` (12)">
+<Accordion title="Endpoints that need `nova:read` (13)">
 - [Boot Nova](/docs/api-reference/nova/configuration/bootNova)
 - [Get canvas mode](/docs/api-reference/nova/preferences/getNovaCanvasMode)
 - [Get configuration](/docs/api-reference/nova/configuration/getNovaConfig)
@@ -512,11 +522,12 @@ granted at the workspace above it to cover every office in it.
 - [Get session state](/docs/api-reference/nova/running-nova/getNovaSessionConfig)
 - [Get voice settings](/docs/api-reference/nova/voice/getNovaVoiceConfig)
 - [List chats](/docs/api-reference/nova/running-nova/listNovaChats)
+- [List scheduled tasks](/docs/api-reference/nova/scheduled-tasks/listNovaCrons)
 - [List models](/docs/api-reference/nova/preferences/listNovaModels)
 - [List prompt versions](/docs/api-reference/nova/personality/listNovaPromptVersions)
 - [List voices](/docs/api-reference/nova/voice/listNovaVoices)
 </Accordion>
-<Accordion title="Endpoints that need `nova:manage` (22)">
+<Accordion title="Endpoints that need `nova:manage` (25)">
 - [Cancel the running turn](/docs/api-reference/nova/running-nova/cancelNovaCycle)
 - [Create a chat](/docs/api-reference/nova/running-nova/createNovaChat)
 - [Create configuration](/docs/api-reference/nova/configuration/createNovaConfig)
@@ -524,6 +535,7 @@ granted at the workspace above it to cover every office in it.
 - [Save a prompt version](/docs/api-reference/nova/personality/createNovaPromptVersion)
 - [Delete a chat](/docs/api-reference/nova/running-nova/deleteNovaChat)
 - [Delete configuration](/docs/api-reference/nova/configuration/deleteNovaConfig)
+- [Delete a scheduled task](/docs/api-reference/nova/scheduled-tasks/deleteNovaCron)
 - [Delete a preview session](/docs/api-reference/nova/preview-ground/deleteNovaPreviewSession)
 - [Improve a prompt](/docs/api-reference/nova/personality/enhanceNovaPrompt)
 - [Get a preview session](/docs/api-reference/nova/preview-ground/getNovaPreviewSession)
@@ -535,7 +547,9 @@ granted at the workspace above it to cover every office in it.
 - [Send a transcript](/docs/api-reference/nova/voice/sendNovaVoiceChat)
 - [Set canvas mode](/docs/api-reference/nova/preferences/setNovaCanvasMode)
 - [Stream a voice prompt](/docs/api-reference/nova/running-nova/streamNovaVoiceCycle)
+- [Run a scheduled task now](/docs/api-reference/nova/scheduled-tasks/triggerNovaCron)
 - [Update configuration](/docs/api-reference/nova/configuration/updateNovaConfig)
+- [Update a scheduled task](/docs/api-reference/nova/scheduled-tasks/updateNovaCron)
 - [Set model preference](/docs/api-reference/nova/preferences/upsertNovaModelPreference)
 - [Set prompt configuration](/docs/api-reference/nova/personality/upsertNovaPromptConfig)
 - [Set voice settings](/docs/api-reference/nova/voice/upsertNovaVoiceConfig)

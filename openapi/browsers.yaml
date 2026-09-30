@@ -1467,11 +1467,11 @@ paths:
       description: |
         The credential groups available to this browser.
 
-        **Names only.** Values are never returned by any endpoint here, so this
-        tells you what exists rather than what it is.
+        **Names only.** This tells you what exists rather than what it is. The
+        one endpoint that returns a value is Read a field.
 
-        **Permission:** `secrets:read` @ `browser/{browserId}`, plus membership
-        or `browser:manage`
+        **Permission:** `secrets:list` or `secrets:read` @ `browser/{browserId}`,
+        plus membership or `browser:manage`
       responses:
         '200':
           description: OK.
@@ -1588,8 +1588,8 @@ paths:
       description: |
         The field names inside a secret. **Names only, never values.**
 
-        **Permission:** `secrets:read` @ `browser/{browserId}`, plus membership
-        or `browser:manage`
+        **Permission:** `secrets:list` or `secrets:read` @ `browser/{browserId}`,
+        plus membership or `browser:manage`
       responses:
         '200':
           description: OK.
@@ -1666,10 +1666,12 @@ paths:
       summary: Read a field
       tags: [Environment secrets]
       description: |
-        Reads one field's metadata.
+        **This returns the decrypted value.** It is the only endpoint in this
+        group that reveals a credential. Treat the response the way you would
+        treat the credential itself, and do not log it.
 
         **Permission:** `secrets:read` @ `browser/{browserId}`, plus membership
-        or `browser:manage`
+        or `browser:manage`. `secrets:list` alone is not enough.
       responses:
         '200':
           description: OK.

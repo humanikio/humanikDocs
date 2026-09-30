@@ -2110,8 +2110,8 @@ paths:
       summary: List secret groups
       operationId: listOfficeSecrets
       description: |
-        Lists the secret groups in the office's vault. Requires `secrets:read`
-        at the office.
+        Lists the secret groups in the office's vault. Requires `secrets:list`
+        or `secrets:read` at the office.
 
         Group names only. No field values are returned by this endpoint.
       responses:
@@ -2215,7 +2215,7 @@ paths:
       operationId: listOfficeSecretFields
       description: |
         Returns the **field names** in a group, without their values. Requires
-        `secrets:read`.
+        `secrets:list` or `secrets:read`.
 
         Use this to see what a group holds without revealing anything.
       responses:
@@ -2294,9 +2294,9 @@ paths:
 
         It is the only endpoint on the office surface that reveals a credential.
         Everything else returns names or references. This is why `secrets:read`
-        exists as an action separate from `office:read`: someone who can operate
-        an office does not automatically get to read its credentials, and the two
-        are granted separately.
+        exists as an action separate from `office:read` and from `secrets:list`:
+        someone who can operate an office, or see which credentials it has, does
+        not automatically get to read them. Each is granted separately.
 
         Treat a response from this endpoint the way you would treat the
         credential itself. Do not log it.

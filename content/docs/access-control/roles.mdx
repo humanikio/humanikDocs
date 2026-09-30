@@ -35,7 +35,7 @@ Assigned at `console`. These do not descend into workspaces.
 | --- | --- |
 | `workspaceAdmin` | Full control of one workspace and everything inside it |
 | `tenantMember` | Baseline membership. The floor a person needs to use the product. |
-| `viewer` | Read only |
+| `viewer` | Read only. It sees which credentials exist but never their values, and it does not see an office's machine or its logs |
 
 ### Operational
 
@@ -43,7 +43,7 @@ Narrower roles for a specific job, meant to be assigned at a narrow boundary.
 
 | Role | For |
 | --- | --- |
-| `officeOperator` | Running and managing offices |
+| `officeOperator` | Running and managing offices: prompting them, starting and stopping them, changing their setup, their machine and its logs, and their credentials including the values |
 | `workflowOperator` | Running workflows |
 | `dataSourceManager` | Managing data sources and ingestion |
 | `integrationPublisher` | Publishing integrations for others to use |
@@ -77,6 +77,26 @@ members, or send from an address it was not assigned. Those stay with people.
 inference and the databases allocated to that browser, and it explicitly excludes
 chat, contacts, calendars, and office access. A browser that is compromised
 cannot reach the rest of the workspace, because its role never permitted it.
+
+### Credentials: names and values are separate
+
+Seeing that a credential exists and reading what it contains are two different
+permissions.
+
+| Action | Lets you |
+| --- | --- |
+| `secrets:list` | See each credential's name and the names of its fields |
+| `secrets:read` | Reveal a value. It also allows everything `secrets:list` does |
+| `secrets:write` | Add, change and remove credentials |
+
+`viewer` holds `secrets:list` only. In the role editor, **View** on the Credentials
+row grants `secrets:list`, and **Reveal values** is its own checkbox, so revealing is
+never included by accident.
+
+<Callout type="warn">
+  **A custom role you made with `secrets:read` can still reveal values.** If it was
+  meant to be read only, switch it to `secrets:list`.
+</Callout>
 
 ## Choosing one
 
