@@ -12,6 +12,7 @@ import {
   ToolSplit,
   TransportDirections,
 } from '@/components/device-diagrams';
+import { EmployeeShapes, EmployeeStates, WhoIsWho } from '@/components/huma-figures';
 import type { MDXComponents } from 'mdx/types';
 
 // Components available in every MDX file without an import. Anything used in
@@ -36,6 +37,9 @@ export function getMDXComponents(components?: MDXComponents) {
     DeviceTransport,
     ToolSplit,
     TransportDirections,
+    WhoIsWho,
+    EmployeeShapes,
+    EmployeeStates,
     ...components,
   } satisfies MDXComponents;
 }

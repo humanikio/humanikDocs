@@ -1,0 +1,130 @@
+---
+title: Synced channels
+description: Keep a HumaChat conversation in step with a Telegram group, and where text message conversations with customers live.
+---
+
+A synced channel is another place the same conversation appears. A message sent in
+HumaChat reaches it, and a message sent there appears in HumaChat.
+
+Telegram is the channel you can connect. Text message conversations with customers
+work differently, and they are covered at the end of this page.
+
+## What connecting does
+
+Connecting a conversation creates a private Telegram group for it, named after the
+conversation, and adds the people and AI employees who are in the conversation at
+that moment. From then on:
+
+| Direction | What happens |
+| --- | --- |
+| **Telegram to HumaChat** | A message appears under the name of the person who wrote it. It always lands in the conversation's **Main** chat, because Telegram has no separate chats |
+| **HumaChat to Telegram** | A person's message is posted in the group by a shared HumanikOS account, starting with **From:** and their name. An AI employee's reply is posted by that employee's own bot |
+
+<Callout type="warn">
+  **Every chat in the conversation is sent to Telegram, not only Main.** If a
+  conversation has several chats, messages from all of them appear in the one
+  Telegram group, including an employee's replies in them. Replies from Telegram
+  come back into Main. Keep a task you do not want in the Telegram group in a
+  conversation that is not synced.
+</Callout>
+
+From Telegram, photos and documents up to 50 MB come through. Stickers, voice notes
+and videos do not.
+
+## Before you connect
+
+Three things have to be true, and they are set up in three different places.
+Skipping one produces a quiet result rather than an error, so it is worth knowing
+all three first.
+
+**1. Each person links their own Telegram account.** In the workspace, open
+**Settings**, then **Profile**, and link Telegram with your Telegram **username**.
+The username is checked against Telegram when you link, so it has to exist. If you
+do not have one, set it in Telegram first, under Settings then Username. Nobody can
+do this for someone else, because it is their account.
+
+**2. Each AI employee that should take part needs its own bot.** An employee speaks
+in Telegram under its own name, so it needs its own Telegram bot rather than
+borrowing anyone else's:
+
+1. Open [@BotFather](https://t.me/BotFather) in Telegram.
+2. Send `/newbot`, or pick a bot you already made.
+3. Copy the HTTP API token it gives you.
+4. In the workspace, open the office, then the employee, then **Gateways**, and
+   paste the token into the Telegram card.
+
+<Callout type="warn">
+  **That token is a credential.** Anyone holding it can act as that bot. Paste it
+  straight into the gateway card and do not forward it. If it is ever exposed,
+  revoke it in @BotFather and add the new one.
+</Callout>
+
+**3. You need permission to manage the conversation.** Connecting, adding people
+later and disconnecting all need `groupchat:manage`, which
+[`workspaceAdmin`](/docs/access-control/roles) includes. You also have to be in the
+conversation. The connect button is shown to everyone, and it returns an error for
+anyone without that permission.
+
+## Connecting
+
+Open the conversation and use **Sync** in its header, then **Sync to Telegram**.
+The dialog says what will happen. Choose **Connect Telegram**.
+
+When it finishes, it tells you who was added. Anyone who could not be added is
+named, so you know who still has a step to do, and there is an invite link you can
+copy and share.
+
+There is one other place to connect: starting a private chat with an employee from
+its office on the Board. When both you and the employee are ready (your account is
+linked and the employee has a bot), that dialog offers **Create the private
+Telegram chat now**. The usual New message and New group flows do not connect
+Telegram. Connect from the header afterwards.
+
+The icons beside a conversation's name show where it is synced. Hover them for the
+list, and use the information button there for a short explanation.
+
+## When a step is missing
+
+Nothing here fails loudly, which is why the order matters.
+
+| What was missing | What you see |
+| --- | --- |
+| A person has not linked Telegram | They are named after you connect, as somebody who could not be added |
+| Their Telegram privacy settings refuse group invitations | They are sent an invite link instead, and have to accept it |
+| An AI employee has no bot | It is not added. It still answers in HumaChat, and its replies are not posted in Telegram |
+| Someone joined the Telegram group some other way | Their messages are not brought into HumaChat. Only people added through the sync are recognised |
+
+## Changes after connecting
+
+The sync keeps the membership it had when you connected. It does not follow later
+changes on its own.
+
+| Change | What to do |
+| --- | --- |
+| **Someone joins the conversation later** | They are not added to Telegram automatically. An administrator adds them from the Console, under **HumaChat**, on the conversation's Telegram card |
+| **Someone links Telegram after you connected** | The same: an administrator adds them from that card |
+| **Someone leaves the conversation** | They stay in the Telegram group, and anything they write there is no longer brought into HumaChat. Remove them in Telegram if they should not see it |
+
+## Disconnecting
+
+Disconnect from the Console, under **HumaChat**, on the conversation's Telegram card,
+with **Unlink**. Syncing stops in both directions.
+
+The Telegram group itself is not deleted and nobody is removed from it, so people
+there keep what was already said. The conversation's history in HumaChat is not
+changed.
+
+## Text message conversations with customers
+
+A conversation with a customer by text message is not something you connect. It
+exists because the customer texted one of your numbers, or because someone texted,
+called or emailed that contact from the CRM.
+
+These conversations are not in HumaChat's list. They are in the CRM, under
+**Conversations**, next to the contact they belong to. There, a reply from an AI
+employee or from someone on your team is sent to the customer as a text, from one of
+your numbers.
+
+STOP, START and HELP are handled before a message reaches the conversation, and they
+count only when they are the whole message. See
+[STOP, START and HELP](/docs/phone/texting#stop-start-and-help).

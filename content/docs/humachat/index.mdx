@@ -11,6 +11,24 @@ Both live in the same place and behave the same way while you are typing in them
 They differ in one respect that is worth knowing before you go looking for a
 setting that does not exist.
 
+## Chats inside a conversation
+
+A conversation can hold more than one chat. Use the chat name next to the conversation's
+title to switch between them, search them, or start a **New Chat**. A new chat takes its
+name from the first thing you say in it, and you can rename it.
+
+Each chat is separate for an AI employee as well. It remembers what was said in the chat
+you are in, and nothing from the others, so a new chat is a fresh start on a new task.
+
+| | |
+| --- | --- |
+| **Main** | Every conversation has one. It holds the history from before chats existed, and it is where Telegram messages arrive |
+| **Archive** | Hides a chat and keeps it. You can restore it |
+| **Delete** | Removes a chat's messages and the employee's memory of it. Main cannot be deleted |
+
+A dot on the chat name means another chat has something you have not read. A moving dot
+means an employee is working in that chat.
+
 ## A direct message cannot be deleted
 
 A channel is something you made. It has a name, you can rename it, and you can
@@ -36,6 +54,19 @@ So there is no delete. What there is instead:
 
 If you delete a channel, its messages go with it.
 
+## Starting a direct message
+
+Use the pencil at the bottom of the conversation list, then **New message**. The
+list shows two kinds of contact:
+
+| | |
+| --- | --- |
+| **AI employees** | The ones you are allowed to use. Messaging an employee wakes it, the same as prompting it from its office, so it needs the same access |
+| **People** | Members who can read and reply in this workspace. Someone who can only view the workspace is not listed, because they could not answer |
+
+The same check runs when the conversation is created, so a contact that is not in
+the list cannot be messaged another way.
+
 ## Who can read a conversation
 
 A channel is readable by the people in it. A direct message is readable by the
@@ -58,70 +89,10 @@ Two things sit outside it, and both are worth knowing before you rely on this.
 
 ## Synced channels
 
-A conversation can also live somewhere else. Two things can put it there:
-
-| Channel | How it gets there |
-| --- | --- |
-| **Telegram** | Somebody connects it, either while starting the conversation or later from the chat header |
-| **SMS** | Not a setting. The conversation is there because it began as a text message from a contact |
-
-When a conversation is synced, messages travel both ways. What is said in Telegram
-appears in HumaChat under the name of whoever wrote it, and what is said in
-HumaChat appears in Telegram.
-
-The icons beside a conversation's name show where it currently lives. Hover them
-for the list, and the information button there explains what syncing means.
-
-### Connecting Telegram
-
-Three things have to be true, and they are set up in three different places. Doing
-them out of order is not harmful, but skipping one produces a quiet result rather
-than an error, so it is worth knowing all three before you start.
-
-**1. Each person connects their own Telegram account.** In the workspace, open
-**Settings** then **Profile**, and link Telegram with your Telegram **username**.
-The username is checked against Telegram when you link, so it has to be one that
-exists. If you do not have one, set it in Telegram first, under Settings then
-Username. This is per person: you cannot do it on somebody else's behalf, because
-it is their account.
-
-**2. Each AI employee that should take part needs its own bot.** An AI employee
-speaks in Telegram under its own name, which means it needs its own Telegram bot
-rather than borrowing anyone else's. You create one in Telegram and give the token
-to the employee:
-
-1. Open [@BotFather](https://t.me/BotFather) in Telegram.
-2. Send `/newbot`, or pick a bot you already made.
-3. Copy the HTTP API token it gives you.
-4. In the workspace, open the office, then the employee, then **Gateways**, and
-   paste the token into the Telegram card.
-
-<Callout type="warn">
-  **That token is a credential.** Anyone holding it can act as that bot. Paste it
-  straight into the gateway card and do not forward it, and if it is ever exposed,
-  revoke it in @BotFather and add the new one.
-</Callout>
-
-**3. Connect the conversation.** Either tick the Telegram option when you start a
-direct message, or open an existing conversation and use the connect action in its
-header. A Telegram group is created, and everyone in the conversation is added to
-it at that moment.
-
-### When a step is missing
-
-Nothing here fails loudly, which is why the order is worth knowing.
-
-| What was skipped | What you see |
-| --- | --- |
-| A person has not linked Telegram | They are named after you connect, as somebody who could not be added |
-| Their Telegram privacy settings refuse group invitations | They are sent an invite link instead, and have to accept it |
-| An AI employee has no bot | It stays in HumaChat. Everyone else still syncs, and the employee still answers in the app |
-
-<Callout type="warn">
-  **Somebody who joins the conversation later is not added to Telegram
-  automatically.** They will see the conversation in HumaChat and will be missing
-  from the Telegram group until an administrator adds them.
-</Callout>
+A conversation can also be kept in step with a Telegram group, so people who live
+in Telegram can take part. Text message conversations with customers are kept in
+the CRM rather than here. [Synced channels](/docs/humachat/synced-channels) covers
+both, including what is sent where and what to set up first.
 
 ## What an AI employee sees
 
