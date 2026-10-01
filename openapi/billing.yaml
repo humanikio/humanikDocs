@@ -14,10 +14,13 @@ info:
     endpoints, and **nothing here adds them into one figure**. A total spend
     number is something you assemble yourself from both.
 
-    Everything on this page is account-wide and checked at `console` scope. Spend
-    *limits* are workspace-scoped and live in
-    [Workspaces](/docs/api-reference/workspaces). [Spending](/docs/spend)
-    explains how the pieces fit together.
+    Everything on this page is account-wide and checked at `console` scope.
+    That includes **Budgets**, which manage spending limits at every scope (the
+    whole account, one workspace, or one employee) from one place. A caller who
+    should manage only one workspace's limits uses the workspace routes in
+    [Workspaces](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets)
+    instead. [Billing and budgets](/docs/spend) explains how the pieces fit
+    together.
 
     Every fact in this document is resolved from `hos-api` source. Endpoints
     whose request or response shape has not been verified are absent rather than
@@ -34,6 +37,10 @@ tags:
     description: The prepaid balance model use is paid from.
   - name: Usage
     description: What has been spent on models, and the invoices behind it.
+  - name: Budgets
+    description: |
+      Spending limits on model use, for the whole account, one workspace, or
+      one employee. See [Budgets](/docs/spend/budgets) for how they behave.
   - name: Compute
     description: What your offices cost while awake.
 
@@ -46,7 +53,49 @@ components:
         A service account API key, sent whole as a bearer token:
         `hsk_<40 hex>.hss_<64 hex>`.
 
+  parameters:
+    BudgetIdPath:
+      name: budgetId
+      in: path
+      required: true
+      description: |
+        The budget to act on. IDs come from
+        [List budgets](/docs/api-reference/billing/budgets/listBudgets), and are
+        also returned as `budgetId` on a `402` from Nova when a budget stopped
+        the work.
+      schema:
+        type: string
+        examples: [Hq3mP0aZ7cTt2Lk1Rw9e]
+    BudgetWorkspaceQuery:
+      name: workspaceId
+      in: query
+      required: false
+      description: |
+        Where the budget is stored. **Required for a workspace or employee
+        budget**: send the workspace it belongs to, which is `workspaceId` on
+        the budget as [List budgets](/docs/api-reference/billing/budgets/listBudgets)
+        returns it. Leave it out for an account budget.
+
+        Sending the wrong workspace, or none for a workspace budget, returns
+        `404`. The ID alone does not find the budget.
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+
   responses:
+    BudgetNotFound:
+      description: |
+        No budget with that ID in the place `workspaceId` names. Check that
+        `workspaceId` is the budget's own workspace, and absent for an account
+        budget.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            missing:
+              value:
+                success: false
+                error: Budget not found
     BadRequest:
       description: A required field is missing or malformed.
       content:
@@ -113,12 +162,296 @@ components:
 
     UsageEntry:
       type: object
-      description: One piece of model work, and what it cost.
+      description: |
+        One piece of model work: which model, how many tokens, what it cost, and
+        who spent it.
+      properties:
+        id:
+          type: string
+          description: Send as `startAfter` to get the page after this entry.
+        modelId:
+          type: string
+          description: The model that did the work.
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        cacheWriteTokens: { type: integer }
+        cacheReadTokens: { type: integer }
+        billingMode:
+          type: string
+          enum: [platform, byok]
+          description: |
+            Who paid. `platform` is charged to your credit. `byok` ran on your
+            own model account and was not charged here.
+        isByok:
+          type: boolean
+          description: True when `billingMode` is `byok`. Kept for older clients.
+        totalCostUsd:
+          type: number
+          description: |
+            What was charged to your credit. **Zero for work on your own model
+            account**, because we do not bill it.
+        computedCostUsd:
+          type: number
+          description: |
+            What the tokens cost, whoever paid. Equal to `totalCostUsd` for
+            platform work. For work on your own model account it is what your
+            provider will charge you, and it is the figure budgets count.
+        uid:
+          type: [string, 'null']
+          description: The person the work ran for, when there is one.
+        workspaceId:
+          type: string
+          description: |
+            The workspace the work ran in. `console` for Nova working at
+            account level rather than in a workspace.
+        officeId:
+          type: string
+          description: The employee's office, or an empty string when no office was involved.
+        browserId:
+          type: [string, 'null']
+          description: Set when a cloud browser did the work.
+        source:
+          type: string
+          description: |
+            The raw origin recorded with the work. Read `origin.kind` instead,
+            which translates it.
+        origin:
+          type: object
+          description: |
+            Who spent it, with current names. Names are looked up when you
+            read, so a renamed employee shows its new name on old entries.
+          properties:
+            kind:
+              type: string
+              enum: [nova, office, browser]
+              description: Nova, an AI employee, or a cloud browser.
+            workspace:
+              type: [object, 'null']
+              properties:
+                id: { type: string }
+                name: { type: string }
+            office:
+              type: [object, 'null']
+              properties:
+                id: { type: string }
+                name: { type: string }
+                serviceId:
+                  type: [string, 'null']
+                  description: The machine the office runs on, for matching against compute spend.
+                projectId: { type: [string, 'null'] }
+            browser:
+              type: [object, 'null']
+              properties:
+                id: { type: string }
+                name: { type: string }
+            missing:
+              type: array
+              description: |
+                Things that no longer exist. Their IDs are returned in place of
+                names.
+              items:
+                type: string
+                enum: [workspace, office, browser]
+        createdAt: { type: string, format: date-time }
+
+    BudgetScope:
+      description: |
+        What the budget covers. Fixed at creation: to change it, delete the
+        budget and create another.
+
+        | `kind` | Counts spend from | Can stop work in |
+        | --- | --- | --- |
+        | `account` | Every workspace | Every workspace |
+        | `workspace` | That workspace, including its employees | That workspace |
+        | `office` | One employee, plus Nova while it works inside that employee's office | That employee |
+      oneOf:
+        - type: object
+          title: Account
+          properties:
+            kind: { type: string, const: account }
+          required: [kind]
+        - type: object
+          title: Workspace
+          properties:
+            kind: { type: string, const: workspace }
+            workspaceId:
+              type: string
+              description: |
+                IDs come from
+                [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+          required: [kind, workspaceId]
+        - type: object
+          title: One employee
+          properties:
+            kind: { type: string, const: office }
+            workspaceId:
+              type: string
+              description: The workspace the employee's office is in.
+            officeId:
+              type: string
+              description: |
+                The employee's office. IDs come from
+                [List offices](/docs/api-reference/offices/offices/listOffices).
+          required: [kind, workspaceId, officeId]
+
+    BudgetAlerts:
+      type: object
+      description: |
+        Who is told as spend approaches and reaches the limit. Each threshold
+        is sent **once per window**. A new window starts with nothing sent, and
+        changing the limit, window, what is counted, or these alerts lets every
+        threshold be sent again.
+      properties:
+        thresholds:
+          type: array
+          maxItems: 10
+          description: |
+            Fractions of `limitUsd`: `0.5` is 50 percent, `1` is the limit. Each
+            value is greater than 0 and at most 2.
+
+            When empty, a `warn` or `notify` budget still alerts at `1`. A
+            `block` budget with no thresholds sends no alert, because the
+            refusal is the signal.
+          items: { type: number, exclusiveMinimum: 0, maximum: 2 }
+        recipients:
+          type: array
+          maxItems: 50
+          description: |
+            User IDs to tell. When empty, everyone holding `billing:manage` on
+            the account is told and, for a workspace or employee budget, that
+            workspace's admins too.
+          items: { type: string }
+        sms:
+          type: boolean
+          description: |
+            Also send a text message at the thresholds in `smsAt`. Texts go only
+            to recipients who have confirmed a phone number on their profile.
+            Defaults to false.
+        smsAt:
+          type: array
+          maxItems: 10
+          description: |
+            Which thresholds also send a text. Defaults to `[1]`, the limit
+            itself. Has no effect unless `sms` is true.
+          items: { type: number, exclusiveMinimum: 0, maximum: 2 }
+
+    BudgetView:
+      type: object
+      description: A budget, with its spend so far in the current window.
       properties:
         id: { type: string }
-        costUsd: { type: number }
+        name:
+          type: string
+          examples: [Support team monthly]
+        scope: { $ref: '#/components/schemas/BudgetScope' }
+        workspaceId:
+          type: [string, 'null']
+          description: |
+            The scope's workspace, or null for an account budget. Send this as
+            the `workspaceId` query parameter to address the budget.
+        window:
+          type: string
+          enum: [daily, weekly, monthly]
+          description: |
+            When the total resets. Weeks start on Monday. Workspace and employee
+            budgets reset at midnight in the workspace's time zone, account
+            budgets at midnight UTC.
+        metric:
+          type: array
+          description: |
+            What is counted. `platform` is model use charged to your credit,
+            `byok` is model use on your own model account. The total is their
+            sum.
+          items:
+            type: string
+            enum: [platform, byok]
+        limitUsd:
+          type: number
+          description: The limit, in US dollars.
+        action:
+          type: string
+          enum: [block, warn, notify]
+          description: |
+            What happens at the limit.
+
+            | Value | At the limit |
+            | --- | --- |
+            | `block` | New work is refused and running work stops |
+            | `warn` | Work continues, and the run is marked as over the limit in the app |
+            | `notify` | Work continues. Only the alerts are sent |
+        alerts: { $ref: '#/components/schemas/BudgetAlerts' }
+        enabled:
+          type: boolean
+          description: A disabled budget is ignored everywhere.
+        pausedUntil:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            While this is in the future the budget is ignored: it stops
+            nothing, warns about nothing, and sends no alerts. A time in the
+            past means it is no longer paused.
+        pausedBy:
+          type: [string, 'null']
+          description: Who paused it.
+        createdBy: { type: string }
         createdAt: { type: string, format: date-time }
-      additionalProperties: true
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+        usage:
+          type: object
+          properties:
+            usedUsd:
+              type: number
+              description: |
+                Spend counted by this budget in the current window. Reads as 0
+                if spend could not be read at that moment.
+            windowStart:
+              type: string
+              format: date-time
+            resetsAt:
+              type: string
+              format: date-time
+              description: When the current window ends and the total returns to zero.
+        workspaceName:
+          type: string
+          description: Present on workspace and employee budgets.
+        officeName:
+          type: string
+          description: Present on employee budgets.
+
+    BudgetEvent:
+      type: object
+      description: One piece of work a `block` budget refused.
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        actor:
+          type: string
+          enum: [nova, office, zylo, cron, sms]
+          description: |
+            What was refused.
+
+            | Value | Work |
+            | --- | --- |
+            | `nova` | Nova, in a chat |
+            | `office` | An AI employee |
+            | `zylo` | An AI employee prompted from a project editor |
+            | `cron` | A scheduled Nova task |
+            | `sms` | Nova replying to a text message |
+        workspaceId:
+          type: string
+          description: The workspace the refused work was in.
+        workspaceName: { type: string }
+        officeId:
+          type: [string, 'null']
+          description: The employee's office, when the work involved one.
+        officeName: { type: string }
+        uid:
+          type: [string, 'null']
+          description: The person the work ran for, when there is one.
+        costAskedUsd:
+          type: [number, 'null']
+          description: Always null today. Reserved for the expected cost of the refused work.
 
 paths:
   /billing/balance:
@@ -325,6 +658,11 @@ paths:
       description: |
         Individual pieces of model work and what each cost, newest first.
 
+        Each entry says **who spent it** in `origin`: Nova, an AI employee, or a
+        cloud browser, with the workspace, employee or browser by its current
+        name. Work on your own model account is listed too, with
+        `totalCostUsd` of zero and its real cost in `computedCostUsd`.
+
         Paginated with a cursor. Take the last entry's `id` from one page and
         send it as `startAfter` to get the next.
 
@@ -369,6 +707,9 @@ paths:
       tags: [Usage]
       description: |
         Totals by month, plus a daily series, for showing spend at a glance.
+        Every figure is split into `platformUsd` (charged to your credit) and
+        `byokUsd` (what work on your own model account cost you there), with
+        `totalUsd` as their sum.
 
         Days and months are resolved in the timezone you pass, so a summary
         rendered for a customer in another region lines up with their calendar
@@ -379,12 +720,12 @@ paths:
         - name: months
           in: query
           required: false
-          description: How many months back. Defaults to 6.
-          schema: { type: integer, default: 6 }
+          description: How many months back. Defaults to 6, and at most 24.
+          schema: { type: integer, default: 6, maximum: 24 }
         - name: timezone
           in: query
           required: false
-          description: An IANA timezone name. Defaults to the account's own.
+          description: An IANA timezone name. Defaults to UTC.
           schema: { type: string, examples: ['America/Toronto'] }
       responses:
         '200':
@@ -442,12 +783,12 @@ paths:
           required: false
           description: |
             Bucket size. Defaults to `auto`, which picks one from the width of
-            the window. Anything unrecognised is treated as `auto` rather than
+            the window and never picks `week`. Anything unrecognised is treated as `auto` rather than
             rejected, and the bucket size actually used comes back on the
             response.
           schema:
             type: string
-            enum: [hour, day, month, auto]
+            enum: [hour, day, week, month, auto]
             default: auto
         - name: timezone
           in: query
@@ -532,6 +873,561 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/budgets:
+    get:
+      operationId: listBudgets
+      summary: List budgets
+      tags: [Budgets]
+      description: |
+        Every budget in the account, at every scope: account budgets first,
+        then workspace and employee budgets, newest first.
+
+        Each one comes with `usage`: what it has counted so far in the current
+        window, when that window started, and when it resets. Budgets on the
+        same scope and window share one spend reading, so the figures agree
+        with each other.
+
+        This is where the `workspaceId` to send with every other budget call
+        comes from. It is `workspaceId` on each budget, and null for an account
+        budget.
+
+        **Permission:** `billing:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budgets:
+                    type: array
+                    items: { $ref: '#/components/schemas/BudgetView' }
+              examples:
+                two:
+                  value:
+                    success: true
+                    budgets:
+                      - id: Hq3mP0aZ7cTt2Lk1Rw9e
+                        name: Account monthly
+                        scope: { kind: account }
+                        workspaceId: null
+                        window: monthly
+                        metric: [platform, byok]
+                        limitUsd: 2000
+                        action: warn
+                        alerts: { thresholds: [0.5, 0.9], recipients: [], sms: false }
+                        enabled: true
+                        pausedUntil: null
+                        pausedBy: null
+                        usage:
+                          usedUsd: 812.4
+                          windowStart: '2026-10-01T00:00:00.000Z'
+                          resetsAt: '2026-11-01T00:00:00.000Z'
+                      - id: b7Rk2Wq9LmXv4Pz0Ns1d
+                        name: Ada monthly
+                        scope: { kind: office, workspaceId: ws_a1b2c3, officeId: off_9c1e7d }
+                        workspaceId: ws_a1b2c3
+                        window: monthly
+                        metric: [platform, byok]
+                        limitUsd: 50
+                        action: block
+                        alerts: { thresholds: [0.8, 1], recipients: [], sms: true }
+                        enabled: true
+                        pausedUntil: null
+                        pausedBy: null
+                        usage:
+                          usedUsd: 41.07
+                          windowStart: '2026-10-01T04:00:00.000Z'
+                          resetsAt: '2026-11-01T04:00:00.000Z'
+                        workspaceName: Support
+                        officeName: Ada
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createBudget
+      summary: Create a budget
+      tags: [Budgets]
+      description: |
+        Creates a spending limit on model use for the whole account, one
+        workspace, or one employee.
+
+        `scope` decides what is counted and what can be stopped, and it cannot
+        be changed later. Get a `workspaceId` from
+        [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces)
+        and an employee's `officeId` from
+        [List offices](/docs/api-reference/offices/offices/listOffices):
+
+        ```bash
+        curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        The workspace, and the office for an employee budget, must exist or
+        the call returns `400`.
+
+        **What a budget counts.** Model use only. The cost of an office being
+        awake is not counted, so a budget is not a limit on total spend.
+
+        **Several budgets can apply to one piece of work**, and every one is
+        checked. Any `block` budget at its limit stops the work, whatever the
+        others say. [Budgets](/docs/spend/budgets) walks through how they
+        combine.
+
+        Defaults: `window` daily, `action` block, no alerts, `enabled` true.
+
+        **Permission:** `billing:manage` @ `console`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  description: Required. A label people will recognise in an alert or a refusal.
+                scope:
+                  $ref: '#/components/schemas/BudgetScope'
+                metric:
+                  type: array
+                  minItems: 1
+                  description: |
+                    Required, and not empty. What to count.
+
+                    | Value | Counts |
+                    | --- | --- |
+                    | `platform` | Model use charged to your credit |
+                    | `byok` | Model use on your own model account, which we never bill |
+
+                    A budget stops or warns only about work it counts, so a
+                    `platform` only budget never stops work on your own model
+                    account, and the reverse. Send both to cover model use
+                    whoever is paying for it.
+                  items:
+                    type: string
+                    enum: [platform, byok]
+                limitUsd:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: Required. The limit in US dollars.
+                window:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                  default: daily
+                  description: |
+                    When the total resets. Weeks start on Monday. Workspace and
+                    employee budgets use the workspace's time zone, account
+                    budgets use UTC.
+                action:
+                  type: string
+                  enum: [block, warn, notify]
+                  default: block
+                  description: What happens at the limit. See `action` on the budget.
+                alerts:
+                  $ref: '#/components/schemas/BudgetAlerts'
+                enabled:
+                  type: boolean
+                  default: true
+              required: [name, scope, metric, limitUsd]
+            examples:
+              employee:
+                summary: Cap one employee at $50 a month, text at the limit
+                value:
+                  name: Ada monthly
+                  scope: { kind: office, workspaceId: ws_a1b2c3, officeId: off_9c1e7d }
+                  window: monthly
+                  metric: [platform, byok]
+                  limitUsd: 50
+                  action: block
+                  alerts: { thresholds: [0.8, 1], recipients: [], sms: true }
+              accountWarn:
+                summary: A monthly account limit that only warns
+                value:
+                  name: Account monthly
+                  scope: { kind: account }
+                  window: monthly
+                  metric: [platform, byok]
+                  limitUsd: 2000
+                  action: warn
+                  alerts: { thresholds: [0.5, 0.9], recipients: [], sms: false }
+              workspaceWeekly:
+                summary: A weekly limit for one workspace
+                value:
+                  name: Support weekly
+                  scope: { kind: workspace, workspaceId: ws_a1b2c3 }
+                  window: weekly
+                  metric: [platform]
+                  limitUsd: 300
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budget: { $ref: '#/components/schemas/BudgetView' }
+        '400':
+          description: |
+            A field is missing or invalid, or the workspace or office does not
+            exist. `error` is a plain sentence naming the problem.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                noScope:
+                  value:
+                    success: false
+                    error: scope is required
+                noOffice:
+                  value:
+                    success: false
+                    error: That office does not exist in this workspace.
+                threshold:
+                  value:
+                    success: false
+                    error: alerts.thresholds values must be fractions of the limit greater than 0 and at most 2, for example 0.5 for 50 percent
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/budgets/{budgetId}:
+    parameters:
+      - $ref: '#/components/parameters/BudgetIdPath'
+      - $ref: '#/components/parameters/BudgetWorkspaceQuery'
+
+    get:
+      operationId: getBudget
+      summary: Get a budget
+      tags: [Budgets]
+      description: |
+        One budget, with its spend so far in the current window.
+
+        Send the budget's `workspaceId` as a query parameter unless it is an
+        account budget. Without it, a workspace or employee budget is not
+        found.
+
+        **Permission:** `billing:read` @ `console`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budget: { $ref: '#/components/schemas/BudgetView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/BudgetNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateBudget
+      summary: Update a budget
+      tags: [Budgets]
+      description: |
+        Changes any of a budget's name, window, what it counts, limit, action,
+        alerts, or whether it is enabled. Fields you leave out are kept.
+        `alerts`, when sent, replaces the whole alerts object.
+
+        **The scope cannot change.** Sending a different `scope` returns `400`.
+        Sending the same scope back is accepted, so a client that posts its
+        whole form still works.
+
+        Changing the limit, window, what is counted, or the alerts lets every
+        threshold alert be sent again in the current window.
+
+        To stop a budget for the rest of its window without changing it, use
+        [Pause a budget](/docs/api-reference/billing/budgets/pauseBudget). To
+        stop it indefinitely, set `enabled` to false.
+
+        **Permission:** `billing:manage` @ `console`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 80 }
+                window:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                metric:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    enum: [platform, byok]
+                limitUsd: { type: number, exclusiveMinimum: 0 }
+                action:
+                  type: string
+                  enum: [block, warn, notify]
+                alerts: { $ref: '#/components/schemas/BudgetAlerts' }
+                enabled: { type: boolean }
+                scope:
+                  $ref: '#/components/schemas/BudgetScope'
+                  description: Optional. Accepted only when it equals the budget's current scope.
+            examples:
+              raise:
+                summary: Raise the limit
+                value:
+                  limitUsd: 75
+              warnOnly:
+                summary: Stop blocking, keep warning
+                value:
+                  action: warn
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budget: { $ref: '#/components/schemas/BudgetView' }
+        '400':
+          description: A field is invalid, or `scope` differs from the budget's scope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                scope:
+                  value:
+                    success: false
+                    error: A budget scope cannot be changed. Delete the budget and create a new one.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/BudgetNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteBudget
+      summary: Delete a budget
+      tags: [Budgets]
+      description: |
+        Removes the budget and its record of refused work. This cannot be
+        undone.
+
+        To keep a budget but stop it applying, set `enabled` to false with
+        [Update a budget](/docs/api-reference/billing/budgets/updateBudget), or
+        pause it until its window resets with
+        [Pause a budget](/docs/api-reference/billing/budgets/pauseBudget).
+
+        **Permission:** `billing:manage` @ `console`
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/BudgetNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/budgets/{budgetId}/pause:
+    parameters:
+      - $ref: '#/components/parameters/BudgetIdPath'
+      - $ref: '#/components/parameters/BudgetWorkspaceQuery'
+    post:
+      operationId: pauseBudget
+      summary: Pause a budget
+      tags: [Budgets]
+      description: |
+        Sets the budget aside until its current window ends, or clears a pause.
+
+        With `untilReset: true`, `pausedUntil` is set to the end of the current
+        window (in the workspace's time zone, or UTC for an account budget) and
+        `pausedBy` to the caller. Until then the budget stops nothing, warns
+        about nothing, and sends no alerts. Nothing has to clear it: at the
+        reset it applies again on its own.
+
+        With `untilReset: false`, the pause is cleared and the budget applies
+        straight away.
+
+        This is the way to let work continue past a limit for the rest of a
+        day, week or month without raising the limit.
+
+        **Permission:** `billing:manage` @ `console`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                untilReset:
+                  type: boolean
+                  description: Required. True to pause until the window resets, false to clear a pause.
+              required: [untilReset]
+            examples:
+              pause:
+                value: { untilReset: true }
+              resume:
+                value: { untilReset: false }
+      responses:
+        '200':
+          description: Saved. The budget is returned with its new `pausedUntil`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  budget: { $ref: '#/components/schemas/BudgetView' }
+        '400':
+          description: '`untilReset` is missing or not a boolean.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: untilReset must be true or false
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/BudgetNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/budgets/{budgetId}/events:
+    parameters:
+      - $ref: '#/components/parameters/BudgetIdPath'
+      - $ref: '#/components/parameters/BudgetWorkspaceQuery'
+    get:
+      operationId: listBudgetEvents
+      summary: List refused work
+      tags: [Budgets]
+      description: |
+        Each piece of work this budget refused, newest first: when, what kind
+        of work, in which workspace and employee, and for whom.
+
+        Only a `block` budget refuses work, so `warn` and `notify` budgets have
+        an empty list. The record is kept on a best effort basis: a refusal is
+        never failed because it could not be recorded, so the list can miss
+        one.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: |
+            How many to return. Defaults to 50, at most 200. A larger value is
+            reduced to 200, and a value below 1 or not a number is treated as
+            50.
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/BudgetEvent' }
+              examples:
+                one:
+                  value:
+                    success: true
+                    events:
+                      - id: Zr4cN8yQ1bVw6Tm3Kd0s
+                        at: '2026-10-14T16:02:11.000Z'
+                        actor: office
+                        workspaceId: ws_a1b2c3
+                        workspaceName: Support
+                        officeId: off_9c1e7d
+                        officeName: Ada
+                        uid: usr_7f2a91
+                        costAskedUsd: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/BudgetNotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/budgets/{budgetId}/series:
+    parameters:
+      - $ref: '#/components/parameters/BudgetIdPath'
+      - $ref: '#/components/parameters/BudgetWorkspaceQuery'
+    get:
+      operationId: getBudgetSeries
+      summary: Get daily spend for a budget
+      tags: [Budgets]
+      description: |
+        Spend per day across the budget's scope, for a chart. Oldest day first,
+        today included, and every day is present, with zeros where nothing was
+        spent.
+
+        Days are cut in the workspace's time zone for a workspace or employee
+        budget, and in UTC for an account budget.
+
+        **Both kinds of spend are returned whatever the budget counts.** A
+        budget that counts only `platform` still gets `byokUsd` here, so add up
+        the fields that match its `metric` to compare against `limitUsd`.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: days
+          in: query
+          required: false
+          description: |
+            How many days, ending today. Defaults to 14, at most 92. A larger
+            value is reduced to 92, and a value below 1 or not a number is
+            treated as 14.
+          schema: { type: integer, default: 14, maximum: 92 }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  series:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          description: The local day, `YYYY-MM-DD`.
+                        platformUsd:
+                          type: number
+                          description: Model use charged to your credit that day.
+                        byokUsd:
+                          type: number
+                          description: Model use on your own model account that day.
+              examples:
+                three:
+                  value:
+                    success: true
+                    series:
+                      - { date: '2026-10-12', platformUsd: 3.14, byokUsd: 0 }
+                      - { date: '2026-10-13', platformUsd: 0, byokUsd: 0 }
+                      - { date: '2026-10-14', platformUsd: 5.02, byokUsd: 1.2 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/BudgetNotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
 
   /nexus/billing/summary:

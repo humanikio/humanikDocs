@@ -1,0 +1,181 @@
+---
+title: Billing and budgets
+description: What costs money, how it is paid for, and how to put a limit on it.
+---
+
+An AI employee costs money in two ways, and the platform treats them as separate
+systems: **model use**, which is paid from a prepaid credit balance, and
+**compute**, which is the cost of an office being awake. Knowing which is which
+is the difference between a spending limit that does what you expect and one
+that does not.
+
+Platform access is billed on its own, as a subscription, separately from both.
+This section is about the two usage meters that sit on top of it.
+
+## What costs money
+
+| | **Model use** | **Compute** |
+| --- | --- | --- |
+| What it measures | Words in and out of a model | An office being awake |
+| Who does it | Nova, AI employees, cloud browsers | AI employees' offices, and any other cloud service you run |
+| Paid from | Your prepaid credit, or your own model account | Machine time, billed separately |
+| Can be limited by a budget | **Yes** | **No** |
+| Invoices | Credit invoices | Compute invoices |
+
+<Callout type="warn">
+  **Only one of the two can be limited.** A budget covers model use. It does not
+  cover the cost of an office being awake, and there is no equivalent limit for
+  that today. An office left running keeps costing until it sleeps.
+</Callout>
+
+The practical consequence: a budget protects you from model work that keeps
+spending, not from a machine nobody turned off. For that, give offices an idle timeout so
+they sleep on their own. See [Compute](#compute) below.
+
+**Nothing adds the two together.** They are measured by different systems and
+reported separately, so "what did this cost me in total" is a question you
+answer by looking in two places.
+
+## Who pays for model use
+
+Every piece of model work is paid one of two ways, decided by which model
+account it runs on.
+
+| | **Our model account** | **Your own model account** |
+| --- | --- | --- |
+| Who pays the provider | We do, and charge your credit | You do, directly |
+| Draws on your credit | Yes | **No. We never bill it** |
+| Appears in usage records | Yes, with what was charged | Yes, with what it cost you, and nothing charged |
+| Can be limited by a budget | Yes | **Yes** |
+
+The second column is the one most people do not expect. When an employee runs
+on [your own model account](/docs/models/your-own-key), the provider bills you
+and we charge nothing. We still record what the work cost, so you can see it,
+and a budget can still limit it.
+
+**The default model choice spends credit.** Leaving the model set to automatic
+is not a free option. It picks a model for you and charges it like any other,
+even when your workspace has your own account available. See
+[Models](/docs/models).
+
+## The checks before model work runs
+
+Work by Nova and by AI employees passes the same checks, in order, before it
+starts and again while it runs:
+
+```
+        which account pays?
+                │
+      ┌─────────┴─────────┐
+      │                   │
+   your own             ours
+      │                   │
+      │            enough credit? ──── no ──▶ stops
+      │                   │
+      │                  yes
+      └─────────┬─────────┘
+                │
+     a budget that stops work
+     at its limit, and counts
+       this kind of spend? ──── yes ──▶ stops
+                │
+                no
+                │
+              runs
+```
+
+Read the shape rather than the boxes. **Your own model account skips the credit
+check**, because there is nothing of ours to draw down. It does not skip
+budgets. That is why a budget is the only control that covers both.
+
+[Credit and top ups](/docs/spend/credit) covers the credit check, and
+[Budgets](/docs/spend/budgets) covers the last one, including budgets that warn
+or only send alerts instead of stopping work.
+
+## When work stops for a money reason
+
+Nova answers with a `402` and a `code` saying which check failed.
+
+| `code` | Meaning |
+| --- | --- |
+| `insufficient_balance` | Out of credit. Add credit, switch on automatic top ups, or use your own model account |
+| `budget_exceeded` | A budget reached its limit. Nova also returns which budget, its window and scope, the amount used and the limit |
+
+Branch on `code` rather than the message text. Nova returns exactly these from
+[Send a prompt](/docs/api-reference/nova/running-nova/runNovaCycle).
+
+**When it arrives depends on the check.** Running out of credit can return a
+`402` at the start of a turn or partway through one. A budget returns a `402`
+only when it stops a turn before it starts. A budget reached partway through
+ends the turn with a `200` and a `status` of `budget_exceeded`, so check the
+body as well as the status code.
+
+## Who can see and change billing
+
+Billing is an account concern. Everything about credit, usage, invoices and
+compute is checked at `console`.
+
+| To | You need |
+| --- | --- |
+| See the balance, usage, invoices, compute cost and every budget | `billing:read` @ `console` |
+| Configure automatic top ups, add or remove cards, buy credit, manage any budget | `billing:manage` @ `console` |
+| See the budgets on one workspace and its employees | `workspace:read` @ that workspace |
+| Create and change budgets on one workspace and its employees | `workspace:manage` @ that workspace |
+
+The built-in [`consoleAdmin`](/docs/access-control/roles) role holds both billing
+permissions, and the account owner is never refused. `workspaceAdmin` holds
+`workspace:manage`, which is what lets you give a team lead control of their own
+team's limits without showing them the account's finances.
+
+**Paying is a console flow.** Buying credit, saving cards, choosing the default
+card and paying subscription invoices are done in the console and refuse API
+keys. Reading the balance, usage and invoices, configuring automatic top ups,
+and managing budgets all work with a key. See the
+[Billing API](/docs/api-reference/billing).
+
+## Compute
+
+Compute is the cost of a machine being awake, billed by how long it runs. It is
+a different meter from credit: it is not drawn from your balance, it is not
+counted by any budget, and it has its own invoices.
+
+[Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
+breaks it down by what was running, and matches each machine to its office, so
+you can see which employee it belongs to. Anything running that is not an office
+is listed separately.
+
+Two settings decide what an office costs while awake, and they are the only
+levers you have:
+
+- **Machine size.** A smaller machine costs less for each second awake.
+- **Idle timeout.** A shorter timeout means fewer seconds awake. An office that
+  is asleep costs nothing to run.
+
+Change them with
+[Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig).
+[Offices and employees](/docs/offices-and-employees) covers idle timeouts.
+
+## In this section
+
+<Cards>
+  <Card
+    title="Credit and top ups"
+    href="/docs/spend/credit"
+    description="The balance, what draws it down, automatic top ups, and invoices."
+  />
+  <Card
+    title="Usage records"
+    href="/docs/spend/usage"
+    description="Every piece of model work, what it cost, and who spent it."
+  />
+  <Card
+    title="Budgets"
+    href="/docs/spend/budgets"
+    description="Limits for the account, a workspace or one employee, and what happens at them."
+  />
+  <Card
+    title="Billing API"
+    href="/docs/api-reference/billing"
+    description="Reading the balance, usage, budgets and compute cost."
+  />
+</Cards>

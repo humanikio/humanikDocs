@@ -573,25 +573,33 @@ granted at the workspace above it to cover every office in it.
 
 | Action | Allows | Usually written at |
 | --- | --- | --- |
-| `billing:read` | Read the balance, usage history and invoices. | `console` |
-| `billing:manage` | Configure automatic top-ups and account billing. | `console` |
+| `billing:read` | Read the balance, usage history, invoices, and every budget in the account. | `console` |
+| `billing:manage` | Configure automatic top-ups and account billing, and manage budgets at every scope. | `console` |
 
 <Accordions>
-<Accordion title="Endpoints that need `billing:read` (10)">
+<Accordion title="Endpoints that need `billing:read` (14)">
 - [Check before spending](/docs/api-reference/billing/credit/checkBalance)
 - [Get the balance](/docs/api-reference/billing/credit/getBalance)
+- [Get a budget](/docs/api-reference/billing/budgets/getBudget)
+- [Get daily spend for a budget](/docs/api-reference/billing/budgets/getBudgetSeries)
 - [Get a compute invoice](/docs/api-reference/billing/compute/getComputeInvoice)
 - [Get a service's settings](/docs/api-reference/billing/compute/getComputeServiceConfig)
 - [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
 - [Get a usage series](/docs/api-reference/billing/usage/getUsageSeries)
 - [Get a usage summary](/docs/api-reference/billing/usage/getUsageSummary)
+- [List refused work](/docs/api-reference/billing/budgets/listBudgetEvents)
+- [List budgets](/docs/api-reference/billing/budgets/listBudgets)
 - [List compute invoices](/docs/api-reference/billing/compute/listComputeInvoices)
 - [List credit invoices](/docs/api-reference/billing/usage/listInvoices)
 - [List model usage](/docs/api-reference/billing/usage/listUsage)
 </Accordion>
-<Accordion title="Endpoints that need `billing:manage` (3)">
+<Accordion title="Endpoints that need `billing:manage` (7)">
+- [Create a budget](/docs/api-reference/billing/budgets/createBudget)
+- [Delete a budget](/docs/api-reference/billing/budgets/deleteBudget)
 - [Create the balance](/docs/api-reference/billing/credit/initializeBalance)
+- [Pause a budget](/docs/api-reference/billing/budgets/pauseBudget)
 - [Configure automatic top ups](/docs/api-reference/billing/credit/updateAutoReload)
+- [Update a budget](/docs/api-reference/billing/budgets/updateBudget)
 - [Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig)
 </Accordion>
 </Accordions>

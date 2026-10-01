@@ -1,0 +1,141 @@
+---
+title: Usage records
+description: Every piece of model work, what it cost, who paid for it, and who spent it.
+---
+
+Every piece of model work leaves a usage record: which model ran, how many
+tokens it used, what it cost, who paid, and who did the work. Records are written
+for work on our model account **and** for work on your own model account, so one
+list shows all model use whoever paid for it.
+
+Usage records cover model use only. The cost of an office being awake is
+reported separately; see [Compute](/docs/spend#compute).
+
+## What one record says
+
+| | Meaning |
+| --- | --- |
+| Model | The model that did the work |
+| Tokens | Input, output, and the two kinds of cached tokens, counted separately |
+| Who paid | Our model account (charged to your credit) or your own model account |
+| Charged | What came out of your credit. **Zero for work on your own model account** |
+| Cost | What the tokens cost, whoever paid. For work on your own model account, this is what your provider charges you |
+| Who spent it | Nova, an AI employee, or a cloud browser, with the workspace and the person it ran for |
+| When | The time the work was recorded |
+
+The difference between **charged** and **cost** follows from
+[Who pays for model use](/docs/spend#who-pays-for-model-use). For work
+on our account they are equal. For work on your own account, charged is zero and
+cost is the money you will see on your provider's bill. Budgets count cost, which
+is why a budget can limit work we never charge for.
+
+## Who spent it
+
+Each record says what kind of work it was and where it ran.
+
+| Kind | Means | Also names |
+| --- | --- | --- |
+| Nova | Nova, in a chat, a scheduled task, or a text message conversation | The workspace, and the employee's office when Nova was working inside one |
+| AI employee | An employee working in its office | The workspace and the employee |
+| Cloud browser | A cloud browser session | The workspace and the browser |
+
+Names are looked up when you read the records, not stored with them. A renamed
+employee shows its current name on old records, and something that has since
+been deleted is reported as missing, with its ID in place of a name.
+
+Nova working at account level, rather than inside a workspace, shows as the
+workspace **Console**.
+
+A record also carries the person the work ran for, when there was one. A
+scheduled task runs for the person who created it, so its spend is recorded
+against them.
+
+## Reading records
+
+[List model usage](/docs/api-reference/billing/usage/listUsage) returns
+records newest first, a page at a time:
+
+#### Request
+
+```bash
+curl "$HOS_API/billing/usage?limit=2" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "success": true,
+  "entries": [
+    {
+      "id": "u_8sK2pQ0aLm",
+      "modelId": "claude-sonnet-4-6",
+      "inputTokens": 18234,
+      "outputTokens": 912,
+      "cacheWriteTokens": 0,
+      "cacheReadTokens": 15200,
+      "billingMode": "byok",
+      "totalCostUsd": 0,
+      "computedCostUsd": 0.0731,
+      "uid": "usr_7f2a91",
+      "workspaceId": "ws_a1b2c3",
+      "officeId": "off_9c1e7d",
+      "browserId": null,
+      "origin": {
+        "kind": "office",
+        "workspace": { "id": "ws_a1b2c3", "name": "Support" },
+        "office": { "id": "off_9c1e7d", "name": "Ada", "serviceId": "svc_41b0", "projectId": "prj_2c9e" },
+        "browser": null,
+        "missing": []
+      },
+      "createdAt": "2026-10-14T15:58:40.000Z"
+    }
+  ],
+  "hasMore": true
+}
+```
+
+This entry ran on the customer's own model account: nothing was charged, and it
+cost them about seven cents with their provider. To get the next page, send the
+last entry's `id` as `startAfter`.
+
+`office.serviceId` is the machine the employee runs on. It matches `serviceId`
+in [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary),
+which is how to put an employee's model use next to its machine time.
+
+## Totals and charts
+
+Two calls add records up for you. Both split every figure into what was charged
+to your credit (`platformUsd`) and what work on your own model account cost
+(`byokUsd`).
+
+| Call | Gives |
+| --- | --- |
+| [Get a usage summary](/docs/api-reference/billing/usage/getUsageSummary) | Totals for each of the last few months, the month so far, and a total for every day |
+| [Get a usage series](/docs/api-reference/billing/usage/getUsageSeries) | Totals for any window you choose, by hour, day, week or month |
+
+Both take a `timezone`, so days and months line up with the calendar of whoever
+is reading them. Without one they use UTC.
+
+All of these need `billing:read` at `console`, so they show the whole account.
+For one workspace's spend without account access,
+[Get current spend](/docs/api-reference/workspaces/budgets/getWorkspaceSpend)
+needs only `workspace:read` on that workspace, and returns its spend for the
+current day, week or month. Each budget also reports its own spend so far; see
+[Budgets](/docs/spend/budgets).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Budgets"
+    href="/docs/spend/budgets"
+    description="Put a limit on the spend these records show."
+  />
+  <Card
+    title="Credit and top ups"
+    href="/docs/spend/credit"
+    description="The balance the charged amounts come out of."
+  />
+</Cards>

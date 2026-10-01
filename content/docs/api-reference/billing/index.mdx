@@ -1,6 +1,6 @@
 ---
 title: Billing
-description: Credit, usage history, and what your machines cost.
+description: Credit, usage history, budgets, and what your machines cost.
 ---
 
 Two meters, reported separately.
@@ -8,8 +8,9 @@ Two meters, reported separately.
 <ApiSetup />
 
 <Callout>
-  **New to this?** [Spending](/docs/spend) explains what each meter measures,
-  which one can be capped, and the order the checks run in. This page describes
+  **New to this?** [Billing and budgets](/docs/spend) explains what each meter
+  measures, which one can be limited, and the order the checks run in.
+  [Budgets](/docs/spend/budgets) covers how limits behave. This page describes
   the API surface.
 </Callout>
 
@@ -21,7 +22,7 @@ Two meters, reported separately.
 | Balance | [Get the balance](/docs/api-reference/billing/credit/getBalance) | Not a balance |
 | History | [List model usage](/docs/api-reference/billing/usage/listUsage) | [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary) |
 | Invoices | [Credit invoices](/docs/api-reference/billing/usage/listInvoices) | [Compute invoices](/docs/api-reference/billing/compute/listComputeInvoices) |
-| Can be capped | Yes, per workspace | No |
+| Can be limited | Yes, by [budgets](#budgets) | No |
 
 <Callout type="warn">
   **Nothing adds the two together.** There is no combined total anywhere in this
@@ -34,17 +35,45 @@ Two meters, reported separately.
 All of it is checked at `console` scope, so a key scoped to a single workspace
 reaches none of it. That is deliberate: billing is an account concern.
 
-Spend **limits** are the opposite. They are workspace-scoped and live in
-[Workspaces](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets), which
-is what lets you cap one team or customer without giving them sight of the
-account's finances.
+## Budgets
+
+Budgets are limits on model use, for the whole account, one workspace, or one
+employee. The **Budgets** operations here manage all of them from one place and
+need `billing:read` or `billing:manage`.
+
+| To | Call |
+| --- | --- |
+| See every budget, with its spend this window and when it resets | [List budgets](/docs/api-reference/billing/budgets/listBudgets) |
+| Create one at any scope | [Create a budget](/docs/api-reference/billing/budgets/createBudget) |
+| Read, change or remove one | [Get](/docs/api-reference/billing/budgets/getBudget), [Update](/docs/api-reference/billing/budgets/updateBudget), [Delete](/docs/api-reference/billing/budgets/deleteBudget) |
+| Let work continue until the window resets | [Pause a budget](/docs/api-reference/billing/budgets/pauseBudget) |
+| See what a budget has refused | [List refused work](/docs/api-reference/billing/budgets/listBudgetEvents) |
+| Chart a budget's daily spend | [Get daily spend for a budget](/docs/api-reference/billing/budgets/getBudgetSeries) |
+
+**Address a budget by its ID and its workspace.** Every call on one budget takes
+`?workspaceId=`, the workspace the budget belongs to, and leaves it out for an
+account budget. The ID alone returns `404`. Both values are on each budget from
+[List budgets](/docs/api-reference/billing/budgets/listBudgets).
+
+```bash
+curl "$HOS_API/billing/budgets/b7Rk2Wq9LmXv4Pz0Ns1d?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Budgets on one workspace and its employees can also be managed through
+[Workspaces](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets) with
+only `workspace:read` or `workspace:manage` on that workspace. That is what lets
+you give one team or customer control of its own limits without sight of the
+account's finances. Account budgets, pausing, and the record of refused work are
+only here.
 
 ## Holding costs down
 
 The two meters need different tools.
 
-**Model use** is capped with a spending limit on a workspace. Past the ceiling,
-work stops.
+**Model use** is limited with a budget, on the account, a workspace or one
+employee. A budget can stop work at its limit, warn and let it continue, or only
+send alerts.
 
 **Compute** has no cap. The only lever is
 [Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig):
@@ -53,8 +82,8 @@ fewer seconds awake. An office nobody stops keeps costing until it sleeps.
 
 ## What is not here
 
-**Paying.** Cards, checkout and subscription management are console flows and
-reject API keys.
+**Paying.** Cards, checkout, subscription invoices and subscription management
+are console flows and reject API keys.
 
 **Adding credit directly.** Credit is added by paying, or by automatic top ups
 configured through
@@ -67,13 +96,13 @@ rather than through this API.
 
 <Cards>
   <Card
-    title="Spending"
+    title="Billing and budgets"
     href="/docs/spend"
-    description="The two meters, and the three checks before anything spends."
+    description="The two meters, and the checks before anything spends."
   />
   <Card
-    title="Budgets"
-    href="/docs/api-reference/workspaces/budgets/listWorkspaceBudgets"
-    description="Per-workspace spending limits."
+    title="Budgets guide"
+    href="/docs/spend/budgets"
+    description="Scopes, windows, the three actions, alerts and worked examples."
   />
 </Cards>

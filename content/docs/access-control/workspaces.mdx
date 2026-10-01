@@ -125,14 +125,18 @@ curl -X POST "$HOS_API/workspaces/ws_a1b2c3/budgets" \
 <Callout type="warn">
   **A budget caps model spend, not everything.** The cost of running machines is
   not counted and cannot be limited this way, so a budget is a ceiling on one
-  kind of spend rather than a total. [Spending](/docs/spend) covers what each
-  meter measures.
+  kind of spend rather than a total. [Billing and budgets](/docs/spend) covers
+  what each meter measures.
 </Callout>
 
 A budget can also cap what employees spend on **your own model account**, which
 is money we never bill you for. That is something a credit balance cannot do,
-and it is usually the real answer to keeping model costs contained. See
-[Spending](/docs/spend).
+and it is usually the real answer to keeping model costs contained.
+
+A budget does not have to stop work. It can warn and let work continue, or only
+send alerts, and it can cover one employee instead of the whole workspace.
+[Budgets](/docs/spend/budgets) covers the choices and how several budgets
+combine.
 
 Budgets reset on the workspace's **own** calendar, using its timezone. Two
 workspaces in different regions roll over at different moments, which is usually

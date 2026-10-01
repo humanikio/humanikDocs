@@ -1,0 +1,139 @@
+---
+title: Credit and top ups
+description: The prepaid balance model use is paid from, what draws it down, and how it is refilled.
+---
+
+Model work that runs on our model account is paid from a prepaid balance held
+for your account, in US dollars. This page covers what draws on it, what happens
+when it runs low, and how to keep it filled. Work on
+[your own model account](/docs/models/your-own-key) never touches it.
+
+## What draws it down
+
+| Spend | Drawn from your credit |
+| --- | --- |
+| Nova, an AI employee or a cloud browser, on our model account | **Yes**, at what the work cost |
+| The same work on your own model account | **No**. Your provider bills you, and we charge nothing |
+| An office being awake | **No**. Compute is billed separately |
+
+Each piece of work is charged once, when it finishes, at what its tokens cost.
+The charge is recorded in your [usage records](/docs/spend/usage), and the same
+figure is what [budgets](/docs/spend/budgets) count.
+
+A new account starts with a balance of zero. Some accounts receive a one time
+trial credit when they are set up; it appears on your invoices as a trial
+credit with nothing charged.
+
+## When the balance runs low
+
+Before work on our model account starts, and again while it runs, the balance is
+checked.
+
+**Work is refused when the balance is at or below five cents** and automatic top
+ups are off. Nova answers with a `402` and `code: "insufficient_balance"`, and an
+AI employee is refused in the same way.
+
+**The work that crosses that floor is allowed to finish.** The check happens
+between steps, not in the middle of one, so the step that takes the balance
+below five cents completes, and the balance can end below zero. The next
+check refuses.
+
+Work on your own model account is never refused for low credit, because it does
+not use any.
+
+To find out in advance whether work would be allowed, call
+[Check before spending](/docs/api-reference/billing/credit/checkBalance). It
+answers without doing any work, which is useful before starting something long.
+
+## Adding credit
+
+Credit is bought in the console with a saved card, between $5 and $500 at a
+time. A platform fee is added on top of the amount, and the console shows the
+amount, the fee and the total before the card is charged. The credit lands in
+your balance once the payment succeeds.
+
+Buying credit, saving cards and choosing the default card are console flows. An
+API key cannot do them.
+
+## Automatic top ups
+
+An automatic top up refills the balance from your default card when it falls
+below a threshold you choose.
+
+| Setting | Meaning |
+| --- | --- |
+| Threshold | Top up once the balance falls below this. Must be more than zero |
+| Amount | How much credit to add each time. At least $5 |
+
+When a piece of work is charged and leaves the balance below the threshold, the
+default card is charged for the amount plus the platform fee, the credit is
+added, and an invoice is written. The top up happens **after** the work that
+took the balance below the threshold, not before it.
+
+Switch it on, change it or switch it off with
+[Configure automatic top ups](/docs/api-reference/billing/credit/updateAutoReload):
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/billing/balance/auto-reload" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "autoReload": { "enabled": true, "thresholdUsd": 10, "reloadAmountUsd": 50 } }'
+```
+
+#### Response `200 OK`
+
+```json
+{ "success": true }
+```
+
+Send `"autoReload": null` to switch it off. This needs `billing:manage`.
+
+<Callout type="warn">
+  **A failed top up does not tell you.** If the card is declined, or there is no
+  default card, no credit is added and no notification is sent. The charge is
+  tried again after later usage. If your balance is lower than you expect, check
+  the default card in the console first.
+</Callout>
+
+## Invoices
+
+Credit invoices record money coming into your balance. Each one carries the
+credit added, the platform fee, the total charged to the card, and a status.
+
+| Type | Recorded when |
+| --- | --- |
+| Credit purchase | You bought credit in the console |
+| Automatic top up | A top up charged your card |
+| Trial credit | A trial credit was granted. Nothing was charged |
+
+List them with
+[List credit invoices](/docs/api-reference/billing/usage/listInvoices).
+
+Two other kinds of invoice exist, and neither is in that list:
+
+- **Compute invoices**, for machine time, listed by
+  [List compute invoices](/docs/api-reference/billing/compute/listComputeInvoices).
+- **Subscription invoices**, for platform access, which are viewed and paid in
+  the console.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Usage records"
+    href="/docs/spend/usage"
+    description="What each piece of model work cost, and who spent it."
+  />
+  <Card
+    title="Budgets"
+    href="/docs/spend/budgets"
+    description="Limits that cover your credit and your own model account."
+  />
+  <Card
+    title="Your own model account"
+    href="/docs/models/your-own-key"
+    description="Running employees on a key you hold, which we never bill."
+  />
+</Cards>

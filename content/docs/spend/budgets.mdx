@@ -1,0 +1,505 @@
+---
+title: Budgets
+description: Limits on model spend for the whole account, one workspace, or one employee, and what happens when one is reached.
+---
+
+A budget is a dollar limit on model use over a day, a week or a month. You
+choose what it covers, what it counts, and what happens when spend reaches the
+limit: stop the work, warn and keep going, or only tell people.
+
+It is what makes unattended work safe to allow. You set the limit once, and your
+employees work inside it without anyone approving each step.
+
+<Callout>
+  **Budgets cover model use only.** The cost of an office being awake is not
+  counted and cannot be limited by a budget. See
+  [What costs money](/docs/spend#what-costs-money).
+</Callout>
+
+## The parts of a budget
+
+| Part | Choices |
+| --- | --- |
+| **Covers** | The whole account, one workspace, or one employee |
+| **Resets** | Every day, every week, or every month |
+| **Counts** | Spend charged to your credit, spend on your own model account, or both |
+| **Limit** | An amount in US dollars |
+| **At the limit** | Stop the work, warn and keep going, or only tell people |
+| **Alerts** | Who is told, at what share of the limit, and whether by text message |
+
+A budget can also be switched off, which keeps its settings, or paused until its
+window resets.
+
+## What a budget covers
+
+| Covers | Counts spend from | Can stop work in | Who can manage it |
+| --- | --- | --- | --- |
+| **The whole account** | Every workspace | Every workspace | `billing:manage` @ `console` |
+| **One workspace** | That workspace, including all of its employees | That workspace | `workspace:manage` on the workspace, or `billing:manage` |
+| **One employee** | That employee, plus Nova while it works inside that employee's office | That employee, and Nova working inside its office | `workspace:manage` on the workspace, or `billing:manage` |
+
+What a budget covers is fixed when it is created. To move a limit from a
+workspace to one employee, delete the budget and create another.
+
+Because a workspace or employee budget needs only `workspace:manage`, you can
+let a team lead set their own team's limits without showing them the account's
+balance, usage or invoices. Account budgets need `billing:manage`.
+
+<Callout type="warn">
+  **A budget does not stop a cloud browser.** Browser spend is counted by
+  account and workspace budgets, so it moves them toward their limits, but
+  browser sessions are not checked against them and keep running.
+</Callout>
+
+## When the total resets
+
+| Window | Runs from | To |
+| --- | --- | --- |
+| Daily | Midnight | The next midnight |
+| Weekly | Monday at midnight | The next Monday at midnight |
+| Monthly | Midnight on the 1st | Midnight on the next 1st |
+
+**Whose midnight depends on what the budget covers.** Workspace and employee
+budgets use the workspace's time zone, set with
+[Set the timezone](/docs/api-reference/workspaces/workspaces/updateWorkspaceTimeConfig).
+A workspace that has never had one set uses UTC. Two workspaces in different
+regions therefore reset at different moments, which is what you want when they
+serve customers in different places.
+
+**Account budgets always use UTC**, because an account has no time zone of its
+own and picking one workspace's would be arbitrary. Every budget reports its
+reset time as `resetsAt`, so the moment is always visible.
+
+Changes to daylight saving time are handled: a day is always a calendar day in
+the workspace's zone, even when that day is 23 or 25 hours long.
+
+## What a budget counts
+
+| Counts | Adds up |
+| --- | --- |
+| Credit | Model use on our model account, charged to your credit |
+| Your own model account | Model use on [your own model account](/docs/models/your-own-key), at what it cost you there. We never bill this |
+| Both | The two added together |
+
+**A budget only acts on work it counts.** A budget that counts only credit never
+stops or warns about work on your own model account, and a budget that counts
+only your own account never stops work on credit. Count both to limit model use
+whoever is paying for it.
+
+Limiting your own model account is the part most people do not expect. We are
+not paid for that usage, and a budget limits it anyway, so an employee that keeps
+spending on your own key stops at your limit rather than at your provider's.
+
+## What happens at the limit
+
+A budget has reached its limit when the spend it counts in the current window
+is equal to or more than the limit.
+
+| | **Stop the work** | **Warn and keep going** | **Only tell people** |
+| --- | --- | --- | --- |
+| In the API | `block` | `warn` | `notify` |
+| New work | Refused | Runs | Runs |
+| Work already running | Stopped at its next step | Continues | Continues |
+| Shown in the app | The refusal and its reason | The run is marked as over the limit | Nothing |
+| Alerts with none configured | None | One, at the limit | One, at the limit |
+| Recorded as refused work | Yes | No | No |
+
+### Stop the work
+
+New work by Nova or an AI employee is refused until the window resets, the limit
+is raised, or the budget is paused. Work already running stops at its next step:
+Nova checks between steps of a turn, and an employee checks before each call to
+a model.
+
+What the caller sees:
+
+| Where | Refusal |
+| --- | --- |
+| Nova, before a turn starts | `402` with `code: "budget_exceeded"`, the budget's ID, window and scope, the amount used and the limit |
+| Nova, partway through a turn | `200` with `status: "budget_exceeded"`, and the turn ends |
+| An AI employee asked to start work | `402` with `code: "budget_exceeded"` |
+
+The message reads like *Weekly workspace budget reached ("Support weekly").
+Resets on Monday at midnight (workspace timezone).* Branch on the code, not the
+words.
+
+<Callout type="warn">
+  **Spend can pass the limit.** Spend is recorded when a piece of work finishes,
+  and a check result is reused for up to five seconds. So the work that carries
+  the total over the limit finishes its current step, and other work that
+  started at the same moment may too. Set the limit with some room.
+</Callout>
+
+If the spend for a budget that could stop the work cannot be read at that
+moment, the work is stopped rather than allowed. The refusal may then name no
+budget.
+
+### Warn and keep going
+
+The work runs. In the app, a run that started while the budget was over its
+limit is marked as over the limit, with the budget's name and the amount used,
+so the person reading it knows. This mark is shown in the app's chat and is not
+returned by the API.
+
+For an AI employee the mark is set when a run starts. If the budget goes over
+its limit during a long run, the mark appears on the next one.
+
+### Only tell people
+
+The work runs and nothing in it changes. The budget exists only to send
+[alerts](#alerts).
+
+## How several budgets combine
+
+One piece of work is usually covered by more than one budget: the account's,
+its workspace's, and its employee's. **Every budget that applies is checked.**
+
+<svg viewBox="0 0 720 344" className="w-full h-auto my-6" role="img" aria-label="Four budgets checked for one piece of work by Ada, an employee in the Support workspace, on your credit. The account monthly budget is under its limit. The Support weekly budget, set to stop the work, is at its limit, so the work stops. The Ada monthly budget, set to only tell people, is over its limit and sends an alert. A Sales workspace budget does not apply.">
+  <title>How several budgets combine</title>
+
+  <text x="8" y="16" fontSize="11" letterSpacing="1.2" fill="var(--color-fd-muted-foreground)">ONE PIECE OF WORK: ADA, AN EMPLOYEE IN SUPPORT, ON YOUR CREDIT</text>
+
+  <g fontSize="10" letterSpacing="1" fill="var(--color-fd-muted-foreground)">
+    <text x="8" y="44">BUDGET</text>
+    <text x="320" y="44">SPEND THIS WINDOW</text>
+    <text x="600" y="44">RESULT</text>
+  </g>
+  <line x1="8" y1="52" x2="712" y2="52" stroke="var(--color-fd-border)" />
+
+  <line x1="528" y1="60" x2="528" y2="278" stroke="var(--color-fd-foreground)" strokeWidth="1" strokeDasharray="3 3" />
+  <rect x="510" y="56" width="36" height="14" fill="var(--color-fd-background)" />
+  <text x="528" y="67" fontSize="10" textAnchor="middle" fill="var(--color-fd-foreground)">limit</text>
+
+  <text x="8" y="90" fontSize="14" fill="var(--color-fd-foreground)">Account monthly</text>
+  <text x="8" y="108" fontSize="12" fill="var(--color-fd-muted-foreground)">whole account · $2,000 · warn</text>
+  <rect x="320" y="80" width="260" height="12" rx="3" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <rect x="320" y="80" width="85" height="12" rx="3" fill="var(--color-fd-muted-foreground)" />
+  <text x="320" y="108" fontSize="11" fill="var(--color-fd-muted-foreground)">$812 of $2,000</text>
+  <text x="600" y="95" fontSize="12.5" fill="var(--color-fd-muted-foreground)">Under its limit</text>
+
+  <text x="8" y="146" fontSize="14" fill="var(--color-fd-foreground)">Support weekly</text>
+  <text x="8" y="164" fontSize="12" fill="var(--color-fd-muted-foreground)">this workspace · $300 · stop the work</text>
+  <rect x="320" y="136" width="260" height="12" rx="3" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <rect x="320" y="136" width="208" height="12" rx="3" fill="var(--color-fd-foreground)" />
+  <text x="320" y="164" fontSize="11" fill="var(--color-fd-muted-foreground)">$300 of $300</text>
+  <text x="600" y="151" fontSize="12.5" fontWeight="600" fill="var(--color-fd-foreground)">Stops the work</text>
+
+  <text x="8" y="202" fontSize="14" fill="var(--color-fd-foreground)">Ada monthly</text>
+  <text x="8" y="220" fontSize="12" fill="var(--color-fd-muted-foreground)">this employee · $50 · only tell people</text>
+  <rect x="320" y="192" width="260" height="12" rx="3" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <rect x="320" y="192" width="254" height="12" rx="3" fill="var(--color-fd-muted-foreground)" />
+  <text x="320" y="220" fontSize="11" fill="var(--color-fd-muted-foreground)">$61 of $50</text>
+  <text x="600" y="201" fontSize="12.5" fill="var(--color-fd-muted-foreground)">Sends an alert,</text>
+  <text x="600" y="217" fontSize="12.5" fill="var(--color-fd-muted-foreground)">stops nothing</text>
+
+  <text x="8" y="258" fontSize="14" fill="var(--color-fd-muted-foreground)">Sales weekly</text>
+  <text x="8" y="276" fontSize="12" fill="var(--color-fd-muted-foreground)">another workspace · $100 · stop the work</text>
+  <rect x="320" y="248" width="260" height="12" rx="3" fill="none" stroke="var(--color-fd-border)" strokeDasharray="4 3" />
+  <text x="320" y="276" fontSize="11" fill="var(--color-fd-muted-foreground)">not checked</text>
+  <text x="600" y="263" fontSize="12.5" fill="var(--color-fd-muted-foreground)">Does not apply</text>
+
+  <line x1="8" y1="298" x2="712" y2="298" stroke="var(--color-fd-border)" />
+  <text x="8" y="318" fontSize="12.5" fill="var(--color-fd-muted-foreground)">Every budget that applies is checked. Any budget set to stop the work that is at its limit stops it,</text>
+  <text x="8" y="336" fontSize="12.5" fill="var(--color-fd-muted-foreground)">whatever the others say. A budget that warns or only tells people never stops work.</text>
+</svg>
+
+The rules, in the order they are applied:
+
+<Steps>
+<Step>
+### Find the budgets that apply
+
+The account's budgets, the budgets on the workspace the work runs in, and the
+budgets on the employee doing it. Budgets on other workspaces and other
+employees are ignored.
+</Step>
+
+<Step>
+### Skip what is off
+
+A switched off budget, or one paused until its reset, is skipped entirely. It
+stops nothing, warns about nothing and sends no alerts.
+</Step>
+
+<Step>
+### Keep the ones that count this work
+
+Only a budget that counts this kind of spend can stop it or warn about it. Work
+on your own model account is not stopped by a budget that counts only credit.
+</Step>
+
+<Step>
+### Any stopping budget at its limit stops the work
+
+If one or more budgets set to stop the work are at their limit, the work stops,
+whatever any other budget says. The refusal names the one with the **lowest
+limit** among them.
+</Step>
+
+<Step>
+### Otherwise the work runs
+
+If a budget set to warn is at its limit, the run is marked as over the limit. A
+budget set to only tell people never changes the work.
+</Step>
+</Steps>
+
+The practical result: **the tightest budget that stops work wins.** Adding a
+budget can only make a stop more likely, never less. A generous account budget
+does not loosen a strict workspace one.
+
+## Alerts
+
+Alerts tell people as spend approaches and reaches a limit. They work the same
+for all three actions.
+
+**Thresholds are shares of the limit.** `0.5` is 50 percent, `1` is the limit
+itself, and values up to `2` (twice the limit) are allowed, so a budget that
+only warns can alert again well past its limit. Up to ten thresholds.
+
+**With no thresholds set**, a budget that warns or only tells people still
+alerts once, at the limit. A budget that stops the work sends nothing, because
+the refusal is the signal. Add thresholds to a stopping budget to hear about it
+before work stops.
+
+**Each threshold is sent once per window.** A new day, week or month starts with
+nothing sent. If several thresholds are crossed at once, one alert is sent, for
+the highest. Changing the limit, the window, what is counted, or the alerts lets
+every threshold be sent again in the current window.
+
+### Who is told
+
+| | Recipients |
+| --- | --- |
+| You list people | Exactly those people, up to 50 |
+| You list nobody | Everyone holding `billing:manage` on the account, plus, for a workspace or employee budget, that workspace's admins |
+
+Alerts arrive as notifications in the app. For a workspace or employee budget
+they appear in that workspace. For an account budget they appear in the
+workspace whose work crossed the threshold, since there is no account level
+notification list.
+
+### Text messages
+
+Switch on text messages for a budget and recipients also get a text from the
+platform number at the thresholds you choose. **By default that is only at the
+limit.** A text goes only to people who have confirmed a phone number on their
+profile; anyone else still gets the notification in the app.
+
+### When an alert is sent
+
+Alerts are checked when Nova or an AI employee is about to start work, and
+between the steps of a Nova turn. They are not sent on a timer. Spend is
+recorded as work finishes, so the alert for a threshold arrives when the next
+piece of work in that scope starts. If nothing else runs, the alert waits until
+something does.
+
+## Pausing until the reset
+
+Pausing sets a budget aside until its current window ends. Until then it stops
+nothing, warns about nothing and sends no alerts. At the reset it applies again
+on its own, and nothing has to be undone. You can also clear a pause early.
+
+This is the way to let work continue past a limit for the rest of a day, week or
+month, without raising the limit and having to remember to lower it again.
+Pausing needs `billing:manage`.
+
+| To | Use |
+| --- | --- |
+| Let work continue until the window resets | Pause |
+| Stop applying a budget until you turn it back on | Switch it off |
+| Allow more spend from now on | Raise the limit |
+| Remove it and its record of refused work | Delete it |
+
+## The record of refused work
+
+Each time a budget set to stop the work refuses something, a record is kept: when
+it happened, what kind of work it was (for example Nova in a chat, a scheduled
+Nova task, or an AI employee), which workspace and employee it was in, and the
+person it ran for.
+
+Read it with
+[List refused work](/docs/api-reference/billing/budgets/listBudgetEvents),
+newest first. It answers *"what has this limit actually stopped?"*, which is the
+question to ask before raising one.
+
+The record is kept on a best effort basis. A refusal never fails because it
+could not be recorded, so the list can occasionally miss one. Deleting a budget
+deletes its record.
+
+## Examples
+
+All of these use the account-wide budget routes, which need `billing:manage`.
+Workspace and employee budgets can also be managed with only `workspace:manage`
+through the [workspace routes](/docs/api-reference/workspaces/budgets/listWorkspaceBudgets).
+
+### Cap one employee at $50 a month, and get a text at the limit
+
+Find the employee's office ID first, with
+[List offices](/docs/api-reference/offices/offices/listOffices):
+
+```bash
+curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Then create the budget:
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/billing/budgets" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Ada monthly",
+    "scope": { "kind": "office", "workspaceId": "ws_a1b2c3", "officeId": "off_9c1e7d" },
+    "window": "monthly",
+    "metric": ["platform", "byok"],
+    "limitUsd": 50,
+    "action": "block",
+    "alerts": { "thresholds": [0.8, 1], "recipients": [], "sms": true }
+  }'
+```
+
+#### Response `201 Created`
+
+```json
+{
+  "success": true,
+  "budget": {
+    "id": "b7Rk2Wq9LmXv4Pz0Ns1d",
+    "name": "Ada monthly",
+    "scope": { "kind": "office", "workspaceId": "ws_a1b2c3", "officeId": "off_9c1e7d" },
+    "workspaceId": "ws_a1b2c3",
+    "window": "monthly",
+    "metric": ["platform", "byok"],
+    "limitUsd": 50,
+    "action": "block",
+    "alerts": { "thresholds": [0.8, 1], "recipients": [], "sms": true },
+    "enabled": true,
+    "pausedUntil": null,
+    "pausedBy": null,
+    "usage": {
+      "usedUsd": 0,
+      "windowStart": "2026-10-01T04:00:00.000Z",
+      "resetsAt": "2026-11-01T04:00:00.000Z"
+    },
+    "workspaceName": "Support",
+    "officeName": "Ada"
+  }
+}
+```
+
+What happens: the month runs on the Support workspace's calendar. At $40 the
+billing admins and Support's workspace admins get a notification. At $50 they
+get another, and those with a confirmed phone also get a text, because `smsAt`
+was left out and defaults to the limit. From then until the 1st, Ada refuses new
+work and stops running work at its next step. The rest of the workspace is not
+affected.
+
+### A monthly account limit that only warns
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/billing/budgets" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Account monthly",
+    "scope": { "kind": "account" },
+    "window": "monthly",
+    "metric": ["platform", "byok"],
+    "limitUsd": 2000,
+    "action": "warn",
+    "alerts": { "thresholds": [0.5, 0.9, 1], "recipients": [], "sms": false }
+  }'
+```
+
+What happens: the month runs from midnight UTC on the 1st. Billing admins are
+told at $1,000, $1,800 and $2,000. Past $2,000 nothing stops: new Nova and
+employee runs in every workspace are marked as over the limit in the app until
+the month resets. To
+make the account limit firm later, change `action` to `block` with
+[Update a budget](/docs/api-reference/billing/budgets/updateBudget).
+
+### Let a team lead manage their own limit
+
+A person or service account holding `workspaceAdmin` on one workspace, and
+nothing on the console, can create a budget for it through the workspace route. They never see the
+account's balance or invoices.
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/workspaces/ws_a1b2c3/budgets" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Support weekly",
+    "window": "weekly",
+    "metric": ["platform"],
+    "limitUsd": 300,
+    "action": "block",
+    "alerts": { "thresholds": [0.75], "recipients": [], "sms": false }
+  }'
+```
+
+`scope` is left out, so this is a workspace budget. The week starts on Monday at
+midnight in the workspace's time zone. It counts only credit, so employees in
+Support that run on your own model account are not stopped by it.
+
+### Let work continue for the rest of the month
+
+A budget has stopped work and you would rather not raise the limit. Pause it
+until its window resets. A workspace or employee budget needs its `workspaceId`
+on the call; an account budget does not.
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/billing/budgets/b7Rk2Wq9LmXv4Pz0Ns1d/pause?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "untilReset": true }'
+```
+
+The response returns the budget with `pausedUntil` set to the start of next
+month. Send `{ "untilReset": false }` to clear the pause early.
+
+## What a budget does not do
+
+- **It does not count compute.** An office being awake costs money that no
+  budget sees.
+- **It does not stop cloud browsers**, though their spend is counted.
+- **It does not cover phone calls or text messages.** Nothing meters them.
+- **It does not stop work mid-step.** The step that crosses the limit finishes,
+  so spend can end up above the limit.
+- **It does not reset on your local time for an account budget.** Account
+  budgets use UTC.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Budgets API"
+    href="/docs/api-reference/billing/budgets/listBudgets"
+    description="Every budget in the account, at every scope."
+  />
+  <Card
+    title="Workspace budgets API"
+    href="/docs/api-reference/workspaces/budgets/listWorkspaceBudgets"
+    description="Budgets on one workspace and its employees, with workspace access only."
+  />
+  <Card
+    title="Usage records"
+    href="/docs/spend/usage"
+    description="The spend that budgets count, record by record."
+  />
+  <Card
+    title="Tenants and workspaces"
+    href="/docs/access-control/workspaces"
+    description="Giving each team or customer its own limit."
+  />
+</Cards>

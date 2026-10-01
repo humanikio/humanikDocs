@@ -449,6 +449,11 @@ paths:
         A cycle that fails returns `200` with `success: false` and a `status` of
         `failed`. Check the body, not just the status code.
 
+        A budget that stops a turn **partway through** also returns `200`, with
+        `success: true` and a `status` of `budget_exceeded`. Only a budget that
+        stops the turn before it starts returns `402`. See
+        [Budgets](/docs/spend/budgets).
+
         ## Long turns, and why a timeout is not a failure
 
         A turn doing real work can run for minutes. The console allows four.
@@ -592,8 +597,14 @@ paths:
             The tenant is out of credit, or a spending budget has been reached.
             Branch on `code`, which is stable, rather than on the message.
 
-            This can arrive at the start of a turn or partway through one, and
-            the shape is the same either way.
+            Running out of credit can return this at the start of a turn or
+            partway through one. A budget returns it only at the start: a budget
+            reached partway through ends the turn with `200` and `status:
+            "budget_exceeded"` instead.
+
+            When `code` is `budget_exceeded`, the body names the budget that
+            stopped the work. If several budgets are at their limit, it is the
+            one with the lowest limit among those that stop work.
           content:
             application/json:
               schema:
@@ -605,10 +616,19 @@ paths:
                     enum: [insufficient_balance, budget_exceeded]
                   error: { type: string }
                   balanceUsd: { type: number }
-                  budgetId: { type: string }
+                  budgetId:
+                    type: string
+                    description: |
+                      The budget that stopped the work. Look it up with
+                      [Get a budget](/docs/api-reference/billing/budgets/getBudget),
+                      sending `workspaceId` unless `budgetScope` is `account`.
                   budgetWindow:
                     type: string
-                    enum: [daily, monthly]
+                    enum: [daily, weekly, monthly]
+                  budgetScope:
+                    type: string
+                    enum: [account, workspace, office]
+                    description: Whether the budget covers the account, the workspace, or one employee.
                   usedUsd: { type: number }
                   limitUsd: { type: number }
               examples:
@@ -624,9 +644,10 @@ paths:
                   value:
                     success: false
                     code: budget_exceeded
-                    error: Monthly budget reached ("Ops"). Resets on the 1st of the month (workspace timezone).
+                    error: Monthly workspace budget reached ("Ops"). Resets on the 1st of the month (workspace timezone).
                     budgetId: bdg_5Kf
                     budgetWindow: monthly
+                    budgetScope: workspace
                     usedUsd: 250
                     limitUsd: 250
         '403': { $ref: '#/components/responses/Forbidden' }

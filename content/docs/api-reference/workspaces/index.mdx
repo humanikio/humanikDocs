@@ -45,28 +45,32 @@ another.
 
 ## Budgets
 
-A budget caps spend in one workspace over a daily or monthly window. Past the
-cap, work in that workspace is refused with a `402` carrying
-`code: "budget_exceeded"`, while other workspaces are unaffected.
+The **Budgets** operations here manage spending limits on this workspace, and on
+the employees in it, with only `workspace:read` or `workspace:manage`. That is
+what lets a team lead manage their own team's limits without access to the
+account's billing.
 
-Two limits worth knowing before you rely on one:
+A budget resets daily, weekly or monthly on the workspace's own calendar, using
+its timezone rather than yours or UTC. At its limit it stops work, warns and lets
+work continue, or only sends alerts. A budget that stops work refuses it with a
+`402` carrying `code: "budget_exceeded"`, while other workspaces are unaffected.
+
+Send `scope: { "kind": "office", "officeId": "..." }` on create to limit one
+employee instead of the whole workspace.
 
 <Callout type="warn">
   **Model spend only.** The cost of running machines is not counted and cannot
-  be capped here.
+  be limited here.
 </Callout>
 
-<Callout type="warn">
-  **Blocking is the only behaviour.** There is no warn-only budget, so a cap you
-  set will stop work rather than notify you.
-</Callout>
+Three things are not available through these routes, and live in
+[Billing](/docs/api-reference/billing/budgets/listBudgets) instead, behind
+`billing:read` or `billing:manage`: account budgets, pausing a budget until its
+window resets, and the record of work a budget refused. The billing routes also
+return each budget's spend so far.
 
-Windows reset on the workspace's own calendar, using its timezone rather than
-yours or UTC.
-
-A limit can also cap model use billed to **your own model account**, which never
-touches your credit here. [Spending](/docs/spend) covers why that matters and
-the order the checks run in.
+[Budgets](/docs/spend/budgets) explains the three actions, alerts, and how
+several budgets combine.
 
 ## What is not here
 
