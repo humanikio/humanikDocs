@@ -49,6 +49,8 @@ tags:
     description: Creating a folder before there is anything in it.
   - name: Search
     description: Finding a file by describing it rather than naming it.
+  - name: Editing
+    description: Viewing and editing a text file, replacing a file's contents, and a file's earlier versions.
 
 components:
   securitySchemes:
@@ -208,6 +210,16 @@ components:
           items:
             type: number
           description: Present on single reads. Large, and rarely useful to a caller.
+        version:
+          type: integer
+          minimum: 1
+          description: |
+            Goes up by one every time the file's contents change (replace, edit
+            or restore). Send it back as `ifVersion` when you change the file;
+            a change based on an older version is refused.
+        updatedBy:
+          type: [string, 'null']
+          description: Who wrote the current contents. Null means the uploader, `createdBy`.
         createdBy:
           type: [string, 'null']
         createdAt:
@@ -217,6 +229,75 @@ components:
           type: string
           format: date-time
       required: [id, path, name, bucketId, status]
+
+    ContentError:
+      type: object
+      description: |
+        The error body on the Editing operations. `error` is prose. `code` is a
+        stable value you can branch on.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+        code:
+          type: string
+          enum: [not_found, version_conflict, exists, invalid, not_text, edit_failed, too_large]
+        currentVersion:
+          type: integer
+          description: On `version_conflict` and `exists`, the file's version now. View the file again before retrying.
+        editIndex:
+          type: integer
+          description: On `edit_failed`, the position (from 0) of the edit that failed. Nothing was saved.
+      required: [success, error]
+
+    FileSummary:
+      type: object
+      description: A file after its contents changed. The heavy fields of `Asset` are left out.
+      properties:
+        id:
+          type: string
+          format: uuid
+        path:
+          type: string
+        name:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [processing, ready, failed]
+        updatedBy:
+          type: [string, 'null']
+        updatedAt:
+          type: string
+          format: date-time
+
+    FileVersion:
+      type: object
+      description: An earlier version of a file.
+      properties:
+        version:
+          type: integer
+        sizeBytes:
+          type: integer
+        mimeType:
+          type: string
+        createdBy:
+          type: [string, 'null']
+          description: Who wrote that version.
+        createdAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          enum: [replace, edit, restore]
+          description: How the version after this one was made.
 
     AssetMatch:
       type: object
@@ -656,7 +737,11 @@ paths:
 
         **Not idempotent.** Every call creates a new file. Uploading the same
         name twice to the same path is refused as a duplicate; uploading to a
-        different path creates a second file.
+        different path creates a second file. To change the contents of a file
+        that already exists, use
+        [Replace a file's contents](/docs/api-reference/buckets/editing/replaceObjectContent)
+        or, for text, [Edit a text file](/docs/api-reference/buckets/editing/editTextObject).
+        Both keep the file's id and path and keep the old contents as a version.
 
         The response returns with `status: "processing"`. Preparing the file for
         search happens afterwards and is not waited on, so the file is
@@ -1092,4 +1177,450 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/text:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    post:
+      tags: [Editing]
+      summary: Write a text file
+      operationId: writeTextObject
+      description: |
+        Saves text as a file, sending the text itself rather than a file upload.
+        Requires `datasource:manage`. For markdown, plain text, CSV, JSON, YAML,
+        HTML and other text types.
+
+        **When the path is free**, a new file is created at version 1, exactly as
+        an upload would.
+
+        **When a file is already at the path**, the call is refused with `409`
+        and `code: "exists"`, carrying the file's `currentVersion`, unless you
+        send that version as `ifVersion`. Then the whole file is replaced, its id
+        and path stay the same, and the old contents are kept as a version. A
+        file is never overwritten by a caller that has not seen it.
+
+        Text files are limited to 2 MB. A binary type (an image, a PDF) is
+        refused: upload those instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, text]
+              properties:
+                path:
+                  type: string
+                  description: The full path including the file name. Folders need no creating.
+                  examples: ['/playbooks/indeed-applicant-outreach.md']
+                text:
+                  type: string
+                  description: The whole content of the file. May be empty.
+                mimeType:
+                  type: string
+                  description: Optional. Taken from the file name when omitted (`.md` becomes `text/markdown`), otherwise `text/plain`.
+                ifVersion:
+                  type: integer
+                  description: Only to replace an existing file. Its current `version`.
+                workspaceId:
+                  type: string
+                  description: The workspace the namespace lives in. From `GET /workspaces`.
+      responses:
+        '201':
+          description: A new file was created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  created: { type: boolean, const: true }
+                  object: { $ref: '#/components/schemas/FileSummary' }
+        '200':
+          description: An existing file was replaced. `object.version` is the new version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  created: { type: boolean, const: false }
+                  object: { $ref: '#/components/schemas/FileSummary' }
+        '400':
+          description: A missing field, a path without a file name, or a type that is not text.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            `exists`: a file is at the path and no `ifVersion` was sent.
+            `version_conflict`: `ifVersion` is not the file's current version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '413':
+          description: The text is over 2 MB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}/text:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - $ref: '#/components/parameters/ObjectId'
+
+    get:
+      tags: [Editing]
+      summary: View a text file
+      operationId: viewTextObject
+      description: |
+        Returns a text file as numbered lines, read from the stored file, with
+        its current `version`. Requires `datasource:read`.
+
+        Use it before editing: copy `oldText` from `content` without the line
+        number and tab, and send `version` back as `ifVersion`.
+
+        Each call returns at most 2,000 lines and 100,000 characters. When
+        `more` is `true`, call again with `startLine` set past `endLine`. Files
+        over 10 MB, and files that are not valid UTF-8 text, are refused; use
+        [Get a file](/docs/api-reference/buckets/files/getObject) for a download
+        link instead.
+
+        Line endings are shown as plain line breaks whatever the file uses. Edits
+        keep the file's own line endings.
+      parameters:
+        - name: startLine
+          in: query
+          description: First line to return, from 1. Defaults to 1.
+          schema: { type: integer, minimum: 1 }
+        - name: endLine
+          in: query
+          description: Last line to return, inclusive. Defaults to 2,000 lines after `startLine`.
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: The requested lines.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  objectId: { type: string, format: uuid }
+                  path: { type: string }
+                  mimeType: { type: string }
+                  version:
+                    type: integer
+                    description: Send this back as `ifVersion` when you edit or replace the file.
+                  totalLines: { type: integer }
+                  startLine: { type: integer }
+                  endLine: { type: integer }
+                  content:
+                    type: string
+                    description: One line per row, as a right-aligned line number, a tab, then the line. The numbers and tab are not part of the file.
+                    examples: ["     1\t# Indeed applicant outreach\n     2\t\n     3\tStep 1: say hello"]
+                  more:
+                    type: boolean
+                    description: True when the file has lines after `endLine`.
+        '400':
+          description: Not a text file, not valid UTF-8, or `startLine` is past the end.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: The file is over 10 MB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}/edits:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - $ref: '#/components/parameters/ObjectId'
+
+    post:
+      tags: [Editing]
+      summary: Edit a text file
+      operationId: editTextObject
+      description: |
+        Changes part of a text file without sending the whole file. Requires
+        `datasource:manage`. Text files up to 2 MB.
+
+        Two kinds of edit, applied in order:
+
+        - `replace`: `oldText` must appear in the file **exactly once**, matched
+          exactly including spaces and line breaks. If it appears more than once
+          the call is refused and the error lists the lines; add surrounding text
+          to make it unique, or set `replaceAll` to change every one. If it is
+          not found, the error names the closest line.
+        - `insert`: adds `text` after line `afterLine`. `0` inserts at the top.
+          Line numbers in a later edit refer to the file after the earlier edits
+          in the same call.
+
+        **All or nothing.** If any edit fails, nothing is saved and `editIndex`
+        says which one.
+
+        `ifVersion` is required. If the file changed since that version, the
+        call is refused with `409` and the current version; view the file again
+        and redo the change on what it says now.
+
+        The file keeps its id, path, line endings and byte order mark, and the
+        previous contents are kept as a version. The text is current at once;
+        the description used by file search is rebuilt shortly after the last
+        change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ifVersion, edits]
+              properties:
+                ifVersion:
+                  type: integer
+                  description: The version you viewed, or the version your previous edit returned.
+                edits:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    oneOf:
+                      - type: object
+                        title: Replace
+                        required: [type, oldText, newText]
+                        properties:
+                          type: { type: string, const: replace }
+                          oldText: { type: string, description: The exact text to change. }
+                          newText: { type: string, description: What it becomes. An empty string deletes it. }
+                          replaceAll: { type: boolean, description: Change every occurrence instead of exactly one. }
+                      - type: object
+                        title: Insert
+                        required: [type, afterLine, text]
+                        properties:
+                          type: { type: string, const: insert }
+                          afterLine: { type: integer, minimum: 0, description: 'The line to insert after. 0 is the top of the file.' }
+                          text: { type: string, description: The lines to add. }
+                  examples:
+                    - - { type: replace, oldText: 'Step 1: say hello', newText: 'Step 1: greet them by name' }
+                      - { type: insert, afterLine: 12, text: 'Step 4: follow up after a week' }
+      responses:
+        '200':
+          description: Saved, or nothing to change (`changed` is false and the version is unchanged).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  objectId: { type: string, format: uuid }
+                  path: { type: string }
+                  version:
+                    type: integer
+                    description: The new version. Use it as `ifVersion` for the next edit.
+                  changed: { type: boolean }
+                  applied:
+                    type: array
+                    description: Where each edit landed.
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string, enum: [replace, insert] }
+                        line: { type: integer, description: The first line the edit touches in the new file. }
+                        count: { type: integer, description: With `replaceAll`, how many places changed. }
+                  preview:
+                    type: string
+                    description: A few numbered lines around the first edit, in the same form as View.
+                  totalLines: { type: integer }
+        '400':
+          description: A missing `ifVersion`, an empty or malformed edit list, an edit that does not match (`edit_failed`), or a file that is not text.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The file changed since `ifVersion`. `currentVersion` is the version now.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '413':
+          description: The file, before or after the edits, is over 2 MB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}/content:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - $ref: '#/components/parameters/ObjectId'
+
+    put:
+      tags: [Editing]
+      summary: Replace a file's contents
+      operationId: replaceObjectContent
+      description: |
+        Gives an existing file new contents, of any type. Requires
+        `datasource:manage`. Takes `multipart/form-data`, like an upload, with a
+        50 MB limit.
+
+        The file keeps its id and path. Its `version` goes up by one and the old
+        contents are kept as a version. `ifVersion` is required; if the file
+        changed since then the call is refused with `409`.
+
+        Download links issued for the old contents keep working until they
+        expire, and keep returning the old contents.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, ifVersion]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                ifVersion:
+                  type: integer
+                  description: The file's current `version`.
+                mimeType:
+                  type: string
+                  description: Optional. Defaults to the uploaded part's type.
+      responses:
+        '200':
+          description: Replaced.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  previousVersion: { type: integer }
+                  object: { $ref: '#/components/schemas/FileSummary' }
+        '400':
+          description: No file part, a missing `ifVersion`, or the target is a folder.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The file changed since `ifVersion`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '500':
+          description: An unhandled failure, or a file over 50 MB (rejected before the handler runs).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - $ref: '#/components/parameters/ObjectId'
+
+    get:
+      tags: [Editing]
+      summary: List a file's versions
+      operationId: listObjectVersions
+      description: |
+        Lists a file's earlier versions, newest first, with its current version.
+        Requires `datasource:read`.
+
+        The 20 most recent earlier versions are kept. Older ones are removed
+        when a newer one is saved. Deleting the file deletes all of them.
+      responses:
+        '200':
+          description: The history.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  objectId: { type: string, format: uuid }
+                  path: { type: string }
+                  currentVersion: { type: integer }
+                  versions:
+                    type: array
+                    items: { $ref: '#/components/schemas/FileVersion' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}/versions/{version}/restore:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - $ref: '#/components/parameters/ObjectId'
+      - name: version
+        in: path
+        required: true
+        description: The earlier version to bring back. From [List a file's versions](/docs/api-reference/buckets/editing/listObjectVersions).
+        schema: { type: integer, minimum: 1 }
+
+    post:
+      tags: [Editing]
+      summary: Restore an earlier version
+      operationId: restoreObjectVersion
+      description: |
+        Brings back an earlier version's contents. Requires `datasource:manage`.
+
+        Nothing is rewound. The old contents are saved as a **new** version, so
+        the contents being replaced are kept too and a restore can be undone the
+        same way. Version numbers only go up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ifVersion]
+              properties:
+                ifVersion:
+                  type: integer
+                  description: The file's current version.
+      responses:
+        '200':
+          description: Restored as a new version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  previousVersion: { type: integer }
+                  object: { $ref: '#/components/schemas/FileSummary' }
+        '400':
+          description: A missing `ifVersion`, or a version that is not in the file's history.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The file changed since `ifVersion`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContentError' }
         '500': { $ref: '#/components/responses/ServerError' }
