@@ -11,7 +11,8 @@ a path, and the path is the address you act on.
 <Callout>
   **New to this?** [Namespaces](/docs/namespaces) covers what a namespace holds
   and why it is the unit you grant access to, and [Files](/docs/namespaces/files)
-  covers the model: paths, folders, download links, and search by meaning. This
+  covers the model: paths, folders, editing and versions, download links, and
+  search by meaning. This
   page describes the API surface.
 </Callout>
 
@@ -22,8 +23,8 @@ here, both evaluated on the namespace in the path:
 
 | Permission | Covers |
 | --- | --- |
-| `datasource:read` | Listing, reading, resolving a path, searching |
-| `datasource:manage` | Creating, uploading, moving, deleting |
+| `datasource:read` | Listing, reading, viewing a text file, listing versions, resolving a path, searching |
+| `datasource:manage` | Creating, uploading, writing and editing text, replacing contents, restoring a version, moving, deleting |
 
 Anyone who can read the namespace can read every bucket in it. If some documents
 should be visible to one employee and not another, they belong in separate
@@ -102,6 +103,60 @@ Omit the delimiter for a flat listing of everything underneath.
 `folderCounts` gives the number of files below each folder at any depth, which is
 what you want before telling someone how much a delete would remove.
 
+## Changing a file: view, then edit with the version
+
+A file's contents change in place. The id and path stay the same, `version` goes
+up by one, and the previous contents are kept (the 20 most recent per file).
+Every change says which version it was based on, so two writers cannot
+silently overwrite each other.
+
+<Steps>
+
+<Step>
+#### View it, and keep the version
+
+```bash
+curl "$HOS_API/namespaces/ns_orders/buckets/$BUCKET/objects/$OBJECT/text?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+`content` is numbered lines (`     3\tStep 1: say hello`) and `version` is what
+the next change must send back. Text files only; up to 2,000 lines per call, with
+`more: true` when there is more.
+</Step>
+
+<Step>
+#### Edit with that version
+
+```bash
+curl -X POST "$HOS_API/namespaces/ns_orders/buckets/$BUCKET/objects/$OBJECT/edits" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ifVersion": 4,
+    "edits": [
+      { "type": "replace", "oldText": "Step 1: say hello", "newText": "Step 1: greet them by name" }
+    ]
+  }'
+```
+
+`oldText` must appear exactly once. The response carries the new `version`, so
+further edits can follow without viewing again. A `409` means the file changed
+since your version: view it again and redo the change.
+</Step>
+
+</Steps>
+
+To create a text file, or replace one whole, use
+[Write a text file](/docs/api-reference/buckets/editing/writeTextObject): it
+refuses to overwrite an existing file unless you send its version. For any other
+type, [Replace a file's contents](/docs/api-reference/buckets/editing/replaceObjectContent)
+takes a multipart upload with `ifVersion`.
+
+These operations answer errors with a stable `code` (`version_conflict`,
+`exists`, `edit_failed` and others) next to the prose `error`, so a client can
+branch on it.
+
 ## Three things that surprise people
 
 **A download link is a capability.** [Get a file](/docs/api-reference/buckets/files/getObject)
@@ -122,8 +177,10 @@ prepare it.
 **Deleting a folder** removes every file under it and is not exposed to the API.
 It is a console action, behind a confirmation naming the count.
 
-**Reading a file's text** rather than downloading it is available to an AI
-employee through its own tools, not over HTTP.
+**Reading a non-text file's text** (a spreadsheet as CSV, a Word document)
+rather than downloading it is available to Nova through its own tools, not over
+HTTP. Text files can be read over HTTP with
+[View a text file](/docs/api-reference/buckets/editing/viewTextObject).
 
 **Uploads are capped at 50 MB** and a larger file is rejected before the request
 reaches the handler, so it returns a plain `500` rather than the usual envelope.

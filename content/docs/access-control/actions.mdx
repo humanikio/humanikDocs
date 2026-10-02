@@ -448,25 +448,31 @@ granted at the workspace above it to cover every office in it.
 | `datasource:manage` | Create and change data namespaces, sources and subscriptions. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `datasource:read` (9)">
+<Accordion title="Endpoints that need `datasource:read` (11)">
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
 - [Post a tile](/docs/api-reference/bulletin/tiles/createBulletinTile)
 - [Get a bucket](/docs/api-reference/buckets/buckets/getBucket)
 - [Read through a tile](/docs/api-reference/bulletin/tile-data/getBulletinTileData)
 - [Get a file](/docs/api-reference/buckets/files/getObject)
 - [List buckets](/docs/api-reference/buckets/buckets/listBuckets)
+- [List a file's versions](/docs/api-reference/buckets/editing/listObjectVersions)
 - [List files](/docs/api-reference/buckets/files/listObjects)
 - [Resolve a path](/docs/api-reference/buckets/paths/resolveObject)
 - [Search files](/docs/api-reference/buckets/search/searchObjects)
+- [View a text file](/docs/api-reference/buckets/editing/viewTextObject)
 </Accordion>
-<Accordion title="Endpoints that need `datasource:manage` (7)">
+<Accordion title="Endpoints that need `datasource:manage` (11)">
 - [Create a bucket](/docs/api-reference/buckets/buckets/createBucket)
 - [Create a folder](/docs/api-reference/buckets/folders/createFolder)
 - [Delete a bucket](/docs/api-reference/buckets/buckets/deleteBucket)
 - [Delete a file](/docs/api-reference/buckets/files/deleteObject)
+- [Edit a text file](/docs/api-reference/buckets/editing/editTextObject)
 - [Move or rename a file](/docs/api-reference/buckets/paths/moveObject)
+- [Replace a file's contents](/docs/api-reference/buckets/editing/replaceObjectContent)
+- [Restore an earlier version](/docs/api-reference/buckets/editing/restoreObjectVersion)
 - [Update a bucket](/docs/api-reference/buckets/buckets/updateBucket)
 - [Upload a file](/docs/api-reference/buckets/files/uploadObject)
+- [Write a text file](/docs/api-reference/buckets/editing/writeTextObject)
 </Accordion>
 </Accordions>
 
