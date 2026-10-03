@@ -32,9 +32,9 @@ in the sandbox.
 | Tools HumanikOS ships | Every office has them: contacts and conversations, calendars, files and namespaces, browsers, schedules, image generation, and reading its own skills |
 | Your integration endpoints | Each endpoint an integration declares and enables becomes its own named tool, with the parameters you described. See [Creating an integration](/docs/integrations/creating) |
 
-While named endpoint tools roll out to every office, some offices reach their integrations
-through one general tool, `hos_integration_request`, which calls the same endpoints by
-integration name and path.
+Every office also has one general tool, `hos_integration_request`, which calls a connected
+integration by its name and a path. It covers endpoints nobody declared, so prefer the
+named tools when they exist.
 
 On your machine the agent sees each office tool as `mcp__hos__` followed by the tool's
 name, for example `mcp__hos__crm_list_contacts`. `hos` is the name of the local MCP
@@ -83,8 +83,9 @@ turns. An integration you add appears after the office restarts.
 **One tool call is limited to about 30 seconds.** A tool that takes longer fails with an
 error the agent can read, and the turn continues.
 
-**Pictures do not reach your machine yet.** When an office tool returns a screenshot or an
-image, an agent on your machine receives the tool's text only.
+**Pictures reach your machine when the tool returns one.** A picture attached to a chat
+message, for example, arrives as an image the agent can see, along with the tool's text.
+Very large pictures are left out and the text says so.
 
 **A dropped connection ends the turn.** The turn channel does not replay, so an
 interruption mid turn loses the rest of it, as described in
