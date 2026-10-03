@@ -344,6 +344,152 @@ export function ToolSplit() {
 }
 
 // ============================================================
+// The bridge: an office's tool catalog on your machine
+// ============================================================
+
+export function ToolBridge() {
+  return (
+    <Figure
+      label="How the office sandbox's tools become tools on your machine"
+      caption="One catalog, owned by the office sandbox. The office's own agent uses it there, and an agent on your machine uses it through the bridge. The tools always run in the sandbox."
+    >
+      <div className="rounded-lg border border-fd-foreground/25 bg-fd-card p-3.5">
+        <Actor ours>Office sandbox</Actor>
+        <p className="mt-1.5 text-sm font-medium text-fd-foreground">One tool catalog</p>
+        <ul className="mt-2 space-y-1 text-xs leading-relaxed text-fd-muted-foreground">
+          <li>The tools HumanikOS ships: contacts, conversations, calendars, files, browsers, schedules</li>
+          <li>One tool for each endpoint your integrations declare and enable</li>
+          <li>The credentials those tools use, kept in the office vault</li>
+        </ul>
+      </div>
+
+      <Wire
+        label="with every turn that runs on your machine: each tool's name, description and parameters, never a credential"
+        note="the office's tool list"
+      />
+
+      <div className="rounded-lg border border-dashed border-fd-border bg-fd-muted/40 p-3.5">
+        <Actor ours={false}>Your machine</Actor>
+        <p className="mt-1.5 text-sm font-medium text-fd-foreground">
+          humanikd starts a local MCP server for the turn
+        </p>
+        <ul className="mt-2 space-y-1 text-xs leading-relaxed text-fd-muted-foreground">
+          <li>
+            Named <span className="font-mono">hos</span>. The agent sees each office tool as{' '}
+            <span className="font-mono">mcp__hos__</span>
+            <span className="italic">tool name</span>
+          </li>
+          <li>Next to the agent's own local tools and the connectors you set up on this machine</li>
+          <li>Exists only for that turn. Nothing about it is written to disk</li>
+        </ul>
+      </div>
+
+      <Wire
+        label="when the agent calls one, the call goes back up and runs in the sandbox; only the result comes down"
+        note="tool request -> office sandbox -> tool result"
+      />
+
+      <div className="rounded-lg border border-fd-foreground/25 bg-fd-card p-3.5">
+        <Actor ours>Office sandbox</Actor>
+        <p className="mt-1.5 text-sm font-medium text-fd-foreground">The tool runs where its credentials are</p>
+        <p className="mt-1 text-xs leading-relaxed text-fd-muted-foreground">
+          The same tool, the same code and the same permissions as when the office's own agent calls it.
+        </p>
+      </div>
+    </Figure>
+  );
+}
+
+// ============================================================
+// One tool call, end to end
+// ============================================================
+
+const CALL_HOPS: Hop[] = [
+  {
+    actor: 'Office sandbox',
+    ours: true,
+    title: 'A turn starts for an employee set to run on your machine',
+    body: 'The office asks the HumanikOS API to run the turn there, with the conversation so far.',
+    wire: 'to the HumanikOS API',
+  },
+  {
+    actor: 'HumanikOS API',
+    ours: true,
+    title: 'It checks the machine and prepares the turn',
+    body: 'The machine must be allocated to this workspace and online. The office is identified from its own credentials, and its tool list is attached to the turn.',
+    wire: 'onto the Redis queue of the gateway instance holding your connection',
+    note: 'queue: one per gateway instance',
+  },
+  {
+    actor: 'Gateway',
+    ours: true,
+    title: 'The turn goes down your connection',
+    body: 'The gateway instance reads its queue and sends the turn down the connection your machine opened. It does not read what it carries.',
+    wire: 'down the connection',
+  },
+  {
+    actor: 'Your machine',
+    ours: false,
+    title: 'humanikd starts the agent with the office tools bridged in',
+    body: 'A local MCP server named hos holds the office tools for this turn. The agent works with your local tools and the office tools together.',
+    wire: 'the agent calls an office tool: a request goes up the same connection',
+    note: 'tool name + arguments only, no identity, no credential',
+  },
+  {
+    actor: 'Gateway and Redis',
+    ours: true,
+    title: 'The request is published on the turn answer channel',
+    body: 'Everything coming up from your machine uses one channel per turn, which the HumanikOS API was already listening on.',
+    wire: 'to the HumanikOS API',
+  },
+  {
+    actor: 'HumanikOS API',
+    ours: true,
+    title: 'It sends the call to the office the turn belongs to',
+    body: 'The office is taken from the turn, never from anything your machine sent.',
+    wire: 'to the office sandbox',
+  },
+  {
+    actor: 'Office sandbox',
+    ours: true,
+    title: 'The tool runs with the office credentials',
+    body: 'The same handler the office uses for its own agent. Only the result leaves the sandbox.',
+    wire: 'the result goes back through the API, the queue and the gateway',
+  },
+  {
+    actor: 'Your machine',
+    ours: false,
+    title: 'The agent carries on in the same turn',
+    body: 'It reads the result and keeps working. It can call more office tools, or local ones, as many times as the turn needs.',
+    wire: 'when it finishes, the answer goes up the answer channel',
+  },
+  {
+    actor: 'Office sandbox',
+    ours: true,
+    title: 'The office posts the reply',
+    body: 'To the office, the whole turn looks like one answer from its model. It is saved and posted like any other reply.',
+  },
+];
+
+export function ToolCallFlow() {
+  return (
+    <Figure
+      label="One office tool call made by an agent on your machine, from start to finish"
+      caption="Your machine is the only box we do not own. It opens the only connection, and the only things that cross it are the turn, tool requests and their results."
+    >
+      <div className="flex flex-col">
+        {CALL_HOPS.map((hop, i) => (
+          <div key={hop.title}>
+            <Node actor={hop.actor} ours={hop.ours} title={hop.title} body={hop.body} />
+            {i < CALL_HOPS.length - 1 ? <Wire label={hop.wire} note={hop.note} /> : null}
+          </div>
+        ))}
+      </div>
+    </Figure>
+  );
+}
+
+// ============================================================
 // The command board
 // ============================================================
 

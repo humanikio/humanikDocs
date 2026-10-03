@@ -68,7 +68,9 @@ the endpoints.
 ## How the call actually crosses
 
 What happens next depends on which flavor of machine you are running, and the
-difference is worth knowing because it changes what a turn feels like.
+difference is worth knowing because it changes what a turn feels like. The full path
+of one call, and the services it passes through, is on
+[How a tool call travels](/docs/devices/tool-calls).
 
 <Tabs items={['Flavor B, an agent', 'Flavor A, a model']}>
 
@@ -84,13 +86,18 @@ last month's payouts" work: the reading and the writing happen on your disk, the
 payout lookup happens in the office, and there is no round trip through a person
 in between.
 
-**One tool call is capped at about two minutes.** A tool that takes longer fails
-with a readable error rather than leaving the agent blocked for the rest of the
-turn.
+**The office's tools are offered on every turn.** Your machine receives the list
+with each message and keeps nothing between them. An integration you add appears
+on the next message after the office restarts, with nothing to change on your
+machine. Tools that belong to the office's own agent framework, such as its shell,
+run only inside the office and cannot be used from your machine.
 
-**Pictures come back too.** A tool that returns a screenshot or a rendered image
-sends it alongside its text rather than encoded inside it, so the model gets both
-the picture and the context for it.
+**One tool call is capped at about 30 seconds.** A tool that takes longer fails
+with an error the agent can read, rather than leaving it blocked for the rest of
+the turn.
+
+**Pictures do not reach your machine yet.** When an office tool returns a
+screenshot or an image, an agent on your machine receives the tool's text only.
 
 </Tab>
 

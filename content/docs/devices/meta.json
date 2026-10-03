@@ -1,5 +1,12 @@
 {
   "title": "Devices",
   "root": true,
-  "pages": ["index", "how-work-reaches-it", "office-tools", "example", "browser"]
+  "pages": [
+    "index",
+    "how-work-reaches-it",
+    "tool-calls",
+    "office-tools",
+    "example",
+    "browser"
+  ]
 }

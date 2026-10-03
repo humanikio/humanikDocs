@@ -1,0 +1,120 @@
+---
+title: How a tool call travels
+description: How an office sandbox's tools are bridged to an agent on your machine, and the path one call takes there and back.
+---
+
+An agent running on your machine can use the same tools as the office it works for:
+its contacts, calendars, files and browsers, and every endpoint your integrations add.
+It never holds the credentials those tools use. This page explains how that works,
+which services are involved, and what crosses the connection between your machine and
+HumanikOS.
+
+It applies to a machine running a Claude Code agent (flavor B). A machine serving a local
+model works differently, see [Tools your machine does not hold](/docs/devices/office-tools).
+
+## The bridge
+
+Every office has an **office sandbox**: a machine HumanikOS runs for that office. It holds
+the office's tools, its integrations and the credentials they use.
+
+The tools form one **tool catalog**. The office's own agent uses that catalog inside the
+sandbox. When an employee's turn runs on your machine instead, the catalog is **bridged**
+to a small MCP server that the humanikd daemon starts on your machine for that turn, so
+the agent there can call the office's tools as if they were its own. Each call still runs
+in the sandbox.
+
+<ToolBridge />
+
+### What gets bridged
+
+| Kind of tool | Where it comes from |
+| --- | --- |
+| Tools HumanikOS ships | Every office has them: contacts and conversations, calendars, files and namespaces, browsers, schedules, image generation, and reading its own skills |
+| Your integration endpoints | Each endpoint an integration declares and enables becomes its own named tool, with the parameters you described. See [Creating an integration](/docs/integrations/creating) |
+
+While named endpoint tools roll out to every office, some offices reach their integrations
+through one general tool, `hos_integration_request`, which calls the same endpoints by
+integration name and path.
+
+On your machine the agent sees each office tool as `mcp__hos__` followed by the tool's
+name, for example `mcp__hos__crm_list_contacts`. `hos` is the name of the local MCP
+server humanikd starts. The agent also keeps its own tools and the connectors you set up
+on the machine, so one turn can mix both.
+
+**Not bridged:** the tools that belong to the office's agent framework itself, such as
+its shell. They only make sense inside the sandbox and cannot be used from your machine.
+
+## One call, from start to finish
+
+<ToolCallFlow />
+
+## The services involved
+
+| Service | Its job in a tool call |
+| --- | --- |
+| **Office sandbox** | Holds the tool catalog and the credentials. Runs every office tool call, whichever machine the agent is on |
+| **HumanikOS API** | Decides where a turn runs: checks the machine is allocated to the workspace and online, attaches the office's tool list, and sends each tool request to the office the turn belongs to |
+| **Redis** | Carries work in both directions. Turns and tool results go down through a queue kept for the gateway instance holding your connection. Everything coming up, output and tool requests, goes out on a channel kept for that one turn |
+| **Gateway** | Holds the connection your machine opened. Passes everything through without reading it |
+| **humanikd** | Receives the turn, starts the agent, runs the local MCP server that bridges the office tools, and sends each call back up the connection |
+
+The queue and the turn channel are the same two mechanisms described in
+[How work reaches your machine](/docs/devices/how-work-reaches-it). A tool call adds
+one round trip on each of them inside a turn that is already running.
+
+## What crosses your connection
+
+| Direction | Carries | Never carries |
+| --- | --- | --- |
+| Down to your machine | The turn, and the office's tool list: each tool's name, description and parameters | A credential, a file path on your machine, or a permission setting |
+| Up from your machine | A tool request: the tool's name and the arguments the agent chose | Who you are. The office is taken from the turn, not from the request |
+| Down again | The tool's result | The credential the tool used |
+
+**Your tool ceiling does not apply to office tools.** The ceiling in your config decides
+what an agent may do to your machine. Office tools never touch your machine: they run in
+the sandbox under the office's own permissions. See
+[Three limits, and none can widen another](/docs/devices#three-limits-and-none-can-widen-another).
+
+## Limits today
+
+**The tool list arrives with every turn.** Nothing is stored on your machine between
+turns. An integration you add appears after the office restarts.
+
+**One tool call is limited to about 30 seconds.** A tool that takes longer fails with an
+error the agent can read, and the turn continues.
+
+**Pictures do not reach your machine yet.** When an office tool returns a screenshot or an
+image, an agent on your machine receives the tool's text only.
+
+**A dropped connection ends the turn.** The turn channel does not replay, so an
+interruption mid turn loses the rest of it, as described in
+[How work reaches your machine](/docs/devices/how-work-reaches-it).
+
+## Building on it
+
+If you build an integration, you do not need to do anything for machines. Declare and
+enable its endpoints, restart the office, and agents running on enrolled machines can call
+them through the bridge, with the credential staying in the office.
+
+The catalog is the office's tool surface: one list, defined in the office sandbox, used by
+whichever agent does the work.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Tools your machine does not hold"
+    href="/docs/devices/office-tools"
+    description="A worked example of a turn split between your machine and the office."
+  />
+  <Card
+    title="How work reaches your machine"
+    href="/docs/devices/how-work-reaches-it"
+    description="The connection, the queue and the turn channel."
+  />
+  <Card
+    title="Creating an integration"
+    href="/docs/integrations/creating"
+    description="Declaring the endpoints that become tools."
+  />
+</Cards>

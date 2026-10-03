@@ -9,6 +9,8 @@ import {
   BoardNodes,
   DeviceRegistries,
   DeviceTransport,
+  ToolBridge,
+  ToolCallFlow,
   ToolSplit,
   TransportDirections,
 } from '@/components/device-diagrams';
@@ -35,6 +37,8 @@ export function getMDXComponents(components?: MDXComponents) {
     BoardNodes,
     DeviceRegistries,
     DeviceTransport,
+    ToolBridge,
+    ToolCallFlow,
     ToolSplit,
     TransportDirections,
     WhoIsWho,

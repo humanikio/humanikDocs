@@ -259,6 +259,14 @@ API of that kind usually looks like, marked as unconfirmed.
 Declaring endpoints is what turns that into named tools with documented arguments. It is the
 single highest value thing you can put in an integration.
 
+### Your endpoints on an employee's machine
+
+An employee can run on a machine you enrol instead of in the cloud. Its tools come with it:
+each declared and enabled endpoint is bridged to a small MCP server on that machine, so the
+agent there can call it by name. The call still runs in the office sandbox with the
+integration's credential, and the machine only receives the result. There is nothing extra to
+set up. See [How a tool call travels](/docs/devices/tool-calls).
+
 ## After it exists
 
 Every route ends in the same place. The integration syncs to a **skill**, the document the
