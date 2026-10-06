@@ -77,7 +77,7 @@ separate boundaries, held by three different parties.
 | Limit | Held by | Decides |
 | --- | --- | --- |
 | **The ceiling** | You, in a file on this machine | What may be done **to this machine** |
-| **The allocation** | An administrator, in the console | Which workspace may use this machine at all, and which employee it is attached to |
+| **The allocation** | An administrator, in the console (**Resources → Devices**, on the machine's own page) | Which workspace may use this machine at all, and which employee it is attached to |
 | **The employee's permissions** | The permission system | What the employee may reach **in the office**, with the office's own credentials |
 
 They compose, and they do not leak into each other.
@@ -137,10 +137,26 @@ steps and what to check when a tool is missing are on
 
 ## Getting started
 
+In the console, open **Resources → Devices**. The **Install** tab shows the command for your
+system, the latest version, and its release notes, and **Add machine** gives you the
+enrolment code and waits until the machine connects.
+
+macOS or Linux:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/humanikio/humanikd-dist/main/install.sh | sh
+curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh
 humanikd setup
 ```
+
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/humanikio/humanikd-dist/releases/latest/download/install.ps1 | iex
+humanikd setup
+```
+
+Each release is on [GitHub](https://github.com/humanikio/humanikd-dist/releases) with notes and
+signed downloads.
 
 `humanikd setup` walks the whole thing: platform check, flavor choice, backend
 prerequisites, enrolment, config, and auto-start. It never installs anything on
