@@ -69,6 +69,24 @@ API. If you could not do it through the API, Nova cannot do it for you.
   <text x="544" y="385" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">nothing changes; the permission is named</text>
 </svg>
 
+## Nova and AI employees are checked differently
+
+Your own code and your AI employees call the API directly, each with its own
+key, so every request they make has always been checked against that key's
+permissions.
+
+The difference is whose permissions count:
+
+| | Acts with |
+| --- | --- |
+| **Nova** | Your permissions. It has none of its own |
+| **An AI employee** | Its own permissions: the namespaces, integrations and access it was given. Not the permissions of the person who asked it for something |
+| **Your code** | The permissions of the service account behind its key |
+
+So asking an employee to do something you could not do yourself is refused or
+allowed by what the employee was given, not by what you hold. Asking Nova is
+refused or allowed by what you hold.
+
 ## Two permissions, not one
 
 Using Nova and what Nova may do are separate.
