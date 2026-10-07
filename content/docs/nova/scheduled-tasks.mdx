@@ -97,7 +97,9 @@ working on, and because the task fires with that person's full permissions.
 Nothing is stored at creation time and replayed later. Each time the task fires,
 your role assignments are loaded fresh and checked before any work starts. The
 mechanism is described in
-[Running as a user](/docs/access-control/running-as-a-user).
+[Running as a user](/docs/access-control/running-as-a-user). Every action the task
+then takes is checked against those permissions, the same as when you ask Nova in
+chat. See [When Nova acts for you](/docs/access-control/acting-for-you).
 
 The consequence worth planning around: **a task stops working when the
 permissions behind it are removed.** If someone's access is narrowed, or they

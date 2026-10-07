@@ -12,7 +12,8 @@ a path, and the path is the address you act on.
   **New to this?** [Namespaces](/docs/namespaces) covers what a namespace holds
   and why it is the unit you grant access to, and [Files](/docs/namespaces/files)
   covers the model: paths, folders, editing and versions, download links, and
-  search by meaning. This
+  search by meaning. [How a file is edited](/docs/namespaces/editing-files) shows
+  each step an edit goes through before it is saved. This
   page describes the API surface.
 </Callout>
 
@@ -174,8 +175,8 @@ prepare it.
 
 ## What is not here
 
-**Deleting a folder** removes every file under it and is not exposed to the API.
-It is a console action, behind a confirmation naming the count.
+**Deleting a folder** removes every file under it, at every depth. It is not yet
+described in this reference.
 
 **Reading a non-text file's text** (a spreadsheet as CSV, a Word document)
 rather than downloading it is available to Nova through its own tools, not over

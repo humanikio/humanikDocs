@@ -1,0 +1,443 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API — Namespaces
+  version: v1
+  summary: Where your data lives, and the unit you grant access to.
+  description: |
+    A namespace holds the data one part of your business runs on: tables of
+    rows, buckets of files, and the sources that feed them. It belongs to one
+    workspace.
+
+    **The namespace is the unit of access.** `datasource:read` and
+    `datasource:manage` are granted on a namespace, or on the workspace above
+    it, and cover everything inside. There is no narrower grant.
+
+    This file covers the namespace itself: creating one, finding it, changing
+    its name and search settings, and deleting it. Buckets and files are in the
+    Files reference.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather
+    than guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Namespaces
+    description: Create, list, read, update, and delete a namespace.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: A service account API key, sent whole as a bearer token.
+
+  parameters:
+    NamespaceId:
+      name: namespaceId
+      in: path
+      required: true
+      description: |
+        The namespace. From [List namespaces](/docs/api-reference/namespaces/namespaces/listNamespaces),
+        or the `namespace.id` returned when you
+        [created it](/docs/api-reference/namespaces/namespaces/createNamespace).
+
+        An ID that does not resolve to a namespace in your tenant is refused by
+        the permission gate with `403`, not reported as `404`.
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Error:
+      type: object
+      description: '`error` is a human readable string, not a stable machine code.'
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+        message:
+          type: string
+      required: [success, error]
+
+    Forbidden:
+      type: object
+      description: The permission gate refused, and the message says which action and scope it evaluated.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          const: Forbidden
+        message:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+      required: [success, error]
+
+    Namespace:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The namespace ID. Use it as `namespaceId` everywhere else.
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+          description: The workspace the namespace belongs to. Fixed at creation; no call moves it.
+        supabaseUid:
+          type: string
+          description: Internal identifier of the account that holds the namespace's tables. No call takes it.
+        name:
+          type: string
+          description: A display name. Not unique; two namespaces may share one.
+          examples: [Orders]
+        description:
+          type: [string, 'null']
+        createdBy:
+          type: [string, 'null']
+          description: The user or service account that created it.
+        embeddingsEnabled:
+          type: boolean
+          description: |
+            Search by meaning over **rows**. When true, rows that arrive are
+            prepared for search. Default `false`.
+        objectEmbeddingsEnabled:
+          type: boolean
+          description: |
+            Search by meaning over **files**. When true, files that are uploaded
+            or changed are described and prepared for search. Default `true`.
+
+            The two defaults differ on purpose: file search was on for everyone
+            before the setting existed.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, workspaceId, name, embeddingsEnabled, objectEmbeddingsEnabled]
+
+  responses:
+    BadRequest:
+      description: The request is malformed or a required field is missing.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: |
+        The caller lacks the required action, or the namespace ID does not
+        resolve to a namespace in your tenant. The two are not distinguished.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Forbidden'
+
+    ServerError:
+      description: Server side failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /namespaces:
+    get:
+      tags: [Namespaces]
+      summary: List namespaces
+      operationId: listNamespaces
+      description: |
+        Lists namespaces, oldest first. Requires `datasource:read`.
+
+        **Where the permission is checked depends on `workspaceId`:**
+
+        | | With `workspaceId` | Without it |
+        | --- | --- | --- |
+        | Checked at | `workspace/{workspaceId}` | `console` |
+        | Returns | Every namespace in that workspace | Every namespace in the tenant |
+
+        The result is not filtered namespace by namespace. A key whose grant
+        covers only one namespace, rather than the workspace, is refused here
+        with `403` and has to be given the namespace ID directly.
+
+        Get a `workspaceId` first:
+
+        ```bash
+        curl "$HOS_API/workspaces" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        There is no paging. **An empty list can also mean the read failed**:
+        the call returns `200` with an empty array rather than an error.
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          description: |
+            Limit the list to one workspace, and check the permission there.
+            From [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The namespaces.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  namespaces:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Namespace'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [Namespaces]
+      summary: Create a namespace
+      operationId: createNamespace
+      description: |
+        Creates an empty namespace in a workspace. Requires `datasource:manage`
+        on that workspace.
+
+        A service account key carries no workspace of its own, so `workspaceId`
+        must be in the body. Without it the call returns `400`.
+
+        Get a `workspaceId` first:
+
+        ```bash
+        curl "$HOS_API/workspaces" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        `name` is not checked for uniqueness. Creating the same name twice gives
+        you two namespaces with different IDs, so keep the `namespace.id` from
+        the response rather than looking it up by name later.
+
+        Both search settings start at their defaults: rows off, files on. Change
+        them with [Update a namespace](/docs/api-reference/namespaces/namespaces/updateNamespace).
+
+        The first namespace in an account sets up the storage behind it, so that
+        call takes longer than later ones.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceId, name]
+              properties:
+                workspaceId:
+                  type: string
+                  description: 'The workspace to create it in. From [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).'
+                  examples: [ws_a1b2c3]
+                name:
+                  type: string
+                  description: A display name. Must not be empty. Not unique.
+                  examples: [Orders]
+                description:
+                  type: string
+                  description: Optional. An empty string is stored as `null`.
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  namespace:
+                    $ref: '#/components/schemas/Namespace'
+        '400':
+          description: |
+            `workspaceId` or `name` missing, a workspace that does not exist, or
+            the account's storage could not be set up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /namespaces/{namespaceId}:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+
+    get:
+      tags: [Namespaces]
+      summary: Get a namespace
+      operationId: getNamespace
+      description: |
+        Reads one namespace, including both search settings. Requires
+        `datasource:read`.
+
+        An unknown ID, or one belonging to another tenant, is refused by the
+        permission gate with `403` before this call runs.
+      responses:
+        '200':
+          description: The namespace.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  namespace:
+                    $ref: '#/components/schemas/Namespace'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Not found. Rare in practice, since an unknown ID is refused at the gate with `403` first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    patch:
+      tags: [Namespaces]
+      summary: Update a namespace
+      operationId: updateNamespace
+      description: |
+        Renames a namespace, changes its description, or turns search by meaning
+        on or off for its rows or its files. Requires `datasource:manage`.
+
+        Send at least one field. Only what is sent is changed.
+
+        - **The two settings must be JSON booleans.** `"true"` as a string is
+          ignored without an error. If nothing else valid was sent, the call
+          returns `400`.
+        - **`name` is not validated here**, unlike on create. Send a non-empty
+          string.
+        - **Turning file search on is not retroactive.** Files uploaded while it
+          was off are not prepared later. Upload them again to make them
+          searchable.
+        - **Preparing files for search uses platform credit**, once per file,
+          and is not covered by your own model key.
+        - A change to either setting can take up to a minute to apply
+          everywhere.
+
+        The workspace cannot be changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  examples: [Orders 2026]
+                description:
+                  type: [string, 'null']
+                embeddingsEnabled:
+                  type: boolean
+                  description: Search by meaning over rows.
+                objectEmbeddingsEnabled:
+                  type: boolean
+                  description: Search by meaning over files.
+      responses:
+        '200':
+          description: The updated namespace.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  namespace:
+                    $ref: '#/components/schemas/Namespace'
+        '400':
+          description: Nothing valid to update, or the change was refused by storage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      tags: [Namespaces]
+      summary: Delete a namespace
+      operationId: deleteNamespace
+      description: |
+        Deletes a namespace and **everything in it**. Requires
+        `datasource:manage`.
+
+        In one call:
+
+        - Every table is dropped, with its rows.
+        - Every bucket is deleted, with its files and their earlier versions.
+        - Every source stops accepting data. Its web address stops working.
+        - Every office and browser that was connected to the namespace is
+          disconnected.
+
+        This is not reversible and nothing is archived first. Take a copy of
+        anything you need before you call it.
+
+        **Removal continues past a failure.** If one table or bucket cannot be
+        removed, the rest of the delete still runs and the call still returns
+        `200`.
+
+        **A second call returns `403`, not `404`**, because the ID no longer
+        resolves to a namespace and the permission gate refuses it.
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: |
+            The namespace could not be read or its record could not be
+            removed. Despite the code, this is also returned for a storage
+            error, so read `error`. When the record removal is what failed,
+            tables and files may already be gone. Calling again is safe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }

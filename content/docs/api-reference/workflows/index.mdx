@@ -245,6 +245,10 @@ of a customer.
 Reading a queue position is `workflow:read`, because it reports an order rather
 than changing one.
 
+These are also the permissions checked when Nova reads, saves or runs a workflow
+for you. Being able to use Nova does not replace them. See
+[When Nova acts for you](/docs/access-control/acting-for-you).
+
 Names and contact details on a run are **not** covered by either action. Runs
 carry a `contactId` and nothing more, and resolving those ids needs
 `contact:read` through

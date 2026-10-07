@@ -160,12 +160,11 @@ half drawn state, so for it the check is a wall.
 
 <Callout type="warn">
   **Nova acts with your permissions, never its own.** It has no identity of its
-  own and holds no credentials. Whatever it does, it does as you, which means
-  opening a workspace to Nova is a real grant. Reaching Nova at all requires
-  `nova:manage` on the workspace, and for administrative work such as billing,
-  members, IAM or secrets, every action is checked against your own roles a
-  second time. See
-  [How Nova is permissioned](/docs/api-reference/nova#how-nova-is-permissioned).
+  own and holds no credentials. Using Nova needs `nova:manage` on the workspace,
+  and each action it then takes, including saving or running a workflow, is also
+  checked against the permission the matching API endpoint needs. If the API
+  would refuse you, Nova is refused too. See
+  [When Nova acts for you](/docs/access-control/acting-for-you).
 </Callout>
 
 ## Checking your work

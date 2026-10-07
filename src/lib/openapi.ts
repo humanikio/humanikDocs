@@ -47,6 +47,7 @@ function system(id: string, file: string) {
 /** Order here is the order systems appear in the API reference sidebar. */
 export const apis = [
   system('workspaces', 'workspaces.yaml'),
+  system('namespaces', 'namespaces.yaml'),
   system('offices', 'offices.yaml'),
   system('crm', 'crm.yaml'),
   system('browsers', 'browsers.yaml'),

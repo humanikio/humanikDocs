@@ -1,0 +1,94 @@
+---
+title: Namespaces
+description: Creating, finding, configuring and deleting the namespaces your data lives in.
+---
+
+A namespace holds tables, buckets of files, and the sources that feed them. It
+belongs to one workspace, and almost every data call takes a `namespaceId`. This
+is where they come from.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [Namespaces](/docs/namespaces) covers what a namespace holds
+  and why it is the unit you grant access to. This page describes the API
+  surface.
+</Callout>
+
+This reference tells you which permission an endpoint needs. It does not
+explain how roles, policies, and assignments fit together. That model is in
+[Access control](/docs/access-control).
+
+## Start here
+
+You need a workspace ID first.
+
+```bash
+curl "$HOS_API/workspaces" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Then list the namespaces in it.
+
+```bash
+curl "$HOS_API/namespaces?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Each entry's `id` is the `namespaceId` for every other call, including the
+[Files](/docs/api-reference/buckets) reference.
+
+## Permissions
+
+| Operation | Permission | Checked at |
+| --- | --- | --- |
+| List | `datasource:read` | The workspace in `workspaceId`, or `console` when it is left out |
+| Create | `datasource:manage` | The workspace in the body |
+| Get | `datasource:read` | The namespace |
+| Update | `datasource:manage` | The namespace |
+| Delete | `datasource:manage` | The namespace |
+
+**Listing is not filtered per namespace.** A key whose grant covers one
+namespace rather than the workspace cannot list, and has to be given the ID.
+
+**An unknown namespace ID returns `403`, not `404`.** The permission gate has to
+find the namespace to know which workspace it belongs to. When it cannot, it
+refuses. A namespace in another tenant looks exactly the same.
+
+## Create one
+
+```bash
+curl -X POST "$HOS_API/namespaces" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "workspaceId": "ws_a1b2c3", "name": "Orders" }'
+```
+
+Names are not unique. Keep the `namespace.id` from the response rather than
+looking the namespace up by name later.
+
+## Search settings
+
+Each namespace has two switches for search by meaning, one for rows and one for
+files, with different defaults.
+
+| Field | Covers | Default |
+| --- | --- | --- |
+| `embeddingsEnabled` | Rows | `false` |
+| `objectEmbeddingsEnabled` | Files | `true` |
+
+```bash
+curl -X PATCH "$HOS_API/namespaces/3f2a9c1e-6b7d-4e8f-a012-5c9d8e7f6a1b" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "objectEmbeddingsEnabled": false }'
+```
+
+Send real booleans. A string such as `"false"` is ignored. Turning file search on
+does not go back and prepare files that were uploaded while it was off.
+
+## Deleting
+
+[Delete a namespace](/docs/api-reference/namespaces/namespaces/deleteNamespace)
+drops every table, deletes every bucket and file, stops every source, and
+disconnects every office and browser, in one call. It cannot be undone.

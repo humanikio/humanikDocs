@@ -14,7 +14,9 @@ reach Nova.
 
 When you ask Nova to do something ordinary, such as send a message, edit a contact
 or wake an office, it does it with your permissions and tells you what it did. There
-is no separate approval step.
+is no separate approval step. Each of those actions is still checked against your
+permissions, the same as a request to the API. See
+[When Nova acts for you](/docs/access-control/acting-for-you).
 
 Nova is instructed to check with you before a step that is hard to undo, such as a
 delete, and it usually does. That is an instruction Nova follows, not a lock. If
@@ -50,9 +52,10 @@ change, replying "yes" in the chat does not approve it. The card stays open, and
 Nova tells you it is still waiting.
 
 When you approve, the action is done as you, with your permissions at that moment.
-An access change is checked again in full at that point: if you no longer hold the
-permission, nothing changes and Nova tells you why. See
-[Changing access](/docs/nova/changing-access).
+It is checked again in full at that point: if you no longer hold the permission,
+nothing changes and Nova tells you which permission is missing. See
+[When Nova acts for you](/docs/access-control/acting-for-you), and for access
+changes, [Changing access](/docs/nova/changing-access).
 
 If the action fails and nothing was changed, the card stays open so you can try
 again. If part of it was done, the card closes so nothing is done twice, and Nova

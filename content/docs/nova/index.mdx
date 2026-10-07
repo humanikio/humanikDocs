@@ -39,6 +39,12 @@ takes is taken with your role assignments, checked by the same policy engine tha
 checks a request you make yourself. There is no privileged path, and nothing Nova
 can reach that you could not reach directly.
 
+Using Nova and what Nova may do are two separate permissions: `nova:manage`
+lets you use Nova in a workspace, and each action it takes for you also needs the
+permission the matching API endpoint needs. See
+[When Nova acts for you](/docs/access-control/acting-for-you), which shows the
+check with a diagram.
+
 When the trigger is a chat message you typed, your permissions come from your
 session. When it is a text message or a scheduled task, there is no session, so
 they are reconstructed and checked before the work starts. That mechanism is

@@ -28,8 +28,9 @@ work starts:
    policy engine that evaluates every other request.
 
 If the check passes, the work runs with exactly those assignments. Every
-permission check inside the run then behaves as it would have if the person had
-asked in the app.
+action inside the run is then checked against them, the same as if the person had
+asked in the app. Being allowed to drive the assistant does not add to what the
+person can do. See [When Nova acts for you](/docs/access-control/acting-for-you).
 
 If the check fails, nothing runs. There is no partial mode and no reduced
 fallback.

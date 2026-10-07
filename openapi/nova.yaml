@@ -430,16 +430,17 @@ paths:
 
         ## Nova acts as you
 
-        Every tool call is made with the roles carried by this request. Nova
-        holds no credentials of its own. A key with narrow permissions gets a
-        narrow Nova.
+        Every action Nova takes is made with the roles carried by this request.
+        Nova holds no credentials of its own. A key with narrow permissions gets
+        a narrow Nova.
 
-        Reaching Nova at all requires `nova:manage` on the workspace, which is a
-        substantial grant on its own. For administrative work, such as billing,
-        members, identity and access, secrets, group chats or connected apps,
-        each action is checked a second time against your roles at the moment it
-        runs, so a caller who can reach Nova but not read billing gets a refusal
-        from the tool rather than an answer.
+        Sending a prompt needs `nova:manage` on the workspace. Each action Nova
+        then takes is also checked against the caller's permissions: the same
+        permission the matching endpoint requires, on the item it acts on.
+        Holding `nova:manage` does not add to what the caller can do. A caller
+        who can use Nova but not edit a namespace's files gets a refusal that
+        names the missing permission, and nothing changes. See
+        [When Nova acts for you](/docs/access-control/acting-for-you).
 
         ## Two failure layers
 
@@ -1210,7 +1211,8 @@ paths:
         wholesale means writing all of that yourself.
 
         Instructions shape behaviour and grant nothing. Nothing written here can
-        widen what Nova may do, because every tool is still gated on your roles.
+        widen what Nova may do, because every action is still checked against
+        your roles.
 
         **Permission:** `nova:manage` @ `workspace/{workspaceId}`
       requestBody:

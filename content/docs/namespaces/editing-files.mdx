@@ -1,0 +1,335 @@
+---
+title: How a file is edited
+description: What happens between sending an edit and the new version being saved, step by step, with every check that can refuse it.
+---
+
+A text file in a bucket can be changed without uploading it again. You send small
+changes ("replace this exact text", "insert these lines after line 12") together
+with the version of the file you looked at. The platform loads the stored file,
+applies your changes to a copy, and saves the result as the next version. The file
+keeps its id and its path, and the contents it replaced are kept as an earlier
+version.
+
+Your own code, your AI employees and Nova all use the same steps. This page
+describes them. The model behind it (paths, versions, search) is on
+[Files](/docs/namespaces/files), and every request and response shape is in the
+[Files API](/docs/api-reference/buckets).
+
+<svg viewBox="0 0 720 470" className="w-full h-auto my-6" role="img" aria-label="An edit request from your code or from an AI employee passes an access check that needs the manage permission on the namespace. The platform then checks that a version was sent, loads the stored file into memory, applies the edits to a copy, puts back the file's line endings, writes the result to a new location, and switches the file to the new contents only if nobody saved since the version that was sent. The result is the same file at the next version, an earlier version kept, and a search description rebuilt about a minute later.">
+  <title>How a file edit is processed and saved</title>
+
+  <text x="8" y="22" fontSize="11" letterSpacing="1.2" fill="var(--color-fd-muted-foreground)">WHO SENDS IT</text>
+  <text x="372" y="22" fontSize="11" letterSpacing="1.2" fill="var(--color-fd-muted-foreground)">WHAT THE PLATFORM DOES, IN MEMORY</text>
+
+  <rect x="8" y="40" width="150" height="48" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="83" y="61" fontSize="14" textAnchor="middle" fill="var(--color-fd-foreground)">Your code</text>
+  <text x="83" y="78" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">your API key</text>
+
+  <rect x="8" y="96" width="150" height="48" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="83" y="117" fontSize="14" textAnchor="middle" fill="var(--color-fd-foreground)">AI employee</text>
+  <text x="83" y="134" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">the office's own key</text>
+
+  <line x1="158" y1="64" x2="186" y2="64" stroke="var(--color-fd-foreground)" />
+  <polygon points="190,64 183,60 183,68" fill="var(--color-fd-foreground)" />
+  <line x1="158" y1="120" x2="186" y2="120" stroke="var(--color-fd-foreground)" />
+  <polygon points="190,120 183,116 183,124" fill="var(--color-fd-foreground)" />
+
+  <rect x="190" y="40" width="140" height="104" rx="6" fill="var(--color-fd-background)" stroke="var(--color-fd-foreground)" />
+  <text x="260" y="80" fontSize="14" textAnchor="middle" fill="var(--color-fd-foreground)">Access check</text>
+  <text x="260" y="98" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">manage permission</text>
+  <text x="260" y="114" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">on the namespace</text>
+  <text x="260" y="164" fontSize="11" textAnchor="middle" fill="var(--color-fd-muted-foreground)">no permission: 403</text>
+
+  <line x1="330" y1="92" x2="356" y2="92" stroke="var(--color-fd-foreground)" />
+  <polygon points="360,92 353,88 353,96" fill="var(--color-fd-foreground)" />
+
+  <rect x="360" y="36" width="352" height="320" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+
+  <g fontSize="12" textAnchor="middle" fill="var(--color-fd-foreground)">
+    <circle cx="380" cy="66" r="10" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+    <text x="380" y="70">1</text>
+    <circle cx="380" cy="118" r="10" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+    <text x="380" y="122">2</text>
+    <circle cx="380" cy="170" r="10" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+    <text x="380" y="174">3</text>
+    <circle cx="380" cy="222" r="10" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+    <text x="380" y="226">4</text>
+    <circle cx="380" cy="274" r="10" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+    <text x="380" y="278">5</text>
+    <circle cx="380" cy="326" r="10" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+    <text x="380" y="330">6</text>
+  </g>
+
+  <g fontSize="14" fill="var(--color-fd-foreground)">
+    <text x="400" y="66">Check that a version was sent</text>
+    <text x="400" y="118">Load the stored file into memory</text>
+    <text x="400" y="170">Apply your edits to a copy</text>
+    <text x="400" y="222">Put back the file's line endings</text>
+    <text x="400" y="274">Write the result to a new location</text>
+    <text x="400" y="326" fontWeight="600">Switch the file to the new contents</text>
+  </g>
+  <g fontSize="12" fill="var(--color-fd-muted-foreground)">
+    <text x="400" y="84">No version: refused before anything is read</text>
+    <text x="400" y="136">Text only, up to 2 MB, valid UTF-8</text>
+    <text x="400" y="188">In order. If one fails, nothing is saved</text>
+    <text x="400" y="240">A Windows file keeps its line endings</text>
+    <text x="400" y="292">The current contents are not touched</text>
+    <text x="400" y="344">Only if nobody saved since your version</text>
+  </g>
+
+  <line x1="536" y1="356" x2="536" y2="380" stroke="var(--color-fd-foreground)" />
+  <line x1="120" y1="380" x2="600" y2="380" stroke="var(--color-fd-foreground)" />
+  <line x1="120" y1="380" x2="120" y2="394" stroke="var(--color-fd-foreground)" />
+  <polygon points="120,398 116,391 124,391" fill="var(--color-fd-foreground)" />
+  <line x1="360" y1="380" x2="360" y2="394" stroke="var(--color-fd-foreground)" />
+  <polygon points="360,398 356,391 364,391" fill="var(--color-fd-foreground)" />
+  <line x1="600" y1="380" x2="600" y2="394" stroke="var(--color-fd-foreground)" />
+  <polygon points="600,398 596,391 604,391" fill="var(--color-fd-foreground)" />
+
+  <rect x="8" y="400" width="224" height="56" rx="6" fill="var(--color-fd-background)" stroke="var(--color-fd-foreground)" />
+  <text x="120" y="423" fontSize="14" textAnchor="middle" fontWeight="600" fill="var(--color-fd-foreground)">The file</text>
+  <text x="120" y="442" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">same id and path, next version</text>
+
+  <rect x="248" y="400" width="224" height="56" rx="6" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+  <text x="360" y="423" fontSize="14" textAnchor="middle" fill="var(--color-fd-foreground)">Earlier versions</text>
+  <text x="360" y="442" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">the 20 most recent are kept</text>
+
+  <rect x="488" y="400" width="224" height="56" rx="6" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+  <text x="600" y="423" fontSize="14" textAnchor="middle" fill="var(--color-fd-foreground)">Search description</text>
+  <text x="600" y="442" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">rebuilt about a minute later</text>
+</svg>
+
+## Step by step
+
+### 1. A version must be sent
+
+Every edit says which version of the file it was based on (`ifVersion`). You get
+that number by viewing the file first. An edit without it is refused before the
+file is read.
+
+This makes "look before you change it" a rule the platform enforces. Nobody, a
+person or an employee, edits a file they have not seen.
+
+### 2. The stored file is loaded into memory
+
+The platform reads the file you named and checks it before doing anything else:
+
+| Check | If it fails |
+| --- | --- |
+| The file is in this namespace | `404`. A file in another namespace is reported as not found, not as forbidden |
+| It is a text type (see [Which files can be edited](#which-files-can-be-edited)) | `400`, `not_text` |
+| It is 2 MB or less | `413`, `too_large` |
+| It is valid UTF-8 | `400`, `not_text`. The file is refused, not damaged |
+
+The edit always works on the **stored file itself**. It never uses the shortened
+text copy that search keeps, so editing a long file cannot cut it short.
+
+Line endings are set aside for now (step 4), so that a Windows file and a Mac
+file match your text the same way.
+
+### 3. Your edits are applied to a copy
+
+Two kinds of edit, applied in the order you send them:
+
+| Edit | What it does |
+| --- | --- |
+| `replace` | Finds `oldText` and replaces it with `newText`. `oldText` must appear **exactly once** in the file, unless you set `replaceAll`. An empty `newText` deletes it |
+| `insert` | Adds `text` after line `afterLine`. `0` means the top of the file |
+
+**All or nothing.** If any one edit fails, nothing is saved, and the error says
+which edit it was (`editIndex`, counting from 0). Up to 50 edits per call.
+
+**Exactly once, on purpose.** If `oldText` is not found, the error names the line
+that looks closest, often the same words with different spacing. If it appears
+more than once, the error lists the lines. Replacing the wrong one of two matches
+would be a wrong change that reports success, so the platform refuses and asks for
+more surrounding text instead.
+
+**Line numbers move as you go.** In one call, an `insert` after a `replace` counts
+lines in the text as it is after the `replace`.
+
+If your edits leave the text exactly as it was, the call succeeds with
+`changed: false` and the version does not go up.
+
+### 4. The file's line endings are put back
+
+The edited text is turned back into bytes with the file's own line endings, and
+its byte order mark if it had one. A CSV made on Windows stays a CSV made on
+Windows. An edit to one line does not rewrite every line in the file.
+
+### 5. The result is written to a new location
+
+The new contents are stored next to the old ones. The current file is not touched
+yet. If anything fails from here on, the file still points at contents that exist.
+
+### 6. The file is switched over, if the version still matches
+
+This is the step that decides. The file is switched to the new contents **only if
+its version is still the one you sent**. If someone else saved in between, the
+switch does not happen, the new contents are discarded, and you get `409` with
+`currentVersion`.
+
+There is no lock. Two people or two employees can both start an edit on version
+4. The first to reach this step wins and the file becomes version 5. The second
+gets `409`, and should view the file again and redo the change on what it now
+says. Retrying the same edit blindly is the wrong response.
+
+On success, the file keeps its id and path, its version goes up by one, and the
+contents it replaced become an earlier version.
+
+### After the save
+
+- **The text is current at once.** A read straight after the edit returns the new
+  contents.
+- **The search description is rebuilt about a minute after the last change.** Ten
+  edits in a row cause one rebuild, not ten. Until then, search by meaning still
+  describes the previous version. This follows the namespace's search setting.
+- **The 20 most recent earlier versions are kept.** Older ones are removed. You
+  can [list them and restore one](/docs/api-reference/buckets/editing/restoreObjectVersion);
+  a restore is saved as a new version, so it can be undone the same way.
+
+## Which files can be edited
+
+Text files only. A file counts as text when its type is any `text/` type
+(`text/plain`, `text/markdown`, `text/csv`, `text/html`, `text/css`,
+`text/calendar` and the rest), or one of these:
+
+```
+application/json      application/xml        application/csv
+application/yaml      application/x-yaml     application/x-ndjson
+application/javascript  application/typescript  application/sql
+application/x-sh      application/toml
+```
+
+A `charset` parameter on the type is ignored. The type is the one recorded when
+the file was uploaded, so a Markdown file uploaded as
+`application/octet-stream` cannot be edited as text. Upload it again with the
+right type.
+
+Other files, such as PDFs, images and spreadsheets, cannot be edited in place.
+They can still be **replaced whole** while keeping their id, path and history:
+
+| | Text files | Any other file |
+| --- | --- | --- |
+| View as numbered lines | Up to 10 MB | No |
+| Edit (`replace`, `insert`) | Up to 2 MB | No |
+| Write the whole text (create, or replace with `ifVersion`) | Up to 2 MB | No |
+| [Replace the whole file](/docs/api-reference/buckets/editing/replaceObjectContent), keep id and path | Yes | Yes, up to 50 MB |
+| List versions, restore | Yes | Yes |
+
+## Errors
+
+Every error from these operations carries a stable `code` next to the prose
+`error`, so your code can branch on it. One exception: an edit sent with no `ifVersion` at all
+is refused with `400` and no `code`.
+
+| `code` | Status | Meaning | What to do |
+| --- | --- | --- | --- |
+| `invalid` | `400` | `ifVersion` is not a whole number of 1 or more | Fix the request |
+| `edit_failed` | `400` | One edit did not apply, including a bad `afterLine`. `editIndex` says which. It is `-1` when the list itself is wrong: empty, or more than 50 edits | View the file again and copy the exact text |
+| `not_text` | `400` | Not a text type, or not valid UTF-8 | Replace the whole file instead |
+| `not_found` | `404` | No such file in this namespace | Check the id |
+| `version_conflict` | `409` | The file changed since your version. `currentVersion` is included | View it again and redo the edit |
+| `too_large` | `413` | The file, or the edited result, is over 2 MB | Replace the whole file instead |
+
+A `403` comes before all of these: the key does not hold the manage permission on
+the namespace. See [Datasource actions](/docs/access-control/actions#datasource).
+
+## Worked example
+
+### View the file and keep its version
+
+```bash
+curl "$HOS_API/namespaces/ns_orders/buckets/7c0e2b5a-31d4-4f7e-9a1c-2b8d6e4f9a10/objects/3f1d9c2e-8a47-4b6e-9d15-6c2a0e7b4f81/text?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+```json
+{
+  "success": true,
+  "objectId": "3f1d9c2e-8a47-4b6e-9d15-6c2a0e7b4f81",
+  "path": "/playbooks/indeed-outreach.md",
+  "mimeType": "text/markdown",
+  "version": 4,
+  "totalLines": 40,
+  "startLine": 1,
+  "endLine": 40,
+  "content": "     1\t# Indeed outreach\n     2\t\n     3\tStep 1: say hello\n...",
+  "more": false
+}
+```
+
+The numbers and the tab at the start of each line are not part of the file. Leave
+them out of `oldText`.
+
+### Send the edits with that version
+
+```bash
+curl -X POST "$HOS_API/namespaces/ns_orders/buckets/7c0e2b5a-31d4-4f7e-9a1c-2b8d6e4f9a10/objects/3f1d9c2e-8a47-4b6e-9d15-6c2a0e7b4f81/edits" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ifVersion": 4,
+    "edits": [
+      { "type": "replace", "oldText": "Step 1: say hello", "newText": "Step 1: greet them by name" },
+      { "type": "insert", "afterLine": 12, "text": "Step 4: follow up after a week" }
+    ]
+  }'
+```
+
+```json
+{
+  "success": true,
+  "objectId": "3f1d9c2e-8a47-4b6e-9d15-6c2a0e7b4f81",
+  "path": "/playbooks/indeed-outreach.md",
+  "version": 5,
+  "changed": true,
+  "applied": [
+    { "type": "replace", "line": 3 },
+    { "type": "insert", "line": 13 }
+  ],
+  "preview": "     1\t# Indeed outreach\n     2\t\n     3\tStep 1: greet them by name\n...",
+  "totalLines": 41
+}
+```
+
+`version` is what the next edit sends as `ifVersion`, so a series of edits needs
+only one view at the start. `applied` says where each edit landed, and `preview`
+shows the lines around the first one.
+
+### If someone saved first
+
+```json
+{
+  "success": false,
+  "error": "The file changed since you viewed it: it is at version 6, your edits were based on 5. View it again, then redo the edits.",
+  "code": "version_conflict",
+  "currentVersion": 6
+}
+```
+
+View the file again, check whether your change still makes sense against what it
+says now, and send the edits with `ifVersion: 6`.
+
+<Cards>
+  <Card
+    title="Edit a text file"
+    href="/docs/api-reference/buckets/editing/editTextObject"
+    description="The full request and response for edits."
+  />
+  <Card
+    title="View a text file"
+    href="/docs/api-reference/buckets/editing/viewTextObject"
+    description="Numbered lines and the version an edit needs."
+  />
+  <Card
+    title="Write a text file"
+    href="/docs/api-reference/buckets/editing/writeTextObject"
+    description="Create a text file, or replace one whole with its version."
+  />
+  <Card
+    title="Files"
+    href="/docs/namespaces/files"
+    description="Paths, folders, versions, download links and search."
+  />
+</Cards>

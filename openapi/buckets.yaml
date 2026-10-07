@@ -65,7 +65,7 @@ components:
       in: path
       required: true
       description: |
-        The namespace the bucket lives in. From `GET /namespaces`.
+        The namespace the bucket lives in. From [List namespaces](/docs/api-reference/namespaces/namespaces/listNamespaces).
 
         This selects the permission the caller needs **and** scopes the row that
         comes back. A bucket or file that belongs to a different namespace is

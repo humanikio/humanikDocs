@@ -32,38 +32,17 @@ same permission checks. There is no privileged path.
 
 ## How Nova is permissioned
 
-**Nova has no identity.** It holds no roles, no key, and no credentials. Every
+**Nova has no identity.** It holds no roles, no key and no credentials. Every
 action it takes is taken as the caller who sent the prompt, using the roles on
 that request.
 
-This is the whole security model, and it has two layers worth understanding
-separately.
-
-<Callout type="warn">
-  **Reaching Nova requires `nova:manage` on the workspace, and that is a real
-  grant.** Nova can operate much of what the workspace contains. Treat granting
-  it as comparable to granting the underlying access, not as a small permission
-  for a chat feature.
-</Callout>
-
-**On top of that, sensitive work is checked again.** Administrative actions are
-gated individually against your roles at the moment they run, so the tool
-refuses rather than answering:
-
-| Area | Checked against |
-| --- | --- |
-| Billing and LLM providers | `billing:read` |
-| Members | `users:read` |
-| IAM and service accounts | `iam:read`, and `iam:manage` to change |
-| Tenant secrets | `secrets:read` / `secrets:write` |
-| Email domains | `email:read` / `email:manage` |
-| Browsers | `browser:read` / `browser:manage`, plus membership |
-| Group chats | `groupchat:read` / `groupchat:send` / `groupchat:manage` |
-| Calendars | `calendar:read` / `calendar:use` / `calendar:manage`, plus membership |
-| CRM | The same contact permissions your own calls need |
-
-The practical summary: **for administrative work, Nova can do exactly what you
-can do.** For ordinary work inside a workspace, `nova:manage` is the boundary.
+There are two separate checks. Sending a prompt needs `nova:manage` on the
+workspace. Each action Nova then takes is also checked against the caller's
+permissions: the same permission the matching endpoint in this reference
+requires, on the item it acts on. Holding `nova:manage` does not add to what the
+caller can do. If a request to the endpoint would be refused, Nova is refused
+too, and it names the permission that was missing. See
+[When Nova acts for you](/docs/access-control/acting-for-you) for the full rules.
 
 Because Nova acts as the caller, an API key with narrow roles gets a narrow
 Nova. That is the intended way to limit it.
@@ -119,7 +98,7 @@ endpoint that returns a chat's history.
 
 **Anything that widens what Nova may do.** Instructions and personality shape
 behaviour only. No configuration on this page grants a permission, because every
-tool call is still gated on the caller's roles.
+action Nova takes is still checked against the caller's roles.
 
 ## Where to go next
 

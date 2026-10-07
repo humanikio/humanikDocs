@@ -48,6 +48,12 @@ Narrower roles for a specific job, meant to be assigned at a narrow boundary.
 | `dataSourceManager` | Managing data sources and ingestion |
 | `integrationPublisher` | Publishing integrations for others to use |
 
+A role that lets someone use Nova does not widen what Nova may do for them. Nova
+can do only what the role's other permissions allow. For example,
+`officeOperator` includes `nova:manage` but no data source permissions, so a
+person who holds only that role can ask Nova to read a namespace's data and Nova
+will be refused. See [When Nova acts for you](/docs/access-control/acting-for-you).
+
 ### Machine identities
 
 Assigned to service accounts rather than to people. Usually attached

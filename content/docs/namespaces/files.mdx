@@ -100,6 +100,9 @@ returns; the description used by search is rebuilt shortly after the last change
 
 This is also how Nova saves and edits documents in a bucket.
 
+[How a file is edited](/docs/namespaces/editing-files) walks through every step between
+sending an edit and the new version being saved, with a diagram.
+
 ### Versions
 
 The 20 most recent earlier versions of each file are kept. You can list them and
@@ -107,7 +110,7 @@ restore one. A restore saves the old contents as a new version, so it can be
 undone the same way.
 
 ```bash
-curl -X POST "$HOS_API/api/v1/namespaces/ns_orders/buckets/7c0e2b5a-31d4-4f7e-9a1c-2b8d6e4f9a10/objects/3f1d9c2e-8a47-4b6e-9d15-6c2a0e7b4f81/edits" \
+curl -X POST "$HOS_API/namespaces/ns_orders/buckets/7c0e2b5a-31d4-4f7e-9a1c-2b8d6e4f9a10/objects/3f1d9c2e-8a47-4b6e-9d15-6c2a0e7b4f81/edits" \
   -H "Authorization: Bearer $HOS_KEY" \
   -H "Content-Type: application/json" \
   -d '{

@@ -8,6 +8,7 @@
     "actions",
     "assignments",
     "service-accounts",
-    "running-as-a-user"
+    "running-as-a-user",
+    "acting-for-you"
   ]
 }

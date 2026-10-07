@@ -1,0 +1,138 @@
+---
+title: When Nova acts for you
+description: Nova has no permissions of its own. Every action it takes for you is checked against your permissions, by the same rules as an API call.
+---
+
+Nova does work for you inside HumanikOS: it reads a table, edits a document,
+wakes an office, builds a workflow. It does that work as you. It holds no
+identity, no roles and no credentials of its own.
+
+Every action Nova takes that reads or changes something in your account is
+checked against **your** permissions, using the same rules as a request to the
+API. If you could not do it through the API, Nova cannot do it for you.
+
+<svg viewBox="0 0 720 420" className="w-full h-auto my-6" role="img" aria-label="Three ways work reaches your account: your own code with an API key, an AI employee with its own key, and Nova acting as you. All three go through the same check. First the platform works out which item the request is about and which workspace it really belongs to. Then it checks whether that person or key holds the permission for that action there. The result is either allowed, and the work runs, or refused, with the missing permission named.">
+  <title>One permission check for the API, employees and Nova</title>
+
+  <text x="8" y="20" fontSize="11" letterSpacing="1.2" fill="var(--color-fd-muted-foreground)">WHO IS ASKING</text>
+
+  <rect x="8" y="34" width="224" height="64" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="120" y="60" fontSize="14" textAnchor="middle" fill="var(--color-fd-foreground)">Your code</text>
+  <text x="120" y="80" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">an API key</text>
+
+  <rect x="248" y="34" width="224" height="64" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="360" y="60" fontSize="14" textAnchor="middle" fill="var(--color-fd-foreground)">AI employee</text>
+  <text x="360" y="80" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">the office's own key</text>
+
+  <rect x="488" y="34" width="224" height="64" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-foreground)" />
+  <text x="600" y="60" fontSize="14" textAnchor="middle" fontWeight="600" fill="var(--color-fd-foreground)">Nova</text>
+  <text x="600" y="80" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">acting as you, with your roles</text>
+
+  <line x1="120" y1="98" x2="120" y2="128" stroke="var(--color-fd-foreground)" />
+  <polygon points="120,134 116,126 124,126" fill="var(--color-fd-foreground)" />
+  <line x1="360" y1="98" x2="360" y2="128" stroke="var(--color-fd-foreground)" />
+  <polygon points="360,134 356,126 364,126" fill="var(--color-fd-foreground)" />
+  <line x1="600" y1="98" x2="600" y2="128" stroke="var(--color-fd-foreground)" />
+  <polygon points="600,134 596,126 604,126" fill="var(--color-fd-foreground)" />
+
+  <rect x="8" y="134" width="704" height="170" rx="8" fill="var(--color-fd-background)" stroke="var(--color-fd-foreground)" />
+  <text x="24" y="158" fontSize="11" letterSpacing="1.2" fill="var(--color-fd-muted-foreground)">THE SAME CHECK, EVERY TIME</text>
+
+  <rect x="24" y="172" width="320" height="112" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="40" y="196" fontSize="14" fontWeight="600" fill="var(--color-fd-foreground)">1. Which item is this?</text>
+  <text x="40" y="218" fontSize="12" fill="var(--color-fd-muted-foreground)">The namespace, office, browser or</text>
+  <text x="40" y="234" fontSize="12" fill="var(--color-fd-muted-foreground)">calendar named, and the workspace</text>
+  <text x="40" y="250" fontSize="12" fill="var(--color-fd-muted-foreground)">it really belongs to. An item that</text>
+  <text x="40" y="266" fontSize="12" fill="var(--color-fd-muted-foreground)">cannot be found is refused.</text>
+
+  <line x1="344" y1="228" x2="370" y2="228" stroke="var(--color-fd-foreground)" />
+  <polygon points="376,228 368,224 368,232" fill="var(--color-fd-foreground)" />
+
+  <rect x="376" y="172" width="320" height="112" rx="6" fill="var(--color-fd-muted)" stroke="var(--color-fd-border)" />
+  <text x="392" y="196" fontSize="14" fontWeight="600" fill="var(--color-fd-foreground)">2. May they do this there?</text>
+  <text x="392" y="218" fontSize="12" fill="var(--color-fd-muted-foreground)">The permission for this action,</text>
+  <text x="392" y="234" fontSize="12" fill="var(--color-fd-muted-foreground)">checked against the role</text>
+  <text x="392" y="250" fontSize="12" fill="var(--color-fd-muted-foreground)">assignments of the person or key,</text>
+  <text x="392" y="266" fontSize="12" fill="var(--color-fd-muted-foreground)">including any deny statements.</text>
+
+  <line x1="240" y1="304" x2="240" y2="334" stroke="var(--color-fd-foreground)" />
+  <polygon points="240,340 236,332 244,332" fill="var(--color-fd-foreground)" />
+  <line x1="480" y1="304" x2="480" y2="334" stroke="var(--color-fd-foreground)" />
+  <polygon points="480,340 476,332 484,332" fill="var(--color-fd-foreground)" />
+
+  <rect x="96" y="340" width="288" height="60" rx="6" fill="var(--color-fd-background)" stroke="var(--color-fd-foreground)" />
+  <text x="240" y="366" fontSize="14" textAnchor="middle" fontWeight="600" fill="var(--color-fd-foreground)">Allowed</text>
+  <text x="240" y="385" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">the work runs</text>
+
+  <rect x="400" y="340" width="288" height="60" rx="6" fill="var(--color-fd-background)" stroke="var(--color-fd-border)" />
+  <text x="544" y="366" fontSize="14" textAnchor="middle" fontWeight="600" fill="var(--color-fd-foreground)">Refused</text>
+  <text x="544" y="385" fontSize="12" textAnchor="middle" fill="var(--color-fd-muted-foreground)">nothing changes; the permission is named</text>
+</svg>
+
+## Two permissions, not one
+
+Using Nova and what Nova may do are separate.
+
+| Question | Answered by |
+| --- | --- |
+| May you use Nova in this workspace at all? | `nova:manage` on the workspace. Without it, Nova does not run for you there |
+| May Nova do this particular thing for you? | The permission the matching API endpoint needs, on the item it acts on |
+
+Holding `nova:manage` does not add to what you can do. A person whose role
+lets them use Nova but not edit a namespace's files can ask Nova to edit one,
+and Nova will be refused, exactly as the API would refuse them.
+
+The permission each action needs is the one listed for the matching endpoint
+in the [API reference](/docs/api-reference). Editing a text file through Nova
+needs `datasource:manage` on the namespace, the same as
+[Edit a text file](/docs/api-reference/buckets/editing/editTextObject).
+Waking an office needs what waking it through the API needs.
+
+## The workspace is checked, not assumed
+
+When Nova acts on a namespace, a browser, a calendar or a project, the platform
+looks up which workspace that item really belongs to, and checks your
+permissions there. Asking Nova in one workspace about a namespace that belongs
+to another workspace is checked against the other workspace, and is refused if
+you have no access to it.
+
+## What you see when Nova is refused
+
+Nova tells you it could not do the action and names the permission that was
+missing, for example `datasource:manage`. Nothing was changed. To allow it,
+someone who manages access control gives you a role that includes that
+permission on the right workspace. See [Assignments](/docs/access-control/assignments).
+
+## When nobody is watching
+
+A [scheduled task](/docs/nova/scheduled-tasks) or a
+[text message to Nova](/docs/nova/texting) has no signed-in session. The
+platform rebuilds your permissions first, as described in
+[Running as a user](/docs/access-control/running-as-a-user), and then every
+action is checked the same way as above. Your permissions are read when the
+work runs, so a task created before your access was narrowed is held to your
+access as it is now.
+
+Actions that wait for your approval are checked again when you approve, with
+your permissions at that moment. See
+[What Nova asks you to approve](/docs/nova/approvals).
+
+## The sharp edges
+
+**The account owner passes every check.** Owners are not subject to role
+checks anywhere on the platform. To see what Nova will refuse for someone, test
+with that person's account or another member account, never the owner's.
+
+**Some checks are in addition to permissions.** A browser or a calendar is
+shared with specific people and employees. Nova needs both the permission and
+that membership, the same as the API.
+
+**Nova still sees every capability.** It is not shown a reduced list based on
+your permissions. It finds out an action is not allowed when it tries, and
+tells you.
+
+<Cards>
+  <Card title="Running as a user" href="/docs/access-control/running-as-a-user" description="How scheduled tasks and text messages get your permissions with no session." />
+  <Card title="Datasource actions" href="/docs/access-control/actions#datasource" description="The permissions that cover namespaces, tables and files." />
+  <Card title="Nova" href="/docs/nova" description="Ways to reach Nova, and what it asks you to approve." />
+</Cards>
