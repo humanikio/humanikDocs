@@ -13,6 +13,7 @@ import {
   ToolCallFlow,
   ToolSplit,
   TransportDirections,
+  WhereToolsRun,
 } from '@/components/device-diagrams';
 import { EmployeeShapes, EmployeeStates, WhoIsWho } from '@/components/huma-figures';
 import type { MDXComponents } from 'mdx/types';
@@ -41,6 +42,7 @@ export function getMDXComponents(components?: MDXComponents) {
     ToolCallFlow,
     ToolSplit,
     TransportDirections,
+    WhereToolsRun,
     WhoIsWho,
     EmployeeShapes,
     EmployeeStates,

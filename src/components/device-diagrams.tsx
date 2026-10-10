@@ -490,6 +490,60 @@ export function ToolCallFlow() {
 }
 
 // ============================================================
+// The two environments, and the three ways an agent acts
+// ============================================================
+
+export function WhereToolsRun() {
+  return (
+    <Figure
+      label="The two environments an agent works across, and the three ways it acts"
+      caption="One agent, two environments. Local work stays on your machine; office work runs in the sandbox where the credentials already are. The same office catalog serves the office's own agent and, bridged, an agent on your machine."
+    >
+      <div className="rounded-lg border border-dashed border-fd-border bg-fd-muted/40 p-3.5">
+        <Actor ours={false}>Your machine</Actor>
+        <p className="mt-1.5 text-sm font-medium text-fd-foreground">
+          The agent runs here, and acts in three ways
+        </p>
+        <ul className="mt-2 space-y-2 text-xs leading-relaxed text-fd-muted-foreground">
+          <li>
+            <span className="font-mono text-fd-foreground">1 · local tools</span> — reads and
+            writes files and runs the connectors you signed in, on this machine, bounded by
+            your ceiling. Nothing leaves.
+          </li>
+          <li>
+            <span className="font-mono text-fd-foreground">2 · a job from the cloud</span> —
+            work is dispatched down, the agent runs the turn here, and the output streams back
+            up. This is the turn itself.
+          </li>
+          <li>
+            <span className="font-mono text-fd-foreground">3 · office tools</span> — the agent
+            calls a tool it does not hold (<span className="font-mono">mcp__hos__…</span>); the
+            call goes up to the office this job belongs to and runs there.
+          </li>
+        </ul>
+      </div>
+
+      <Wire
+        label="only mode 3 leaves your machine: a signed tool request carrying a name and arguments, never a credential and never who you are"
+        note="tool request -> gateway -> HumanikOS -> the office this job belongs to"
+      />
+
+      <div className="rounded-lg border border-fd-foreground/25 bg-fd-card p-3.5">
+        <Actor ours>The office sandbox</Actor>
+        <p className="mt-1.5 text-sm font-medium text-fd-foreground">
+          One tool catalog, reached two ways
+        </p>
+        <ul className="mt-2 space-y-1 text-xs leading-relaxed text-fd-muted-foreground">
+          <li>The office's own agent uses the catalog in the sandbox, over a loopback MCP server</li>
+          <li>An agent on your machine reaches the same catalog, bridged, through this office</li>
+          <li>Either way the tool runs in the sandbox under the office's credentials, and only the result travels</li>
+        </ul>
+      </div>
+    </Figure>
+  );
+}
+
+// ============================================================
 // The command board
 // ============================================================
 

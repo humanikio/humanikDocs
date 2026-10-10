@@ -12,6 +12,18 @@ HumanikOS.
 It applies to a machine running a Claude Code agent (flavor B). A machine serving a local
 model works differently, see [Tools your machine does not hold](/docs/devices/office-tools).
 
+## Two environments, three ways an agent acts
+
+An agent on your machine works across **two** environments at once: your machine and the
+office it works for. It never experiences them as separate — they are all tools with names —
+but where a tool runs decides what it can touch and what crosses your connection.
+
+<WhereToolsRun />
+
+Modes 1 and 2 stay on your machine. Mode 3 is the one this page is about: the agent reaches
+the office's tools over a bridge, and each call runs in the office sandbox, not on your
+hardware.
+
 ## The bridge
 
 Every office has an **office sandbox**: a machine HumanikOS runs for that office. It holds
