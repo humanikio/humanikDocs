@@ -26,6 +26,9 @@ export function baseOptions(): BaseLayoutProps {
       // state — see the note in section-nav.tsx.
       {
         type: 'custom',
+        // Header only. In the phone drawer this row did not fit, so the drawer
+        // gets MobileSectionMenu (the sidebar banner in docs/layout.tsx) instead.
+        on: 'nav',
         children: <SectionNav />,
       },
       {

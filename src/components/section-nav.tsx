@@ -22,19 +22,24 @@ import { cn } from '@/lib/cn';
  * would leave HumanikOS lit while you read the API reference. Matching
  * therefore runs longest-URL-first, independently of display order.
  */
-const SECTIONS = [
+export const SECTIONS = [
   { text: 'HumanikOS', url: '/docs' },
   { text: 'Access Control (IAM)', url: '/docs/access-control' },
   { text: 'Devices', url: '/docs/devices' },
 ];
 
-const REFERENCE = { text: 'API reference', url: '/docs/api-reference' };
+export const REFERENCE = { text: 'API reference', url: '/docs/api-reference' };
 
 const BY_SPECIFICITY = [...SECTIONS, REFERENCE].sort((a, b) => b.url.length - a.url.length);
 
+/** The section the reader is in: the most specific URL that prefixes the path. */
+export function activeSectionUrl(pathname: string) {
+  return BY_SPECIFICITY.find((s) => pathname.startsWith(s.url))?.url;
+}
+
 export function SectionNav() {
   const pathname = usePathname();
-  const activeUrl = BY_SPECIFICITY.find((s) => pathname.startsWith(s.url))?.url;
+  const activeUrl = activeSectionUrl(pathname);
 
   return (
     <nav className="flex flex-row items-center gap-1">
