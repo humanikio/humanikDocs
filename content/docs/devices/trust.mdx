@@ -1,0 +1,106 @@
+---
+title: One catalog, two environments
+description: Where an agent's tools run across your machine, the cloud and its office, and what never leaves each place.
+---
+
+HumanikOS runs an employee in **two environments at once**: the machine you enrol, and the
+**office sandbox** HumanikOS runs for that employee. The point of the system is that you do not
+have to choose between them. The same employee does local work on your hardware and credentialed
+work in its office, inside a single turn, and you never wire the two together by hand.
+
+This page is the whole picture in one place: the three ways an agent acts, where each one runs,
+and the three things that stay put no matter which one it is. The pages it links to explain each
+mechanism in detail.
+
+## Three ways an agent acts
+
+An agent never experiences the two environments as separate. Everything is a tool with a name.
+But *where* a tool runs decides what it can touch and what crosses the connection between your
+machine and HumanikOS.
+
+<WhereToolsRun />
+
+Those three modes are reached through **one tool catalog**, defined once in the office sandbox.
+The office's own agent uses the catalog inside the sandbox. When the turn runs on your machine
+instead, the same catalog is bridged to the agent there. One list, one definition, whichever
+machine does the work.
+
+## Where each tool runs
+
+| The agent is… | Runs where | Bounded by | Credentials it holds |
+| --- | --- | --- | --- |
+| Using a tool on your machine | Your machine, in a workspace directory the daemon derives | **Your ceiling**, in a file you write | Only the connectors you set up locally |
+| Running a job sent from the cloud | Your machine, within that same ceiling | **Your ceiling** | Same as above |
+| Using an office tool over the bridge | The **office sandbox**, never your hardware | The **employee's permissions**, in the office | The office's own credentials — never copied to you |
+
+The first two stay on your machine and answer to the ceiling you set. The third runs in the
+sandbox under the office's permissions. Your machine receives the result, not the credential and
+not the code.
+
+## Three things that stay put
+
+**Your keys stay in the office.** The integrations you connect — your Stripe key, your CRM
+token, an internal API credential — are written into a vault the office reads at boot. They
+become tools the employee calls, but the values are never sent to your machine, never written
+there, and not readable from it. This machine receives responses, not keys. See
+[Integrations and secrets](/docs/integrations).
+
+**Your ceiling bounds your machine, and nothing widens it.** The ceiling lives in a config file
+on your hardware, written by you. HumanikOS never sends a tool list, a working directory or a
+permission mode — it sends the conversation and what it wants done. If the control plane were
+compromised tomorrow, it still could not widen what any enrolled machine is permitted to do. See
+[the rule that makes this safe](/docs/devices#the-rule-that-makes-this-safe).
+
+**Each hop proves who it is.** The connection your machine opens is outbound only; there is no
+inbound port. Your machine signs what it sends with a key that never leaves the device, and the
+office a tool call belongs to is taken from the job on our side, never from anything the machine
+claims about itself. The identity of a request is established server-side and cannot be forged by
+a compromised machine.
+
+<Callout>
+  **One catalog is the reason a device is not a lesser employee.** An agent on your laptop
+  reaches the same software as one in the cloud, because both read the same catalog. Build an
+  integration once, enable its endpoints, and every agent — in the office or on an enrolled
+  machine — can call them, with the credential staying in the office.
+</Callout>
+
+## The three boundaries, held by three parties
+
+The guarantees above are not one setting. Work reaching an enrolled machine passes three separate
+boundaries, held by three different people, and they compose without leaking into each other.
+
+| Boundary | Held by | Decides |
+| --- | --- | --- |
+| **The ceiling** | You, on your machine | What may be done **to your machine** |
+| **The allocation** | An administrator, in the console | Which workspace may use the machine, and which employee is attached to it |
+| **The employee's permissions** | The permission system | What the employee may reach **in its office** |
+
+Widening the ceiling does not grant the employee more access to company data. Granting the
+employee a broader role does not let it do more on your laptop. An administrator pointing an
+office at a machine grants the right to think there, not to act beyond the ceiling. The full
+treatment is [Three limits, and none can widen another](/docs/devices#three-limits-and-none-can-widen-another).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="How a tool call travels"
+    href="/docs/devices/tool-calls"
+    description="The bridge, the services involved, and what crosses your connection on one call."
+  />
+  <Card
+    title="Tools your machine does not hold"
+    href="/docs/devices/office-tools"
+    description="A worked example of a turn split between your machine and the office."
+  />
+  <Card
+    title="Integrations and secrets"
+    href="/docs/integrations"
+    description="Connecting software an employee can use, and where its credentials live."
+  />
+  <Card
+    title="Connect your own machine"
+    href="/docs/devices"
+    description="Enrol a device, set its ceiling, and understand the three kinds of device."
+  />
+</Cards>

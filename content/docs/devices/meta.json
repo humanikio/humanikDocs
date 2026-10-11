@@ -3,6 +3,7 @@
   "root": true,
   "pages": [
     "index",
+    "trust",
     "how-work-reaches-it",
     "tool-calls",
     "office-tools",
