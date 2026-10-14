@@ -1,0 +1,173 @@
+---
+title: Pricing
+description: What every machine on Humanik Cloud costs per hour and per month, exactly which time is billed, and worked examples.
+---
+
+On Humanik Cloud you pay for one thing: **the time a machine is running**, at the
+hourly price of its size. A machine that is asleep costs nothing to run. There is
+no charge per request, per deploy or per service.
+
+This is separate from model use. Machine time is not drawn from your
+[credit balance](/docs/spend/credit), and no [budget](/docs/spend/budgets) counts
+it. See [Billing and budgets](/docs/spend) for how the two fit together.
+
+## The rule
+
+```
+cost = time a machine runs × the hourly price of its size
+```
+
+- **Each machine is billed on its own.** Two machines running for one hour cost
+  two hours.
+- **Time is measured exactly.** There is no minimum and no rounding up to the
+  hour. A machine that runs for 12 minutes is billed for 12 minutes.
+- **Prices are in US dollars**, per machine, per hour it runs.
+
+## Prices
+
+The monthly column is a machine that runs all month (730 hours) and never sleeps.
+Most services sleep when idle and cost much less. See the
+[worked examples](#worked-examples).
+
+### Offices
+
+The machine behind one AI employee. Set with `instanceType`. The default is `pro`.
+
+| `instanceType` | vCPU | Memory | Per hour | Awake all month |
+| --- | --- | --- | --- | --- |
+| **`pro` (default)** | 4 | 8 GB | **$0.25** | $182.50 |
+| `pro-max` | 4 | 16 GB | $0.35 | $255.50 |
+| `pro-ultra` | 8 | 32 GB | $0.65 | $474.50 |
+
+### Cloud browsers
+
+Set with `instanceType`. The default is `standard`.
+
+| `instanceType` | vCPU | Memory | Per hour | Awake all month |
+| --- | --- | --- | --- | --- |
+| **`standard` (default)** | 2 | 4 GB | **$0.25** | $182.50 |
+| `pro` | 4 | 8 GB | $0.25 | $182.50 |
+
+### Web services
+
+A web service picks vCPU and memory separately, so its price is built from three
+parts:
+
+| Part | Per hour |
+| --- | --- |
+| Each vCPU | $0.04857 |
+| Each GB of memory | $0.00534 |
+| Each running machine | $0.0075 |
+
+```
+per hour = vCPU × $0.04857 + GB × $0.00534 + $0.0075
+```
+
+For the default size, 1 vCPU with 2 GB: $0.04857 + 2 × $0.00534 + $0.0075 =
+**$0.0668 per hour**.
+
+| Size | Per hour | Awake all month |
+| --- | --- | --- |
+| 0.25 vCPU, 512 MB | $0.0223 | $16.29 |
+| 0.25 vCPU, 1 GB | $0.0250 | $18.24 |
+| 0.5 vCPU, 1 GB | $0.0371 | $27.10 |
+| 0.5 vCPU, 2 GB | $0.0425 | $31.00 |
+| **1 vCPU, 2 GB (default)** | **$0.0668** | **$48.73** |
+| 1 vCPU, 4 GB | $0.0774 | $56.52 |
+| 2 vCPU, 4 GB | $0.1260 | $91.98 |
+| 2 vCPU, 8 GB | $0.1474 | $107.57 |
+| 4 vCPU, 8 GB | $0.2445 | $178.48 |
+| 4 vCPU, 16 GB | $0.2872 | $209.67 |
+
+Any other allowed pairing is priced with the same formula.
+[Machine sizes](/docs/cloud/sizes#web-services) lists every pairing you can pick.
+
+## Which time is billed
+
+Billing for a machine starts when the machine is started and stops when it is
+stopped. Every moment in between is billed, whether or not the machine is doing
+work.
+
+| A machine starts when | A machine stops when |
+| --- | --- |
+| A request or message arrives for a service with no machine running | Its [idle timeout](/docs/cloud/scaling#idle-timeout) runs out |
+| You deploy or restart a service | You deploy or restart the service, which replaces it |
+| | You shut it down |
+| | A deploy fails and its new machine is stopped |
+| | The machine stops unexpectedly |
+
+**Starting up is billed.** A machine is billed from the moment it starts, not
+from the moment it is ready. An office restoring its files, or a web service
+cloning, installing and building before it answers, is billed for those minutes.
+
+**Waiting for the idle timeout is billed.** After its last piece of work, a
+machine stays awake for its idle timeout before it stops. A 20 minute timeout
+adds up to 20 minutes to every burst of work.
+
+**A deploy or restart ends the old machine's time at once.** The old machine's
+billing stops when it is stopped, and the new machine's starts with it.
+
+## The price is fixed when a machine starts
+
+A machine is billed at the price of its size at the moment it starts, for as long
+as it runs. Changing a service's size does not change the price of a machine that
+is already running. The new price applies to the next machine started.
+
+The same is true of a change to our prices: a machine already running keeps the
+price it started with.
+
+## Worked examples
+
+**An office that works in bursts.** A `pro` office ($0.25 per hour) with a
+20 minute idle timeout gets a message, works for 10 minutes, and then has no more
+work. It runs for 30 minutes: 10 working and 20 waiting for its timeout.
+That is $0.125.
+
+**An office kept awake.** The same office with an idle timeout of `0` runs all
+month: 730 hours, $182.50.
+
+**A web service kept awake.** A web service at the default size ($0.0668 per
+hour) with an idle timeout of `0` runs all month: 730 hours, $48.73.
+
+**The same web service, sleeping.** With the default 20 minute timeout, it gets
+requests between 9:00 and 17:00 on 22 working days and nothing at night. It runs
+about 8 hours and 20 minutes each of those days: about 183 hours, $12.25.
+
+**A size change partway through a month.** A web service runs at 1 vCPU, 2 GB for
+the first 15 days, then is resized to 2 vCPU, 4 GB ($0.1260 per hour) and
+deployed again, and runs for the rest of the month. About 365 hours at $0.0668
+and 365 hours at $0.1260: about $70.37.
+
+## Seeing what you have spent
+
+The console shows machine time for the current month on the Billing page and on
+each service's Usage tab, broken down by service. Each office is matched to its
+employee, so you can see which employee a cost belongs to.
+
+Running time is recorded every five minutes, and once more when the machine
+stops, so the figure for a machine that is running can be up to five minutes
+behind.
+
+With a key, use
+[Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary).
+It needs `billing:read` at `console`.
+
+## Keeping the cost down
+
+<Callout type="warn">
+  **Nothing caps machine time.** A budget covers model use only. A service kept
+  awake, or one that keeps receiving work, keeps costing until it stops.
+</Callout>
+
+Two settings decide what a service costs, and they are the only levers:
+
+| Lever | Effect |
+| --- | --- |
+| A smaller [size](/docs/cloud/sizes) | A lower hourly price |
+| A shorter [idle timeout](/docs/cloud/scaling#idle-timeout) | Fewer hours awake after the last piece of work |
+
+An idle timeout of `0` keeps a machine awake and bills every hour of the month.
+Use it only for a service that has to answer at once.
+
+Change both in the console, or with
+[Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig).

@@ -1,4 +1,9 @@
 {
   "title": "Billing and budgets",
-  "pages": ["index", "credit", "usage", "budgets"]
+  "pages": [
+    "index",
+    "credit",
+    "usage",
+    "budgets"
+  ]
 }

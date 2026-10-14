@@ -1,0 +1,77 @@
+---
+title: Machine sizes
+description: The sizes each kind of service can run at, which pairings a web service allows, and how to change and pick a size.
+---
+
+Every machine has a size: how much CPU and memory it gets. The size decides how
+much work the machine can do at once and its hourly price. Offices and cloud
+browsers pick from a short list of named sizes. Web services pick vCPU and memory
+separately.
+
+The price of every size is on [Pricing](/docs/cloud/pricing).
+
+## Offices
+
+Set with `instanceType`. The default is `pro`.
+
+| `instanceType` | vCPU | Memory |
+| --- | --- | --- |
+| `pro` | 4 | 8 GB |
+| `pro-max` | 4 | 16 GB |
+| `pro-ultra` | 8 | 32 GB |
+
+## Cloud browsers
+
+Set with `instanceType`. The default is `standard`.
+
+| `instanceType` | vCPU | Memory |
+| --- | --- | --- |
+| `standard` | 2 | 4 GB |
+| `pro` | 4 | 8 GB |
+
+## Web services
+
+Set with `cpus` and `memoryMb`. The default is 1 vCPU with 2 GB (`cpus: 1`,
+`memoryMb: 2048`). `instanceType` is accepted on a web service and ignored.
+
+Not every pairing is allowed. Memory must be one of the values for the vCPU you
+pick:
+
+| `cpus` | Allowed `memoryMb` |
+| --- | --- |
+| `0.25` | 512, 1024, 2048 |
+| `0.5` | 1024, 2048, 3072, 4096 |
+| `1` | 2048 to 8192, in steps of 1024 |
+| `2` | 4096 to 16384, in steps of 1024 |
+| `4` | 8192 to 16384, in steps of 1024 |
+
+A pairing outside this table is refused when you save it, with an error that
+names both fields and lists the memory values allowed for that vCPU.
+
+A web service is priced by its vCPU and memory. See
+[Pricing](/docs/cloud/pricing#web-services).
+
+## Changing a size
+
+A new size applies the next time a machine starts. A machine that is already
+running keeps its size, and its [price](/docs/cloud/pricing#the-price-is-fixed-when-a-machine-starts), until it stops. To apply a new size now,
+restart the office or deploy the web service again.
+
+| Service | Change it with |
+| --- | --- |
+| Office | The office's Compute tab, or [the office machine settings](/docs/api-reference/offices) |
+| Web service | The service's Settings tab, or [Update service settings](/docs/api-reference/cloud/services/updateCloudServiceUserConfig) |
+
+The allowed values are also returned by
+[Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions),
+and a value that is not allowed is refused with a `400` that names the field.
+
+## Picking a size
+
+Start at the default and change it when the service tells you to:
+
+- **The service runs out of memory**: give it more memory.
+- **Requests are slow while the machine is busy**, and memory is not the limit:
+  give it more vCPU.
+- **The machine is mostly idle while awake**: a smaller size costs less for the
+  same hours.

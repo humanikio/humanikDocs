@@ -1,0 +1,102 @@
+---
+title: Humanik Cloud
+description: What runs on Humanik Cloud, how each service gets its own machines, and how the pieces fit together.
+---
+
+Humanik Cloud is where everything that runs for your account lives: the offices
+behind your AI employees, cloud browsers, and web services you deploy from your
+own code. You do not manage servers. You describe a service, and Humanik Cloud
+starts machines for it when there is work, stops them when there is not, and
+bills for the time they run.
+
+## What runs here
+
+| Service | What it is | Sized by |
+| --- | --- | --- |
+| **Office** | The machine behind one AI employee. Holds its files, credentials and tools | A machine size: `pro`, `pro-max` or `pro-ultra` |
+| **Cloud browser** | A browser an employee or a person can drive | A machine size: `standard` or `pro` |
+| **Web service** | Your own app, built and run from a GitHub repository | vCPU and memory, chosen separately |
+
+Each has its own page: [Offices](/docs/cloud/offices) and
+[Web services](/docs/cloud/web-services). Cloud browsers are covered in the
+[Browsers API](/docs/api-reference/browsers).
+
+## What it costs
+
+You pay for the time a machine runs, at the hourly price of its size. A machine
+that is asleep costs nothing to run, and there is no charge per request, per
+deploy or per service.
+
+| Service | Default size | Per hour | Awake all month |
+| --- | --- | --- | --- |
+| Office | `pro`, 4 vCPU, 8 GB | $0.25 | $182.50 |
+| Cloud browser | `standard`, 2 vCPU, 4 GB | $0.25 | $182.50 |
+| Web service | 1 vCPU, 2 GB | $0.0668 | $48.73 |
+
+Machine time is separate from model use: it is not drawn from your credit and no
+budget limits it. [Pricing](/docs/cloud/pricing) has every size, exactly which
+time is billed, and worked examples.
+
+## What every service has in common
+
+The details differ, but four things are true of every service.
+
+**It runs on its own machines.** Nothing is shared between services. Two
+services never see each other's files, environment or secrets, and a busy
+service does not slow down an idle one.
+
+**It sleeps when it has no work.** A machine that has had no work for its idle
+timeout stops, and a stopped machine costs nothing. The next request starts it
+again and waits for it rather than failing. You can also keep a service awake all
+the time. See [Scaling and sleep](/docs/cloud/scaling).
+
+**Its size is a setting.** You pick how much CPU and memory each machine gets.
+The size decides the hourly price. See [Machine sizes](/docs/cloud/sizes).
+
+**It is billed for the time it runs.** Billing starts when a machine is started
+and stops when it is stopped, at the hourly price of its size. See
+[Pricing](/docs/cloud/pricing).
+
+## Settings apply when a machine starts
+
+A machine reads its settings once, when it starts, and keeps them until it
+stops. Changing a size, an idle timeout or an environment variable does not touch
+a machine that is already running. The change applies the next time a machine
+starts, whether that is a restart, a redeploy, or the service waking from sleep.
+
+The console shows when a service has changes that are not applied yet.
+
+## In this section
+
+<Cards>
+  <Card
+    title="Pricing"
+    href="/docs/cloud/pricing"
+    description="Every size and its price, which time is billed, and worked examples."
+  />
+  <Card
+    title="Offices"
+    href="/docs/cloud/offices"
+    description="How an employee's machine sleeps, wakes and keeps its work."
+  />
+  <Card
+    title="Web services"
+    href="/docs/cloud/web-services"
+    description="Deploy your own app from GitHub."
+  />
+  <Card
+    title="Machine sizes"
+    href="/docs/cloud/sizes"
+    description="Every size each kind of service can run at, and how to pick one."
+  />
+  <Card
+    title="Scaling and sleep"
+    href="/docs/cloud/scaling"
+    description="Instances, idle timeouts, and keeping a service awake."
+  />
+  <Card
+    title="Humanik Cloud API"
+    href="/docs/api-reference/cloud"
+    description="Services, sizing and logs across the account."
+  />
+</Cards>

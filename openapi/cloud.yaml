@@ -3,16 +3,21 @@ openapi: 3.1.0
 info:
   title: HumanikOS API — Humanik Cloud
   version: v1
-  summary: The compute platform offices run on.
+  summary: The platform offices, cloud browsers and web services run on.
   description: |
-    Humanik Cloud is the platform that runs your services. An office is one of
-    them: it exists as a service of type `cloudClaw`, which is why an office can
-    be resized and given an idle timeout at all.
+    Humanik Cloud is the platform that runs your services: offices, cloud
+    browsers, and web services you deploy from GitHub. An office exists as a
+    service of type `cloudClaw`, which is why an office can be resized and given
+    an idle timeout at all.
 
-    These endpoints manage services directly. Most people never need them,
-    because the office endpoints do the same thing in a narrower, safer way. Use
-    these when you are managing services that are not offices, or when you want a
-    tenant wide view.
+    These endpoints manage services directly. For an office, the office
+    endpoints do the same thing in a narrower way. Use these for web services,
+    and when you want a tenant wide view.
+
+    The guides explain the platform these endpoints manage:
+    [Humanik Cloud](/docs/cloud), [Web services](/docs/cloud/web-services),
+    [Machine sizes](/docs/cloud/sizes), [Scaling and sleep](/docs/cloud/scaling)
+    and [Compute billing](/docs/spend/compute).
 
     Every fact in this document is resolved from source. Endpoints whose request
     shape has not been verified are absent rather than guessed at.
@@ -25,11 +30,15 @@ security:
 
 tags:
   - name: Services
-    description: The unit of compute. An office is one of these.
+    description: |
+      The unit of compute: an office, a cloud browser or a web service. See
+      [Humanik Cloud](/docs/cloud).
   - name: Projects
     description: Services are grouped into projects.
   - name: Deployments
-    description: Shipping code to a service, and the history of doing so.
+    description: |
+      Shipping code to a service, and the history of doing so. See
+      [How a deploy works](/docs/cloud/web-services#how-a-deploy-works).
 
 components:
   securitySchemes:
@@ -61,6 +70,121 @@ components:
         type: string
 
   schemas:
+    UserConfig:
+      type: object
+      description: |
+        A service's settings. Which fields apply depends on the service type, and
+        a field that does not apply to the type is refused. Every value is checked
+        when it is saved.
+
+        | Field | Office (`cloudClaw`) | Cloud browser | Web service |
+        | --- | --- | --- | --- |
+        | `instanceType` | `pro`, `pro-max`, `pro-ultra` | `standard`, `pro` | Accepted and ignored |
+        | `cpus` and `memoryMb` | Not used | Not used | The size |
+        | `idleTimeoutMinutes` | 0, 5, 10, 20, 60 | 0, 5, 10, 20, 60, 120 | 0, 5, 10, 20, 60 |
+
+        Settings apply the next time a machine starts. See
+        [Machine sizes](/docs/cloud/sizes) for every size and its price, and
+        [Web services](/docs/cloud/web-services#build-and-run-settings) for the
+        build and run fields.
+      properties:
+        instanceType:
+          type: string
+          description: |
+            The named size for an office or cloud browser. Defaults to `pro` for
+            an office and `standard` for a cloud browser.
+          enum: [pro, pro-max, pro-ultra, standard]
+        cpus:
+          type: number
+          description: |
+            Web services only. vCPU per machine. Must form an allowed pair with
+            `memoryMb`. Default 1.
+          enum: [0.25, 0.5, 1, 2, 4]
+        memoryMb:
+          type: integer
+          description: |
+            Web services only. Memory per machine in MB, from 512 to 16384. Must
+            be one of the values allowed for `cpus`; see
+            [Machine sizes](/docs/cloud/sizes#web-services). Default 2048.
+          minimum: 512
+          maximum: 16384
+        idleTimeoutMinutes:
+          type: integer
+          description: |
+            Minutes without work before a machine stops. `0` means it never stops
+            on its own and is billed every hour. Default 20.
+          enum: [0, 5, 10, 20, 60, 120]
+        gitRepoUrl:
+          type: string
+          format: uri
+          description: Web services only. The GitHub repository to clone with your connected GitHub account.
+        gitBranch:
+          type: string
+          description: Web services only. The branch a deploy takes its commit from. Default `main`. Use this, not `branch`.
+        rootDirectory:
+          type: string
+          description: Web services only. The folder inside the repository the app lives in. Default `.`.
+        runtime:
+          type: string
+          enum: [nodejs, python]
+          description: Web services only. Default `nodejs`.
+        installCommand:
+          type: string
+          description: Web services only. Default `npm ci`, which needs a lockfile.
+        buildCommand:
+          type: string
+          description: Web services only. Default `npm install && npm run build`.
+        startCommand:
+          type: string
+          description: Web services only. Default `npm start`. The app must listen on the `PORT` environment variable.
+        networkAccess:
+          type: string
+          enum: [http, none]
+          description: Web services only. `none` allows no inbound connections. Default `http`.
+      examples:
+        - cpus: 1
+          memoryMb: 2048
+          idleTimeoutMinutes: 20
+
+    DeployResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        deploymentId:
+          type: string
+          description: |
+            The deployment this started. Read its progress with
+            [Get a deployment](/docs/api-reference/cloud/deployments/getCloudDeployment).
+        routeId:
+          type: string
+          description: The service's public address is `https://{routeId}.humanikapi.io`.
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    LogEntry:
+      type: object
+      description: One log line. Fields beyond these depend on what the service writes.
+      properties:
+        _time:
+          type: string
+          format: date-time
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+        message:
+          type: string
+        instance_id:
+          type: string
+          description: The machine that wrote it. From [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances).
+        service_name:
+          type: string
+      additionalProperties: true
+
     Error:
       type: object
       description: |
@@ -166,15 +290,23 @@ paths:
                     The project to create it in. From
                     [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
                 userConfig:
-                  type: object
-                  description: Initial size and idle timeout. See Update service settings.
+                  $ref: '#/components/schemas/UserConfig'
               required: [serviceName, serviceType]
+            example:
+              serviceName: orders-api
+              serviceType: webservice
+              projectId: prj_7f2a91
+              userConfig:
+                gitRepoUrl: https://github.com/acme/orders-api
+                gitBranch: main
+                cpus: 1
+                memoryMb: 2048
       responses:
-        '200':
+        '201':
           description: Created.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          description: '`serviceName` or `serviceType` is missing.'
+          description: '`serviceName` or `serviceType` is missing, or a `userConfig` value is not allowed for the type.'
           content:
             application/json:
               schema:
@@ -202,9 +334,10 @@ paths:
         The service types available to you, and the sizes each supports.
         Requires `cloud:read` at `console`.
 
-        **Read this before creating or resizing anything.** Options depend on
-        your account and change over time, so valid values come from here rather
-        than from a list in these docs.
+        **Read this before creating or resizing anything.** It returns each
+        service type's settings, the allowed values for each, and the size range
+        (`machineSpecs`) for types sized by `cpus` and `memoryMb`. The same values
+        are listed on [Machine sizes](/docs/cloud/sizes).
       responses:
         '200':
           description: Available service types and sizes.
@@ -222,8 +355,10 @@ paths:
       description: |
         Creates a service and ships it in one call. Requires `cloud:manage`.
 
-        Same body as [Create a service](/docs/api-reference/cloud/services/createCloudService),
-        plus whatever the deployment needs.
+        Same body as [Create a service](/docs/api-reference/cloud/services/createCloudService).
+        A web service needs `userConfig.gitRepoUrl`, and your account must have
+        GitHub connected: the repository is cloned with your own connection.
+        See [Web services](/docs/cloud/web-services).
       requestBody:
         required: true
         content:
@@ -239,7 +374,16 @@ paths:
                 projectId:
                   type: string
                   description: From [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
+                userConfig:
+                  $ref: '#/components/schemas/UserConfig'
               required: [serviceName, serviceType]
+            example:
+              serviceName: orders-api
+              serviceType: webservice
+              projectId: prj_7f2a91
+              userConfig:
+                gitRepoUrl: https://github.com/acme/orders-api
+                gitBranch: main
       responses:
         '200':
           description: Created and deploying.
@@ -293,13 +437,13 @@ paths:
                     Move the service to another project. From
                     [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
                 userConfig:
-                  type: object
+                  $ref: '#/components/schemas/UserConfig'
       responses:
         '200':
           description: Updated.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          description: Nothing to change.
+          description: Nothing to change, or a `userConfig` value is not allowed.
           content:
             application/json:
               schema:
@@ -320,6 +464,9 @@ paths:
       operationId: deleteCloudService
       description: |
         Requires `cloud:manage`.
+
+        **Deleting a service does not stop a machine that is already running.**
+        Shut it down, or wait for its idle timeout, before deleting it.
 
         **Do not delete an office's service this way.**
         [Delete the office](/docs/api-reference/offices/offices/deleteOffice)
@@ -357,8 +504,14 @@ paths:
         | Reaches | One office | Any service in the tenant |
         | Permission | `instance:manage` @ office | `cloud:manage` @ console |
 
-        Valid sizes come from
-        [Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions).
+        An office or cloud browser is sized by `instanceType`. A web service is
+        sized by `cpus` and `memoryMb`, which must be an allowed pair. Every
+        value is checked when it is saved. See [Machine sizes](/docs/cloud/sizes).
+
+        **The change applies the next time a machine starts.** A running machine
+        keeps its size and its price until it stops. Restart the office, or
+        [redeploy](/docs/api-reference/cloud/deployments/redeployCloudService)
+        the web service, to apply it now.
       requestBody:
         required: true
         content:
@@ -367,12 +520,13 @@ paths:
               type: object
               properties:
                 userConfig:
-                  type: object
-                  description: |
-                    The settings to change. Carries `instanceType` for size and
-                    `idleTimeoutMinutes` for how long the service stays awake
-                    while idle.
+                  $ref: '#/components/schemas/UserConfig'
               required: [userConfig]
+            example:
+              userConfig:
+                cpus: 2
+                memoryMb: 4096
+                idleTimeoutMinutes: 0
       responses:
         '200':
           description: Updated.
@@ -388,6 +542,14 @@ paths:
                   value:
                     success: false
                     error: userConfig object is required
+                badPair:
+                  value:
+                    success: false
+                    error: "Fields 'cpus' and 'memoryMb' are not a valid pair: 2 vCPU accepts memoryMb 4096, 5120, 6144, 7168, 8192, 9216, 10240, 11264, 12288, 13312, 14336, 15360, 16384 (got 2048)"
+                notAllowed:
+                  value:
+                    success: false
+                    error: "Field 'idleTimeoutMinutes' must be one of: 0, 5, 10, 20, 60 (got '30')"
         '403':
           $ref: '#/components/responses/Forbidden'
         '502':
@@ -403,8 +565,8 @@ paths:
       description: |
         What is running for this service right now. Requires `cloud:read`.
 
-        A service that has scaled to zero returns none. That is the resting
-        state, not an error.
+        A service that is asleep returns none. That is the resting state, not an
+        error. Reading this never wakes a service.
       responses:
         '200':
           description: Running instances, if any.
@@ -421,10 +583,119 @@ paths:
       tags: [Services]
       summary: Get service logs
       operationId: getCloudServiceLogs
-      description: Requires `cloud:read`.
+      description: |
+        Log lines from every machine of this service, newest first. Requires
+        `cloud:read`.
+
+        **Pass `serviceType`.** Logs for each kind of service are kept apart, and
+        this parameter picks which to read. Without it the call reads the wrong
+        place and returns no lines, with a `200`. Get the type from
+        [Get a service](/docs/api-reference/cloud/services/getCloudService).
+
+        With no time range, it returns the last 15 minutes. Narrow to one machine
+        with `instanceId`, or to one deploy with `deploymentId`. Reading logs never
+        wakes a service.
+
+        A service that has never run returns `success: true` with no lines and a
+        note in `error` that no logs exist yet.
+      parameters:
+        - name: serviceType
+          in: query
+          required: false
+          description: The service's type, such as `webservice` or `cloudClaw`. Set it; see above.
+          schema:
+            type: string
+        - name: instanceId
+          in: query
+          description: Only lines from this machine. From [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances).
+          schema:
+            type: string
+        - name: deploymentId
+          in: query
+          description: Only lines from this deploy. From [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments).
+          schema:
+            type: string
+        - name: startTime
+          in: query
+          description: ISO 8601 time. Default 15 minutes ago.
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          description: ISO 8601 time. Default now.
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          description: Only lines containing this text.
+          schema:
+            type: string
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+        - name: limit
+          in: query
+          description: Lines per page. Default 100, at most 1000.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+        - name: cursor
+          in: query
+          description: The `cursor` from the previous page, to read the next one.
+          schema:
+            type: string
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
       responses:
         '200':
-          description: Log output.
+          description: Log lines.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LogEntry'
+                  cursor:
+                    type: string
+                    description: Pass back as `cursor` to read the next page. Absent on the last page.
+                  hasMore:
+                    type: boolean
+                  count:
+                    type: integer
+                  timestamp:
+                    type: string
+                    format: date-time
+              example:
+                success: true
+                logs:
+                  - _time: '2026-10-13T14:02:11.482Z'
+                    level: info
+                    message: Server listening on 8080
+                    instance_id: inst_4c9d2e
+                    service_name: orders-api
+                hasMore: false
+                count: 1
+                timestamp: '2026-10-13T14:05:00.000Z'
+        '400':
+          description: '`level`, `order` or `limit` has a value that is not allowed.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -438,10 +709,34 @@ paths:
       tags: [Deployments]
       summary: Deploy a service
       operationId: deployCloudService
-      description: Ships code to a service. Requires `cloud:manage`.
+      description: |
+        The first deploy of a service that has never run. Requires `cloud:manage`.
+        For a service that has run before, use
+        [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService).
+
+        Takes the commit at the tip of the service's `gitBranch`, and every
+        machine started for this deploy runs that commit. The first deploy also
+        creates the public address. Your account must have GitHub connected. See
+        [How a deploy works](/docs/cloud/web-services#how-a-deploy-works).
+
+        Billing starts when the machine starts. See
+        [Compute billing](/docs/spend/compute).
       responses:
         '200':
           description: Deployment started.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DeployResult'
+                  - type: object
+                    properties:
+                      instanceIds:
+                        type: array
+                        items:
+                          type: string
+                      instanceCount:
+                        type: integer
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -456,13 +751,45 @@ paths:
       summary: Redeploy a service
       operationId: redeployCloudService
       description: |
-        Ships the current version again. Requires `cloud:manage`.
+        Replaces the service's machines with new ones. Requires `cloud:manage`.
 
-        Useful when the code has not changed but the environment has, since
-        secrets are read at boot.
+        **The service is down while this runs.** The running machines are
+        stopped first, then new ones start. A deploy that does not become ready
+        within 20 minutes fails and its machines are stopped.
+
+        **Which commit.** Without `gitSha`, the commit at the tip of `gitBranch`.
+        With `gitSha`, that exact commit, which is how you roll back to a known
+        good version. Every machine started afterwards, including after sleep,
+        runs the commit this deploy chose.
+
+        Also use it when the code has not changed but secrets or settings have,
+        since both are read when a machine starts. `userConfig` in the body is
+        saved first, so a size change and the deploy that applies it can be one
+        call.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                gitSha:
+                  type: string
+                  description: |
+                    A full commit SHA from the service's repository. From the
+                    repository, or from an earlier deploy in
+                    [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments).
+                userConfig:
+                  $ref: '#/components/schemas/UserConfig'
+            example:
+              gitSha: 3f9c2a7e5b1d4c8a9e0f6b2d7a1c5e8f4b3a2d1c
       responses:
         '200':
           description: Redeployment started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeployResult'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'

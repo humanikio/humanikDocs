@@ -18,16 +18,16 @@ Two meters, reported separately.
 
 | | Model use | Compute |
 | --- | --- | --- |
-| Paid from | Prepaid credit | Billed by runtime |
+| Priced | Per token, paid from prepaid credit | Per hour of machine time, by size. See [Pricing](/docs/cloud/pricing) |
 | Balance | [Get the balance](/docs/api-reference/billing/credit/getBalance) | Not a balance |
 | History | [List model usage](/docs/api-reference/billing/usage/listUsage) | [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary) |
-| Invoices | [Credit invoices](/docs/api-reference/billing/usage/listInvoices) | [Compute invoices](/docs/api-reference/billing/compute/listComputeInvoices) |
+| Invoices | [Credit invoices](/docs/api-reference/billing/usage/listInvoices) | None |
 | Can be limited | Yes, by [budgets](#budgets) | No |
 
 <Callout type="warn">
   **Nothing adds the two together.** There is no combined total anywhere in this
   API. A figure for what an account spent is something you assemble from both
-  sides, and the two use different units and different invoices.
+  sides, and the two use different units.
 </Callout>
 
 ## Everything here is account-wide
@@ -77,8 +77,9 @@ send alerts.
 
 **Compute** has no cap. The only lever is
 [Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig):
-a smaller machine costs less per second awake, and a shorter idle timeout means
-fewer seconds awake. An office nobody stops keeps costing until it sleeps.
+a smaller size has a lower hourly price, and a shorter idle timeout means fewer
+hours awake. A service nobody stops keeps costing until it sleeps. The rules are
+in [Pricing](/docs/cloud/pricing).
 
 ## What is not here
 
@@ -89,8 +90,8 @@ are console flows and reject API keys.
 configured through
 [Configure automatic top ups](/docs/api-reference/billing/credit/updateAutoReload).
 
-**Rates.** What a given model or machine size costs is published in the console
-rather than through this API.
+**Rates.** Machine prices are published on [Machine sizes](/docs/cloud/sizes).
+Model prices are shown in the console rather than through this API.
 
 ## Where to go next
 

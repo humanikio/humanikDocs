@@ -132,7 +132,8 @@ is a setting, not a fixed behaviour.
 `idleTimeoutMinutes` decides it. A short timeout means the machine sleeps
 quickly, costs nothing at rest, and pays for that with a cold start on the next
 job. A long one keeps it warm and responsive, and it is awake, and billed, the
-whole time.
+whole time. The allowed values are 0, 5, 10, 20 and 60 minutes, and 0 means it
+never sleeps. See [Scaling and sleep](/docs/cloud/scaling).
 
 Neither is the right answer in general. An employee that answers customers during
 business hours wants to be warm. One that runs a nightly reconciliation does not
@@ -143,13 +144,11 @@ filesystem, so an office that wakes on Thursday still has what it did on Monday.
 
 ## You can resize the machine
 
-`instanceType` selects the machine tier. An employee doing light triage and one
-compiling code do not need the same computer, and you are not locked into the
-size you started with.
-
-**The available tiers depend on the service type**, so read the current
-configuration to see what you can choose rather than assuming a list. Both
-settings live on the same endpoint:
+`instanceType` selects the machine size: `pro` (the default), `pro-max` or
+`pro-ultra`. An employee doing light triage and one compiling code do not need
+the same computer, and you are not locked into the size you started with.
+[Machine sizes](/docs/cloud/sizes) lists the vCPU, memory and hourly price of
+each. Both settings live on the same endpoint:
 
 <Cards>
   <Card

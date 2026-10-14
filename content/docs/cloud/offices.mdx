@@ -1,5 +1,5 @@
 ---
-title: Where offices run
+title: Offices
 description: The machines behind your AI employees, how they sleep and resume, and what they cost while awake.
 ---
 
@@ -77,15 +77,17 @@ If that matters, keep the office awake rather than trying to make waking faster.
 
 ## The two levers on cost
 
-Machine time is billed while an office is awake, and unlike model spend it
-**cannot be capped**. A [spending limit](/docs/spend) does not reach it.
+An office is billed for the time it is awake, at the hourly price of its size, and
+unlike model spend it **cannot be capped**. A [spending limit](/docs/spend) does
+not reach it. [Pricing](/docs/cloud/pricing) has the prices and the exact
+rules for when billing starts and stops.
 
 So the controls are structural rather than a ceiling:
 
 | Lever | Effect |
 | --- | --- |
-| **Size** | A smaller machine costs less for every second it is awake |
-| **Idle timeout** | A shorter one means fewer seconds awake |
+| **Size** | A smaller machine has a lower hourly price. See [Machine sizes](/docs/cloud/sizes) |
+| **Idle timeout** | A shorter one means fewer hours awake. See [Scaling and sleep](/docs/cloud/scaling) |
 
 Because each employee carries its own size and its own timeout, these are per
 employee decisions rather than one setting for the account. An office that
@@ -125,9 +127,11 @@ with a control to apply them.
 
 ## What else runs here
 
-Offices are the common case, but they are not the only thing. Anything running
-for your account appears in the same place, which is why the cost breakdown
-separates what it can identify as an office from what it cannot.
+Offices are the common case, but they are not the only thing. Cloud browsers and
+[web services](/docs/cloud/web-services) run on Humanik Cloud too, and everything
+running for your account appears in the same place. That is why the cost
+breakdown separates what it can identify as an office from what it cannot.
+[Humanik Cloud](/docs/cloud) lists every kind of service.
 
 Use the [Humanik Cloud API](/docs/api-reference/cloud) when you want a view
 across everything, and the office's own endpoints when you are working with one
@@ -151,9 +155,9 @@ responsible for a single employee without giving them the whole account.
     description="What runs on the machine, and why it is a swappable part."
   />
   <Card
-    title="Humanik Cloud API"
-    href="/docs/api-reference/cloud"
-    description="Services, sizing and logs across the account."
+    title="Machine sizes"
+    href="/docs/cloud/sizes"
+    description="The sizes an office can run at, and the price of each."
   />
   <Card
     title="Spending"

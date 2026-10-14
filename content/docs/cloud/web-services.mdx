@@ -1,0 +1,155 @@
+---
+title: Web services
+description: Deploy your own app from a GitHub repository, how it is built and run, and what it needs to do to be reachable.
+---
+
+A web service is your own app running on Humanik Cloud. You point it at a GitHub
+repository and a branch, and Humanik Cloud builds it, runs it, gives it a public
+address, and stops it when nobody is using it.
+
+## Before you start
+
+**Connect your GitHub account.** A web service is cloned with your account's own
+GitHub connection, never with a shared one. Connect it in the console under
+Humanik Cloud settings. A service whose repository your connection cannot read
+fails at the clone step.
+
+## How a deploy works
+
+```
+  deploy ──▶ clone the commit ──▶ install ──▶ build ──▶ start ──▶ ready
+```
+
+**Every machine runs the same commit.** A deploy records the exact commit at the
+tip of your branch, and every machine started for that deploy clones that commit,
+including machines started later when the service wakes from sleep. Pushing to the
+branch does not change a running service. Deploy again to pick up the new commit.
+
+**A deploy replaces the machines, and the service is down while it does.** The
+running machines are stopped first, then new ones start with the new commit. Until
+a new machine is ready, the service is not serving. Deploy at a time when that
+gap is acceptable.
+
+**A deploy that does not become ready within 20 minutes fails.** Its machines are
+stopped. Read the deploy's logs, fix the cause, and deploy again.
+
+## Build and run settings
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `gitRepoUrl` | Required | The repository to clone |
+| `gitBranch` | `main` | The branch a deploy takes its commit from |
+| `rootDirectory` | `.` | The folder inside the repository the app lives in. Commands run from here. Use it for a monorepo, with one service per folder |
+| `runtime` | `nodejs` | `nodejs` or `python` |
+| `installCommand` | `npm ci` | Installs dependencies. `npm ci` needs a lockfile. Set `npm install`, `pnpm install` or `yarn install` to match your repository |
+| `buildCommand` | `npm install && npm run build` | Builds the app |
+| `startCommand` | `npm start` | Starts the server |
+
+<Callout type="warn">
+  **Use `gitBranch`, not `branch`.** `branch` is still accepted so older services
+  keep working, but nothing reads it. A service with only `branch` set deploys
+  `main`.
+</Callout>
+
+## What your app must do
+
+**Listen on `PORT`.** Your app receives the port to listen on in the `PORT`
+environment variable. Read it from the environment. Setting `PORT` yourself has
+no effect: the platform sets it last.
+
+**Answer on it.** The service is ready once your app answers on `PORT`. Until
+then, requests wait.
+
+**Leave a few paths free.** These paths are answered by the platform and never
+reach your app:
+
+| Path | Answered with |
+| --- | --- |
+| `GET /health` | Whether the machine is up, even while it is still building |
+| `GET /ready` | Whether your app is answering yet |
+| Anything under `/__runner/` | Reserved |
+| Anything under `/api/v1/machine/` | Reserved |
+
+If your app already uses `/health` for its own check, move that check to another
+path.
+
+## The public address
+
+The first deploy gives the service a public address of the form
+`https://{routeId}.humanikapi.io`. It stays the same across deploys. Requests to it
+reach your app over HTTPS, and wake the service if it is asleep.
+
+## Environment variables and secrets
+
+Your app receives the environment variables and secrets you set on the service.
+It does not receive any platform credentials, so nothing you deploy can act as
+Humanik Cloud.
+
+Secrets are read when a machine starts. Changing one applies to machines started
+after the change. Deploy again to apply it straight away.
+
+## Network access
+
+| `networkAccess` | Meaning |
+| --- | --- |
+| `http` (default) | The service can receive requests at its public address |
+| `none` | No inbound connections at all. For a service that only reaches out, such as a worker that polls a queue |
+
+It applies the next time a machine starts.
+
+## Size, scaling and cost
+
+A web service is sized by vCPU and memory, chosen separately, from 0.25 vCPU with
+512 MB up to 4 vCPU with 16 GB. It runs on one machine, and sleeps after 20
+minutes without requests unless you change its idle timeout.
+
+| Page | Covers |
+| --- | --- |
+| [Pricing](/docs/cloud/pricing#web-services) | What each size costs per hour and per month, and which time is billed |
+| [Machine sizes](/docs/cloud/sizes#web-services) | Every size a web service can run at, and how to pick one |
+| [Scaling and sleep](/docs/cloud/scaling) | How many machines run, idle timeouts, and keeping a service awake |
+
+<Callout>
+  **The first request after sleeping waits for the whole start.** That includes
+  the clone, the install and the build, which can take a few minutes. If people
+  reach the service directly, keep it awake. See
+  [Scaling and sleep](/docs/cloud/scaling#keeping-a-service-awake).
+</Callout>
+
+## Managing a web service with a key
+
+Everything in the console is also available with a service account key holding
+`cloud:read` or `cloud:manage` at `console`.
+
+| To | Use |
+| --- | --- |
+| Create a service, or create and deploy in one call | [Create a service](/docs/api-reference/cloud/services/createCloudService), [Create and deploy](/docs/api-reference/cloud/services/createAndDeployCloudService) |
+| Change its size, timeout or build settings | [Update service settings](/docs/api-reference/cloud/services/updateCloudServiceUserConfig) |
+| Deploy for the first time | [Deploy a service](/docs/api-reference/cloud/deployments/deployCloudService) |
+| Deploy again, or roll back to a commit | [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService) with `gitSha` |
+| Follow a deploy | [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments), [Get a deployment](/docs/api-reference/cloud/deployments/getCloudDeployment) |
+| See what is running | [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances) |
+| Read its logs | [Get service logs](/docs/api-reference/cloud/services/getCloudServiceLogs). Pass `serviceType=webservice` |
+| See what it costs | [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary) |
+
+#### Request
+
+```bash
+curl "$HOS_API/cloud/services/svc_3b8e1f/logs?serviceType=webservice&level=error&limit=50" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Machine sizes"
+    href="/docs/cloud/sizes"
+    description="Pick a size, and see the hourly price."
+  />
+  <Card
+    title="Humanik Cloud API"
+    href="/docs/api-reference/cloud"
+    description="Create, configure and deploy services with a key."
+  />
+</Cards>

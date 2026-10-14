@@ -1,0 +1,74 @@
+---
+title: Scaling and sleep
+description: How many machines a service runs, when they stop on their own, and how to keep a service awake.
+---
+
+A service runs on machines that start when there is work and stop when there is
+not. Two things decide how many hours you pay for: how many machines are running,
+and how long each stays awake after its last piece of work.
+
+## How many machines run
+
+| Service | Machines |
+| --- | --- |
+| Office | One. An office is one employee's machine |
+| Cloud browser | One |
+| Web service | One |
+
+None of these add machines when they are busy. A busy web service gets more
+capacity from a larger [size](/docs/cloud/sizes), not from more machines.
+
+When a service has no machine running, the next request starts one and waits for
+it. Nothing is refused because the service was asleep.
+
+## Idle timeout
+
+The idle timeout is how long a machine stays awake after its last piece of work.
+When it runs out, the machine stops, and a stopped machine costs nothing.
+
+| Service | Allowed values (minutes) | Default |
+| --- | --- | --- |
+| Office | 0, 5, 10, 20, 60 | 20 |
+| Cloud browser | 0, 5, 10, 20, 60, 120 | 20 |
+| Web service | 0, 5, 10, 20, 60 | 20 |
+
+**What counts as work** is a request reaching the service. For a web service,
+that is any request to its public address.
+
+A short timeout means fewer hours awake and more waits for a machine to start. A
+long one means the reverse. The right value depends on whether somebody is
+waiting on the other end of the first request.
+
+## Keeping a service awake
+
+An idle timeout of `0` means the machine never stops on its own. Use it when:
+
+- People reach the service directly and should not wait for it to start.
+- An office takes inbound calls or messages from a channel that will not wait,
+  such as a phone call.
+
+**An awake service is billed every hour it is awake.** A web service at the
+default size kept awake all month is about $48.73. See
+[Machine sizes](/docs/cloud/sizes) for every size.
+
+## Starting from sleep takes time
+
+A machine starting from sleep is not ready straight away:
+
+- **An office** restores its files and configuration before it answers.
+- **A web service** clones its commit, installs, builds and starts your app
+  before it answers. That can take a few minutes.
+
+That time is billed: billing starts when the machine is started, not when it is
+ready. See [Pricing](/docs/cloud/pricing#which-time-is-billed).
+
+## Stopping a machine yourself
+
+| Service | How |
+| --- | --- |
+| Office | [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine). Work in progress finishes first |
+| Web service | It stops after its idle timeout. Setting the timeout to 5 minutes is the shortest wait |
+
+To see whether a service has a machine running, use
+[List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances).
+It returns none for a service that is asleep, and reading it never wakes one.
