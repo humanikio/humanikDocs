@@ -44,9 +44,10 @@ Your ordinary service account key, plus `cloud:read` or `cloud:manage` at
 
 <Callout>
   HumanikOS holds a Humanik Cloud key on your tenant's behalf and uses it to make
-  these calls for you. You never see it and never send it. That key scopes every
-  response to your own tenant structurally, before any permission check runs, so
-  a caller cannot reach another tenant's cloud even in principle.
+  these calls for you. You never see it and never send it. Every call that names
+  a service, cron or secret is checked against your own account, and one that
+  belongs to another account is answered with `404`, the same as one that does
+  not exist.
 </Callout>
 
 If your tenant has never used Humanik Cloud, the account is provisioned on the
@@ -62,13 +63,29 @@ consequences:
 - **`502` means we could not reach Humanik Cloud**, not that your request was
   wrong.
 
+## Crons and secrets
+
+**Crons** run work on a service on a schedule: an HTTP request, or a command on a
+web service. Start at
+[List crons](/docs/api-reference/cloud/crons/listCloudCrons).
+
+**Secrets** are encrypted values a service reads when its machine starts, for
+one service or for the whole account. Start at
+[List secrets](/docs/api-reference/cloud/secrets/listCloudSecrets).
+
+| To | You need |
+| --- | --- |
+| List crons, secrets and secret field names | `cloud:read` @ `console` |
+| Create, change, run or delete a cron or secret | `cloud:manage` @ `console` |
+| **Read a secret's value** | `cloud:manage` @ `console` |
+
+Reading a value needs `cloud:manage`, not `cloud:read`, so a read only role can
+see which secrets exist without seeing what is in them.
+
 ## What is not here yet
 
-**Crons, protected secrets, and API keys** are part of this surface and are not
-documented. Crons and secrets are a later pass.
-
-API keys are held deliberately. Every Humanik Cloud key is an **admin key** with
-full account access, and the `scopes` field on the create surface is not
+**API keys** are part of this surface and are not documented, deliberately.
+Every Humanik Cloud key is an **admin key** with full account access, and the `scopes` field on the create surface is not
 enforced. Documenting a scoped key that is not scoped would be worse than
 documenting nothing, so that surface waits until the work in progress lands.
 

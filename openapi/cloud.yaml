@@ -39,6 +39,15 @@ tags:
     description: |
       Shipping code to a service, and the history of doing so. See
       [How a deploy works](/docs/cloud/web-services#how-a-deploy-works).
+  - name: Crons
+    description: |
+      Scheduled work on your services. A cron either sends an HTTP request to
+      a service, or runs a shell command on a web service.
+  - name: Secrets
+    description: |
+      Encrypted values your services read when their machines start. A secret
+      is a named group of fields, kept either for the whole account or for one
+      service.
 
 components:
   securitySchemes:
@@ -68,6 +77,63 @@ components:
       description: The project. From [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
       schema:
         type: string
+    CronId:
+      name: cronId
+      in: path
+      required: true
+      description: |
+        The cron. From [List crons](/docs/api-reference/cloud/crons/listCloudCrons),
+        or the `cronJob.cronId` returned by
+        [Create a cron](/docs/api-reference/cloud/crons/createCloudCron).
+      schema:
+        type: string
+
+    SecretName:
+      name: secretName
+      in: path
+      required: true
+      description: |
+        The secret's name, as you gave it when you created it. From
+        [List secrets](/docs/api-reference/cloud/secrets/listCloudSecrets).
+        A name cannot contain `/`, `?`, `#`, `%` or `\`.
+      schema:
+        type: string
+
+    FieldName:
+      name: fieldName
+      in: path
+      required: true
+      description: |
+        One field of the secret. From
+        [List secret fields](/docs/api-reference/cloud/secrets/listCloudSecretFields).
+        A name cannot contain `/`, `?`, `#`, `%` or `\`.
+      schema:
+        type: string
+
+    SecretServiceIdQuery:
+      name: serviceId
+      in: query
+      required: false
+      description: |
+        Act on the secrets of this one service. Omit it for account-wide
+        secrets. From [List services](/docs/api-reference/cloud/services/listCloudServices).
+        A project ID is also accepted here. A service or project that is not in
+        your account fails with a `404`.
+      schema:
+        type: string
+
+    SecretEnvironmentQuery:
+      name: environment
+      in: query
+      required: false
+      description: |
+        `dev` or `prod` to act on that environment's group. Omit it for the
+        original group, which holds every secret created before environments
+        existed. **Any other value is ignored without an error** and the
+        original group is used.
+      schema:
+        type: string
+        enum: [dev, prod]
 
   schemas:
     UserConfig:
@@ -197,6 +263,355 @@ components:
         error:
           type: string
       required: [success, error]
+    CronSchedule:
+      description: |
+        When the cron fires. `kind` decides which other fields apply.
+
+        | `kind` | Fields | Fires |
+        | --- | --- | --- |
+        | `at` | `at` | Once, at that time. A time in the past fires at the next check |
+        | `every` | `everyMs`, `anchorMs` | Repeatedly, every `everyMs` milliseconds |
+        | `cron` | `expr`, `tz` | On a standard five field cron expression |
+        | `workflowWait` | `resumeAtMs` | Once. Written by workflow wait steps; not for direct use |
+
+        **The schedule is checked when you save**, and a schedule that is not
+        valid is refused with `400`: an `at` time that cannot be read, an
+        `every` without a positive `everyMs`, a `cron` expression without five
+        fields (or six, with seconds first) or with a value out of range, or a
+        `tz` that is not a known time zone. The check is on the expression's
+        shape. If a cron still shows `nextRunAtMs: null` a minute after saving,
+        its expression could not be scheduled.
+      oneOf:
+        - type: object
+          title: at
+          properties:
+            kind:
+              type: string
+              const: at
+            at:
+              type: string
+              format: date-time
+              description: ISO 8601 time to fire once.
+          required: [kind, at]
+        - type: object
+          title: every
+          properties:
+            kind:
+              type: string
+              const: every
+            everyMs:
+              type: integer
+              minimum: 1
+              description: The interval in milliseconds.
+            anchorMs:
+              type: integer
+              description: |
+                Optional start time in epoch milliseconds. With it, the first
+                fire is at `anchorMs` (or at the next check if that is already
+                past) and the interval counts from there. Without it, fires are
+                aligned to whole intervals counted from 1 January 1970 UTC.
+          required: [kind, everyMs]
+        - type: object
+          title: cron
+          properties:
+            kind:
+              type: string
+              const: cron
+            expr:
+              type: string
+              description: A cron expression, for example `0 9 * * 1-5`.
+            tz:
+              type: string
+              description: |
+                An IANA time zone such as `America/Toronto`. Without it the
+                expression is read in UTC.
+          required: [kind, expr]
+        - type: object
+          title: workflowWait
+          properties:
+            kind:
+              type: string
+              const: workflowWait
+            resumeAtMs:
+              type: integer
+              description: Epoch milliseconds to fire once.
+          required: [kind, resumeAtMs]
+      discriminator:
+        propertyName: kind
+
+    CronRequest:
+      type: object
+      description: |
+        The HTTP request sent to the target service on each fire. For a
+        `command` cron this is built for you from `command` and cannot be set.
+      properties:
+        method:
+          type: string
+          description: HTTP method, such as `POST`.
+        path:
+          type: string
+          description: |
+            Path on the target service, such as `/jobs/nightly`. Paths under
+            `/__runner/` are refused; use a `command` cron instead.
+        body:
+          type: object
+          additionalProperties: true
+          description: JSON body to send. Not sent for `GET` or `HEAD`.
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Extra headers stored with the cron. Whether a custom header arrives
+            at your service unchanged has not been verified; do not depend on it.
+      required: [method, path]
+
+    CronCommand:
+      type: object
+      description: The shell command a `command` cron runs.
+      properties:
+        run:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: |
+            Run with `sh -c`, as the app's user, in the app's directory, with the
+            app's environment variables plus `JOB_RUN_ID` and `JOB_CRON_ID`.
+            Must not contain a NUL character.
+        timeoutMinutes:
+          type: integer
+          minimum: 1
+          maximum: 720
+          default: 60
+          description: The job is stopped after this many minutes.
+      required: [run]
+
+    CronJob:
+      type: object
+      description: A cron as stored. Fields not listed here may also appear.
+      additionalProperties: true
+      properties:
+        cronId:
+          type: string
+          description: The cron's ID. Use it as `cronId` in the other cron endpoints.
+        tenantId:
+          type: string
+          description: |
+            Your account's ID on Humanik Cloud. This is not your HumanikOS
+            tenant ID, and no endpoint takes it as input.
+        serviceId:
+          type: string
+          description: |
+            The service the cron fires at. From
+            [List services](/docs/api-reference/cloud/services/listCloudServices),
+            or the name of a platform service. Fixed at creation.
+        name:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        kind:
+          type: string
+          enum: [command]
+          description: |
+            `command` for a command cron. **Absent on an HTTP cron**, which is
+            the default kind.
+        schedule:
+          $ref: '#/components/schemas/CronSchedule'
+        request:
+          $ref: '#/components/schemas/CronRequest'
+        command:
+          $ref: '#/components/schemas/CronCommand'
+        nextRunAtMs:
+          type: [integer, 'null']
+          description: |
+            When it fires next, in epoch milliseconds. `null` right after a
+            `cron` or plain `every` schedule is saved, until the schedule is
+            first read (usually within a minute), and after a one-time cron has fired.
+        lastRunAtMs:
+          type: [integer, 'null']
+        lastStatus:
+          type: [string, 'null']
+          enum: [ok, error, skipped, null]
+          description: |
+            The result of the last fire. For a `command` cron, `ok` means the
+            command **started**, not that it succeeded; see
+            [List command jobs](/docs/api-reference/cloud/services/listCloudServiceRunnerJobs).
+            `skipped` means the previous run of the same command was still going.
+        lastError:
+          type: [string, 'null']
+        consecutiveErrors:
+          type: integer
+          description: Failed fires in a row. Reset by a success, or by turning the cron back on.
+        disabledReason:
+          type: string
+          description: Present when the cron was turned off automatically after 10 failed fires in a row.
+        lastTriggeredBy:
+          type: object
+          description: Who last ran the cron by hand. Absent if nobody has.
+          properties:
+            source:
+              type: string
+              enum: [hos, nexus, ticker]
+              description: |
+                `hos` for a cron run through this API.
+            uid:
+              type: string
+              description: |
+                Who ran it: the user's ID, or the service account's ID, taken
+                from the credentials of the call.
+            tenantId:
+              type: string
+              description: Same as the cron's `tenantId`.
+            triggeredAtMs:
+              type: integer
+        metadata:
+          type: object
+          additionalProperties: true
+          description: The `metadata` given at creation, stored as sent.
+        idempotencyKey:
+          type: string
+          description: The `idempotencyKey` given at creation, if any.
+        createdBy:
+          type: string
+          description: |
+            For a cron created through this API, an internal key ID for your
+            account. It does not identify the person or service account that
+            made the call.
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+
+    CronResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        cronJob:
+          $ref: '#/components/schemas/CronJob'
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          description: The HTTP status code, repeated in the body.
+
+    CronPreferences:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        preferences:
+          type: object
+          properties:
+            hiddenScheduleKinds:
+              type: array
+              items:
+                type: string
+                enum: [at, every, cron]
+              description: Schedule kinds this caller has chosen to hide. Empty means show all.
+            hideDisabled:
+              type: boolean
+              description: Whether this caller hides turned off crons.
+        timestamp:
+          type: string
+          format: date-time
+
+    SecretTimestamp:
+      type: object
+      description: A stored time, returned in this raw form rather than as a string.
+      properties:
+        _seconds:
+          type: integer
+        _nanoseconds:
+          type: integer
+
+    SecretSummary:
+      type: object
+      properties:
+        secretName:
+          type: string
+          description: Use it as `secretName` in the other secret endpoints.
+        tenantId:
+          type: string
+          description: Your account's ID on Humanik Cloud. Not your HumanikOS tenant ID.
+        serviceId:
+          type: [string, 'null']
+          description: The service this secret belongs to, or `null` for an account-wide secret.
+        fieldNames:
+          type: array
+          items:
+            type: string
+          description: The names of its fields. Values are not included.
+        createdAt:
+          $ref: '#/components/schemas/SecretTimestamp'
+        createdBy:
+          type: [string, 'null']
+          description: |
+            For a secret created through this API, an internal key ID for your
+            account. It does not identify the caller.
+        updatedAt:
+          $ref: '#/components/schemas/SecretTimestamp'
+
+    CommandJob:
+      type: object
+      description: One run of a command cron, as kept on the machine that ran it.
+      properties:
+        runId:
+          type: string
+          description: The run's ID. Log lines from this run carry it as `job_run_id`.
+        cronId:
+          type: string
+          description: |
+            The command cron that started it. Look it up with
+            [Get a cron](/docs/api-reference/cloud/crons/getCloudCron).
+        run:
+          type: string
+          description: The command line that ran.
+        startedAtMs:
+          type: integer
+        finishedAtMs:
+          type: [integer, 'null']
+          description: '`null` while it is still running.'
+        status:
+          type: string
+          enum: [running, succeeded, failed, timed_out]
+        exitCode:
+          type: [integer, 'null']
+          description: |
+            `null` while running, when the process was stopped by a signal, or
+            when it could not be started.
+
+    ServiceOffice:
+      type: object
+      properties:
+        id:
+          type: string
+          description: |
+            The office ID. Use it with
+            [Get an office](/docs/api-reference/offices/offices/getOffice).
+        name:
+          type: string
+          description: The office's name, or its ID if it has none.
+        workspaceId:
+          type: string
+          description: |
+            The workspace the office is in. Use it with
+            [Get a workspace](/docs/api-reference/workspaces/workspaces/getWorkspace).
+        workspaceName:
+          type: [string, 'null']
+        projectId:
+          type: [string, 'null']
+          description: |
+            The project the office's service is filed under, from the
+            workspace's setting first and the office's second. Use it with
+            [Get a project](/docs/api-reference/cloud/projects/getCloudProject).
 
   responses:
     Unauthorized:
@@ -231,6 +646,55 @@ components:
               value:
                 success: false
                 error: Failed to reach Humanik Cloud
+    CronNotFound:
+      description: |
+        No cron with this ID exists in your account. A cron in another account
+        reads the same way.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notFound:
+              value:
+                success: false
+                error: Cron job not found
+                status: 404
+
+    SecretInvalid:
+      description: |
+        A name or ID in the request cannot be used: it is empty, or contains
+        `/`, `?`, `#`, `%`, `\` or a control character. The `error` says which.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    SecretNotFound:
+      description: |
+        The secret, the field, or the `serviceId` does not exist in your account,
+        in the group chosen by `serviceId` and `environment`. The `error` says
+        which.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    SecretConflict:
+      description: |
+        The name is already taken in that group. The `error` says which name.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    SecretServerError:
+      description: |
+        The secret store failed. The reason is in `error`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
 
 paths:
   /cloud/services:
@@ -931,3 +1395,1427 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '502':
           $ref: '#/components/responses/Unreachable'
+  /cloud/crons:
+    get:
+      tags: [Crons]
+      summary: List crons
+      operationId: listCloudCrons
+      description: |
+        Your account's crons, newest first. Requires `cloud:read` at `console`.
+
+        **At most 100 are returned, and there is no next page.** An account with
+        more than 100 crons cannot read the older ones through this list; filter
+        by `serviceId` to narrow it.
+
+        Crons created by offices and by workflows appear here too, alongside
+        the ones you create.
+      parameters:
+        - name: serviceId
+          in: query
+          required: false
+          description: |
+            Only crons that fire at this service. From
+            [List services](/docs/api-reference/cloud/services/listCloudServices).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The crons.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  cronJobs:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: '#/components/schemas/CronJob'
+                  count:
+                    type: integer
+                  timestamp:
+                    type: string
+                    format: date-time
+                  status:
+                    type: integer
+                    description: The HTTP status code, repeated in the body.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    post:
+      tags: [Crons]
+      summary: Create a cron
+      operationId: createCloudCron
+      description: |
+        Schedules work on a service. Requires `cloud:manage` at `console`.
+
+        **Two kinds.** `kind` decides what a fire does and which fields apply:
+
+        | | `kind: "http"` (default) | `kind: "command"` |
+        | --- | --- | --- |
+        | A fire does | Sends `request` to the service | Runs `command.run` in a shell on the service |
+        | `request` | **Required** | Must be omitted. Built for you |
+        | `command` | Must be omitted | **Required** |
+        | `serviceId` may be | One of your services, or a platform service | One of your **web services** whose `networkAccess` is `http` |
+
+        **Where a cron may point.** `serviceId` must be one of your own services
+        ([List services](/docs/api-reference/cloud/services/listCloudServices)),
+        or a platform system service. A cron aimed at a platform system service
+        is sent with your account's identity attached, so the receiving service
+        knows whose cron it is. Shared platform worker services are refused for
+        every account except the platform's own. The service is fixed at
+        creation and cannot be changed later.
+
+        **A command cron does not wait for the command.** The fire counts as
+        `ok` once the command starts. Its result is in
+        [List command jobs](/docs/api-reference/cloud/services/listCloudServiceRunnerJobs)
+        and its output is in the service's
+        [logs](/docs/api-reference/cloud/services/getCloudServiceLogs). If the
+        previous run of the same cron is still going, the new fire is recorded as
+        `skipped`. A fire wakes a stopped service, and a running command keeps
+        the machine awake until it ends.
+
+        **Failures.** A failed fire is not retried; the cron waits for its next
+        scheduled time. After 10 failed fires in a row, a repeating cron is
+        turned off and `disabledReason` says why. A one-time cron is turned off
+        after it fires, whether it succeeded or not.
+
+        **Repeat-safe creation is opt in.** Send `idempotencyKey` and a second
+        create with the same key and service returns the first cron (with `201`)
+        instead of making another. The response does not say which happened.
+
+        Every failure on this route is returned as `400`, including a service
+        that does not exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceId:
+                  type: string
+                  description: |
+                    The service to fire at. From
+                    [List services](/docs/api-reference/cloud/services/listCloudServices).
+                    Must not contain `/`.
+                name:
+                  type: string
+                  minLength: 1
+                  description: Leading and trailing spaces are removed.
+                description:
+                  type: string
+                enabled:
+                  type: boolean
+                  default: true
+                kind:
+                  type: string
+                  enum: [http, command]
+                  default: http
+                schedule:
+                  $ref: '#/components/schemas/CronSchedule'
+                request:
+                  $ref: '#/components/schemas/CronRequest'
+                command:
+                  $ref: '#/components/schemas/CronCommand'
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: Free-form data stored with the cron and returned as sent.
+                idempotencyKey:
+                  type: string
+                  description: |
+                    Any string that makes this cron unique for this service. See
+                    the description above.
+              required: [serviceId, name, schedule]
+            examples:
+              http:
+                summary: An HTTP cron
+                value:
+                  serviceId: svc_7f3a9c2e
+                  name: Nightly report
+                  schedule:
+                    kind: cron
+                    expr: 0 6 * * *
+                    tz: America/Toronto
+                  request:
+                    method: POST
+                    path: /jobs/nightly-report
+                    body:
+                      format: pdf
+              command:
+                summary: A command cron on a web service
+                value:
+                  serviceId: svc_7f3a9c2e
+                  name: Prune old uploads
+                  kind: command
+                  schedule:
+                    kind: every
+                    everyMs: 3600000
+                  command:
+                    run: node scripts/prune-uploads.js --older-than 30d
+                    timeoutMinutes: 15
+      responses:
+        '201':
+          description: Created, or the existing cron for this `idempotencyKey`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronResult'
+        '400':
+          description: A field is missing or not allowed, or the service cannot take this cron.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noRequest:
+                  value:
+                    success: false
+                    error: request is required
+                    status: 400
+                badTarget:
+                  value:
+                    success: false
+                    error: serviceId 'svc_0000' is not a service of this tenant, a pool service (platform tenant only), or a system service
+                    status: 400
+                notWebService:
+                  value:
+                    success: false
+                    error: Command crons run only on webservice services (this service is 'cloudClaw')
+                    status: 400
+                runnerPath:
+                  value:
+                    success: false
+                    error: Paths under /__runner/ are reached with kind 'command', not a plain request
+                    status: 400
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/crons/preferences:
+    get:
+      tags: [Crons]
+      summary: Get cron list preferences
+      operationId: getCloudCronPreferences
+      description: |
+        Which crons the caller has chosen to hide when listing one service's
+        crons. Requires `cloud:read` at `console`.
+
+        These are display settings for one caller and one service. They never
+        change a cron, and [List crons](/docs/api-reference/cloud/crons/listCloudCrons)
+        does not apply them. A caller who has saved nothing gets the defaults:
+        nothing hidden. For a service account key, the caller is the service
+        account.
+      parameters:
+        - name: serviceId
+          in: query
+          required: true
+          description: |
+            The service whose cron list these apply to. From
+            [List services](/docs/api-reference/cloud/services/listCloudServices).
+            Not checked against your services.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The caller's preferences for this service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronPreferences'
+        '400':
+          description: '`serviceId` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noService:
+                  value:
+                    success: false
+                    error: serviceId is required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          description: Humanik Cloud could not be reached, or your account is not linked to it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notLinked:
+                  value:
+                    success: false
+                    error: Humanik Cloud account is not linked for this tenant
+
+    put:
+      tags: [Crons]
+      summary: Save cron list preferences
+      operationId: updateCloudCronPreferences
+      description: |
+        Replaces the caller's display settings for one service's cron list.
+        Requires `cloud:manage` at `console`.
+
+        **This is a full replace.** A field you leave out is reset:
+        `hiddenScheduleKinds` to empty and `hideDisabled` to `false`. Any value
+        of `hideDisabled` other than `true` is saved as `false`. Repeated kinds
+        are saved once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceId:
+                  type: string
+                  description: |
+                    The service whose cron list these apply to. From
+                    [List services](/docs/api-reference/cloud/services/listCloudServices).
+                    Not checked against your services.
+                hiddenScheduleKinds:
+                  type: array
+                  items:
+                    type: string
+                    enum: [at, every, cron]
+                hideDisabled:
+                  type: boolean
+              required: [serviceId]
+            example:
+              serviceId: svc_7f3a9c2e
+              hiddenScheduleKinds: [at]
+              hideDisabled: true
+      responses:
+        '200':
+          description: Saved. The body is what was stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronPreferences'
+        '400':
+          description: '`serviceId` is missing, or `hiddenScheduleKinds` is not a list of allowed kinds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badKinds:
+                  value:
+                    success: false
+                    error: 'hiddenScheduleKinds may only contain: at, every, cron'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          description: Humanik Cloud could not be reached, or your account is not linked to it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /cloud/crons/{cronId}:
+    parameters:
+      - $ref: '#/components/parameters/CronId'
+    get:
+      tags: [Crons]
+      summary: Get a cron
+      operationId: getCloudCron
+      description: Requires `cloud:read` at `console`.
+      responses:
+        '200':
+          description: The cron.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronResult'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/CronNotFound'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    put:
+      tags: [Crons]
+      summary: Update a cron
+      operationId: updateCloudCron
+      description: |
+        Changes only the fields you send. Requires `cloud:manage` at `console`.
+
+        **Fixed at creation:** `serviceId` and `kind`. Sending a different value
+        for either is refused. On a `command` cron, change `command` (its
+        `request` is rebuilt from it); on an HTTP cron, change `request`.
+
+        **Changing `schedule` restarts its timing** from the new schedule.
+        **Turning a cron back on** (`enabled: true` on a turned off cron) clears
+        its failure count, and a repeating cron starts from its next scheduled
+        time rather than firing at once.
+
+        The target rule from [Create a cron](/docs/api-reference/cloud/crons/createCloudCron)
+        is checked again whenever this change could make the cron fire. Turning
+        a cron off, or changing only its name or description, is always allowed.
+
+        **For an office's cron, prefer
+        [Turn a cron on or off](/docs/api-reference/cloud/crons/setCloudCronEnabled).**
+        This route changes the cron but not the office's own list of its crons,
+        which can then show the old state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                enabled:
+                  type: boolean
+                schedule:
+                  $ref: '#/components/schemas/CronSchedule'
+                request:
+                  $ref: '#/components/schemas/CronRequest'
+                command:
+                  $ref: '#/components/schemas/CronCommand'
+                kind:
+                  type: string
+                  enum: [http, command]
+                  description: Accepted only when it matches the cron's existing kind.
+            example:
+              schedule:
+                kind: cron
+                expr: 30 6 * * 1-5
+                tz: America/Toronto
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronResult'
+        '400':
+          description: A field is not allowed for this cron, or the target is no longer allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                serviceFixed:
+                  value:
+                    success: false
+                    error: "A cron's serviceId cannot be changed; delete it and create a new one"
+                    status: 400
+                requestOnCommand:
+                  value:
+                    success: false
+                    error: "request cannot be set on a 'command' cron; change command instead"
+                    status: 400
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/CronNotFound'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    delete:
+      tags: [Crons]
+      summary: Delete a cron
+      operationId: deleteCloudCron
+      description: |
+        Requires `cloud:manage` at `console`.
+
+        Returns `404` if the cron is already gone. For a delete that succeeds
+        either way, and that also updates an office's own list of its crons,
+        use [Delete a cron and its office copy](/docs/api-reference/cloud/crons/deleteCloudCronSource).
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  message:
+                    type: string
+                    const: Cron job deleted
+                  timestamp:
+                    type: string
+                    format: date-time
+                  status:
+                    type: integer
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/CronNotFound'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/crons/{cronId}/trigger:
+    parameters:
+      - $ref: '#/components/parameters/CronId'
+    post:
+      tags: [Crons]
+      summary: Run a cron now
+      operationId: triggerCloudCron
+      description: |
+        Makes the cron due now. It fires at the next scheduler check, normally
+        within about 15 seconds, not during this call. Requires `cloud:manage`
+        at `console`.
+
+        The cron's schedule is kept: a repeating cron carries on as before
+        afterwards, and a one-time `at` cron is used up by this run.
+
+        **A turned off cron is refused** with `400`. Turn it on first.
+
+        The response is the cron with its new `nextRunAtMs` and
+        `lastTriggeredBy`, which records the user or service account that made
+        this call. Its `updatedAt` is the value from before this call. The call
+        takes no body.
+      responses:
+        '200':
+          description: Scheduled to fire at the next check.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronResult'
+        '400':
+          description: |
+            The cron is turned off. The `error` text says to turn it on before
+            running it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/CronNotFound'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/crons/{cronId}/source:
+    parameters:
+      - $ref: '#/components/parameters/CronId'
+    delete:
+      tags: [Crons]
+      summary: Delete a cron and its office copy
+      operationId: deleteCloudCronSource
+      description: |
+        Deletes the cron, and if it belongs to an office, removes it from that
+        office's own list of its crons as well. Requires `cloud:manage` at
+        `console`. This is the delete the console uses.
+
+        **Safe to repeat.** A cron that does not exist returns `200` with
+        `removed: false` and `reason: "not-found"`, so a cleanup can finish
+        without special handling.
+      responses:
+        '200':
+          description: The cron is gone.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  mode:
+                    type: string
+                    const: direct
+                    description: Always `direct`. Kept for older callers.
+                  data:
+                    type: object
+                    properties:
+                      removed:
+                        type: boolean
+                        description: '`true` if this call deleted it, `false` if it was already gone.'
+                      reason:
+                        type: string
+                        const: not-found
+                        description: Present only when `removed` is `false`.
+                  timestamp:
+                    type: string
+                    format: date-time
+                  status:
+                    type: integer
+              examples:
+                deleted:
+                  value:
+                    success: true
+                    mode: direct
+                    data:
+                      removed: true
+                    timestamp: '2026-10-13T14:05:00.000Z'
+                    status: 200
+                alreadyGone:
+                  value:
+                    success: true
+                    mode: direct
+                    data:
+                      removed: false
+                      reason: not-found
+                    timestamp: '2026-10-13T14:05:00.000Z'
+                    status: 200
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    patch:
+      tags: [Crons]
+      summary: Turn a cron on or off
+      operationId: setCloudCronEnabled
+      description: |
+        Turns the cron on or off, and if it belongs to an office, updates that
+        office's own list of its crons to match. Requires `cloud:manage` at
+        `console`. This is the switch the console uses.
+
+        Turning a cron back on clears its failure count, and a repeating cron
+        starts from its next scheduled time rather than firing at once. Turning
+        it on also checks the target rule from
+        [Create a cron](/docs/api-reference/cloud/crons/createCloudCron) again,
+        so a cron whose service is no longer allowed cannot be turned on.
+        Turning one off is always allowed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+              required: [enabled]
+            example:
+              enabled: false
+      responses:
+        '200':
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  mode:
+                    type: string
+                    const: direct
+                    description: Always `direct`. Kept for older callers.
+                  data:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                      cronJob:
+                        $ref: '#/components/schemas/CronJob'
+                  timestamp:
+                    type: string
+                    format: date-time
+                  status:
+                    type: integer
+        '400':
+          description: '`enabled` is missing or not a boolean, or the target is no longer allowed.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noEnabled:
+                  value:
+                    success: false
+                    error: enabled (boolean) is required
+                    status: 400
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/CronNotFound'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  # ───────────────────────── Secrets ─────────────────────────
+
+  /cloud/secrets/protected:
+    get:
+      tags: [Secrets]
+      summary: List secrets
+      operationId: listCloudSecrets
+      description: |
+        The secrets in one group: account-wide, or one service's, in one
+        environment. Requires `cloud:read` at `console`.
+
+        Names and field names only. Values are read one field at a time with
+        [Read a secret field](/docs/api-reference/cloud/secrets/getCloudSecretField).
+
+        **Each group is separate.** Without `environment` you get only the
+        original group; secrets saved under `dev` or `prod` do not appear, and
+        the reverse. Times are returned as `{ _seconds, _nanoseconds }` objects,
+        not strings.
+      parameters:
+        - $ref: '#/components/parameters/SecretServiceIdQuery'
+        - $ref: '#/components/parameters/SecretEnvironmentQuery'
+      responses:
+        '200':
+          description: The secrets in the group.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      tenantId:
+                        type: string
+                        description: Your account's ID on Humanik Cloud. Not your HumanikOS tenant ID.
+                      serviceId:
+                        type: [string, 'null']
+                        description: The `serviceId` you asked for, or `null` for account-wide.
+                      secrets:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SecretSummary'
+                      count:
+                        type: integer
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/SecretInvalid'
+        '404':
+          $ref: '#/components/responses/SecretNotFound'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    post:
+      tags: [Secrets]
+      summary: Create a secret
+      operationId: createCloudSecret
+      description: |
+        Creates an empty secret. Requires `cloud:manage` at `console`. Add values
+        with [Add a secret field](/docs/api-reference/cloud/secrets/addCloudSecretField).
+
+        A name already used in the same group fails with `409`. The same name
+        may exist in other groups (another service, or another environment).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  description: Your name for the secret. Used in the path of every other secret call.
+                serviceId:
+                  type: string
+                  description: |
+                    Create it for this service. Omit it for an account-wide
+                    secret. From [List services](/docs/api-reference/cloud/services/listCloudServices).
+                environment:
+                  type: string
+                  enum: [dev, prod]
+                  description: |
+                    Create it in this environment's group. Omit it for the
+                    original group. Any other value is ignored without an error.
+              required: [secretName]
+            example:
+              secretName: stripe
+              serviceId: svc_7f3a9c2e
+              environment: prod
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      tenantId:
+                        type: string
+                        description: Your account's ID on Humanik Cloud. Not your HumanikOS tenant ID.
+                      serviceId:
+                        type: [string, 'null']
+                      created:
+                        type: boolean
+                        const: true
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '400':
+          description: '`secretName` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noName:
+                  value:
+                    success: false
+                    error: secretName is required
+                    status: 400
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/SecretNotFound'
+        '409':
+          $ref: '#/components/responses/SecretConflict'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/secrets/protected/transfer:
+    post:
+      tags: [Secrets]
+      summary: Copy an account-wide secret to a service
+      operationId: transferCloudSecret
+      description: |
+        Copies every field of an account-wide secret into a new secret on one
+        service. Requires `cloud:manage` at `console`. The original is kept.
+
+        **Original groups only.** The copy is read from the account-wide
+        original group and written to the service's original group. There is no
+        `environment` option: a copy will not appear under `dev` or `prod`.
+
+        Fails with `404` if the source does not exist, `400` if it has no
+        fields, and `409` if a secret with the target name already exists on
+        the service.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  description: |
+                    The account-wide secret to copy. From
+                    [List secrets](/docs/api-reference/cloud/secrets/listCloudSecrets)
+                    with no `serviceId`.
+                targetServiceId:
+                  type: string
+                  description: |
+                    The service to copy it to. From
+                    [List services](/docs/api-reference/cloud/services/listCloudServices).
+                targetSecretName:
+                  type: string
+                  description: Name for the copy. Defaults to `secretName`.
+              required: [secretName, targetServiceId]
+            example:
+              secretName: sendgrid
+              targetServiceId: svc_7f3a9c2e
+              targetSecretName: email
+      responses:
+        '201':
+          description: Copied.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      sourceScope:
+                        type: string
+                        const: global
+                      sourceSecretName:
+                        type: string
+                      targetServiceId:
+                        type: string
+                      targetSecretName:
+                        type: string
+                      fieldsCopied:
+                        type: array
+                        items:
+                          type: string
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '400':
+          description: '`secretName` or `targetServiceId` is missing.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: secretName and targetServiceId are required
+                    status: 400
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/SecretNotFound'
+        '409':
+          $ref: '#/components/responses/SecretConflict'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/secrets/protected/{secretName}:
+    parameters:
+      - $ref: '#/components/parameters/SecretName'
+    delete:
+      tags: [Secrets]
+      summary: Delete a secret
+      operationId: deleteCloudSecret
+      description: |
+        Deletes the secret and every field in it. Requires `cloud:manage` at
+        `console`. Send the same `serviceId` and `environment` the secret was
+        created with; they choose which group it is deleted from.
+
+        There is no endpoint here to delete a single field. A secret that does
+        not exist in the chosen group fails with `404`.
+
+        Machines already running keep the values they started with.
+      parameters:
+        - $ref: '#/components/parameters/SecretServiceIdQuery'
+        - $ref: '#/components/parameters/SecretEnvironmentQuery'
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      tenantId:
+                        type: string
+                        description: Your account's ID on Humanik Cloud. Not your HumanikOS tenant ID.
+                      deleted:
+                        type: boolean
+                        const: true
+                      fieldsDeleted:
+                        type: integer
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/SecretInvalid'
+        '404':
+          $ref: '#/components/responses/SecretNotFound'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/secrets/protected/{secretName}/fields:
+    parameters:
+      - $ref: '#/components/parameters/SecretName'
+    get:
+      tags: [Secrets]
+      summary: List secret fields
+      operationId: listCloudSecretFields
+      description: |
+        The field names of one secret, without values. Requires `cloud:read` at
+        `console`.
+
+        A secret that does not exist in the chosen group fails with `404`.
+      parameters:
+        - $ref: '#/components/parameters/SecretServiceIdQuery'
+        - $ref: '#/components/parameters/SecretEnvironmentQuery'
+      responses:
+        '200':
+          description: The field names.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      tenantId:
+                        type: string
+                        description: Your account's ID on Humanik Cloud. Not your HumanikOS tenant ID.
+                      fieldNames:
+                        type: array
+                        items:
+                          type: string
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No secret with this name in the chosen group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          $ref: '#/components/responses/SecretInvalid'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+    post:
+      tags: [Secrets]
+      summary: Add a secret field
+      operationId: addCloudSecretField
+      description: |
+        Adds one encrypted field to an existing secret. Requires `cloud:manage`
+        at `console`. Send the same `serviceId` and `environment` the secret was
+        created with.
+
+        **Create the secret first.** Adding a field to a secret that does not
+        exist fails with `404`, and nothing is stored. A field that already
+        exists fails with `409`; change it with
+        [Update a secret field](/docs/api-reference/cloud/secrets/updateCloudSecretField).
+
+        An empty `fieldValue` is refused. Machines read secrets when they start,
+        so [redeploy](/docs/api-reference/cloud/deployments/redeployCloudService)
+        a running service to pick up the change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldName:
+                  type: string
+                  description: Your name for the field.
+                fieldValue:
+                  type: string
+                  minLength: 1
+                  description: The value to encrypt and store.
+                serviceId:
+                  type: string
+                  description: |
+                    The service the secret belongs to. Omit it for an
+                    account-wide secret. From
+                    [List services](/docs/api-reference/cloud/services/listCloudServices).
+                environment:
+                  type: string
+                  enum: [dev, prod]
+                  description: Any other value is ignored without an error.
+              required: [fieldName, fieldValue]
+            example:
+              fieldName: STRIPE_SECRET_KEY
+              fieldValue: sk_live_51Hx...redacted
+              serviceId: svc_7f3a9c2e
+              environment: prod
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      fieldName:
+                        type: string
+                      created:
+                        type: boolean
+                        const: true
+                      dekVersion:
+                        type: integer
+                        description: A counter that starts at 1 and goes up by one on every update of this field.
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '400':
+          description: '`fieldName` or `fieldValue` is missing or empty.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: secretName, fieldName, and fieldValue are required
+                    status: 400
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/SecretNotFound'
+        '409':
+          $ref: '#/components/responses/SecretConflict'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/secrets/protected/{secretName}/fields/{fieldName}:
+    parameters:
+      - $ref: '#/components/parameters/SecretName'
+      - $ref: '#/components/parameters/FieldName'
+    put:
+      tags: [Secrets]
+      summary: Update a secret field
+      operationId: updateCloudSecretField
+      description: |
+        Replaces one field's value. Requires `cloud:manage` at `console`. Send
+        the same `serviceId` and `environment` the secret was created with.
+
+        The field must already exist, or the call fails with `404`. An empty
+        `fieldValue` is refused. Running machines keep the old value until they
+        restart; [redeploy](/docs/api-reference/cloud/deployments/redeployCloudService)
+        to apply it now.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldValue:
+                  type: string
+                  minLength: 1
+                serviceId:
+                  type: string
+                  description: |
+                    The service the secret belongs to. Omit it for an
+                    account-wide secret. From
+                    [List services](/docs/api-reference/cloud/services/listCloudServices).
+                environment:
+                  type: string
+                  enum: [dev, prod]
+                  description: Any other value is ignored without an error.
+              required: [fieldValue]
+            example:
+              fieldValue: sk_live_51Hy...redacted
+              serviceId: svc_7f3a9c2e
+              environment: prod
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      fieldName:
+                        type: string
+                      updated:
+                        type: boolean
+                        const: true
+                      dekVersion:
+                        type: integer
+                        description: Goes up by one on every update of this field.
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '400':
+          description: '`fieldValue` is missing or empty.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: secretName, fieldName, and fieldValue are required
+                    status: 400
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/SecretNotFound'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/secrets/protected/{secretName}/{fieldName}:
+    parameters:
+      - $ref: '#/components/parameters/SecretName'
+      - $ref: '#/components/parameters/FieldName'
+    get:
+      tags: [Secrets]
+      summary: Read a secret field
+      operationId: getCloudSecretField
+      description: |
+        **Returns the field's decrypted value in plain text.** Requires
+        `cloud:manage` at `console`. `cloud:read` is enough to list secrets and
+        their field names, but not to read a value.
+
+        Send the same `serviceId` and `environment` the secret was created with.
+        A field that does not exist in the chosen group fails with `404`.
+
+        Note the path: the field name follows the secret name directly, with no
+        `/fields/` segment. A field literally named `fields` cannot be read here,
+        because that path lists the fields instead.
+      parameters:
+        - $ref: '#/components/parameters/SecretServiceIdQuery'
+        - $ref: '#/components/parameters/SecretEnvironmentQuery'
+      responses:
+        '200':
+          description: The decrypted value.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      fieldName:
+                        type: string
+                      value:
+                        type: string
+                        description: The plain text value.
+                      dekVersion:
+                        type: integer
+                        description: Goes up by one on every update of this field.
+                      timestamp:
+                        type: string
+                        format: date-time
+                  status:
+                    type: integer
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/SecretInvalid'
+        '404':
+          $ref: '#/components/responses/SecretNotFound'
+        '500':
+          $ref: '#/components/responses/SecretServerError'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  # ───────────────────────── Services additions ─────────────────────────
+
+  /cloud/services/{serviceId}/office:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    get:
+      tags: [Services]
+      summary: Get the office on a service
+      operationId: getCloudServiceOffice
+      description: |
+        Which office, if any, runs on this service. Requires `cloud:read` at
+        `console`.
+
+        Returns names and IDs only, never spend. `office` is `null` for a
+        service that is not an office's (a web service or a cloud browser), and
+        also for a service ID that does not exist: this call does not check that
+        the service is real.
+      responses:
+        '200':
+          description: The office, or `null`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  office:
+                    oneOf:
+                      - $ref: '#/components/schemas/ServiceOffice'
+                      - type: 'null'
+              examples:
+                office:
+                  value:
+                    success: true
+                    office:
+                      id: off_2b8e41
+                      name: Front desk
+                      workspaceId: ws_91c0d7
+                      workspaceName: Downtown clinic
+                      projectId: prj_4a17f3
+                none:
+                  value:
+                    success: true
+                    office: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The lookup failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /cloud/services/{serviceId}/runner/jobs:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+    get:
+      tags: [Services]
+      summary: List command jobs
+      operationId: listCloudServiceRunnerJobs
+      description: |
+        Recent runs of [command crons](/docs/api-reference/cloud/crons/createCloudCron)
+        on a web service, newest first. Requires `cloud:read` at `console`.
+
+        **This never wakes a stopped service.** It checks for a healthy machine
+        first, and with none it answers `running: false` and an empty list
+        without contacting the service.
+
+        **The list is short and temporary.** Each machine keeps its last 20 runs
+        in memory, plus any still running. When the machine stops, its list is
+        gone. With more than one machine, the list comes from one of them. For a
+        lasting record use the cron's `lastStatus` and the service's
+        [logs](/docs/api-reference/cloud/services/getCloudServiceLogs), where each
+        output line carries `job_run_id` and `cron_id`.
+
+        Meant for web services. What a different service type returns here has
+        not been verified. A service ID that is not in your account returns
+        either an error or `running: false` with an empty list, so an empty
+        answer does not prove the service is yours.
+      responses:
+        '200':
+          description: The kept runs, or an empty list when no machine is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  running:
+                    type: boolean
+                    description: |
+                      Whether a healthy machine was found. When `false`, `jobs`
+                      is always empty, which does not mean no job ever ran.
+                  jobs:
+                    type: array
+                    maxItems: 20
+                    items:
+                      $ref: '#/components/schemas/CommandJob'
+              examples:
+                running:
+                  value:
+                    success: true
+                    running: true
+                    jobs:
+                      - runId: run_9f2c41a7e03b5d18
+                        cronId: Xk3pQ8vLm2RtY7wZ
+                        run: node scripts/prune-uploads.js --older-than 30d
+                        startedAtMs: 1760364000000
+                        finishedAtMs: 1760364012000
+                        status: succeeded
+                        exitCode: 0
+                asleep:
+                  value:
+                    success: true
+                    running: false
+                    jobs: []
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          description: |
+            Humanik Cloud or the service could not be reached, or the service
+            did not answer the request. Other error statuses from the service
+            are passed through with their own status code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unreachable:
+                  value:
+                    success: false
+                    error: Failed to reach Humanik Cloud
