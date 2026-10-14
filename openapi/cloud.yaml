@@ -48,6 +48,11 @@ tags:
       Encrypted values your services read when their machines start. A secret
       is a named group of fields, kept either for the whole account or for one
       service.
+  - name: API keys
+    description: |
+      The key HumanikOS holds for your Humanik Cloud account. Nobody can view
+      it: access is decided by each person's or service account's role. You can
+      list keys, rotate the one in use, and revoke ones that are not.
 
 components:
   securitySchemes:
@@ -612,6 +617,39 @@ components:
             The project the office's service is filed under, from the
             workspace's setting first and the office's second. Use it with
             [Get a project](/docs/api-reference/cloud/projects/getCloudProject).
+    CloudApiKey:
+      type: object
+      description: One key. Metadata only; a key's secret is never returned.
+      properties:
+        id:
+          type: string
+          description: The access key ID.
+        name:
+          type: string
+        secretLastFour:
+          type: string
+          description: The last four characters of the secret, to tell keys apart.
+        active:
+          type: boolean
+        isStoredKey:
+          type: boolean
+          description: This is the key HumanikOS uses for your account.
+        isActiveAccountKey:
+          type: boolean
+          description: This is the key Humanik Cloud gives to machines when they start.
+        createdAt:
+          type: object
+          description: Firestore timestamp (`_seconds`, `_nanoseconds`).
+        lastUsedAt:
+          type: object
+          nullable: true
+          description: Firestore timestamp, or `null` if never used.
+        expiresAt:
+          type: object
+          nullable: true
+          description: |
+            Set on a key that was rotated out: the time it stops working.
+            `null` for a key in use.
 
   responses:
     Unauthorized:
@@ -2819,3 +2857,120 @@ paths:
                   value:
                     success: false
                     error: Failed to reach Humanik Cloud
+  /cloud/api-keys:
+    get:
+      tags: [API keys]
+      summary: List API keys
+      operationId: listCloudApiKeys
+      description: |
+        Every key on your Humanik Cloud account, newest first, without secrets.
+        Requires `cloud:read` at `console`.
+
+        The key in use has `isStoredKey` and `isActiveAccountKey` set. A key that
+        was rotated out shows the time it stops working in `expiresAt`.
+      responses:
+        '200':
+          description: The keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  apiKeys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CloudApiKey'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /cloud/api-keys/rotate:
+    post:
+      tags: [API keys]
+      summary: Rotate the key
+      operationId: rotateCloudApiKey
+      description: |
+        Replaces the key in use with a new one. Requires `cloud:manage` at
+        `console`. The new key is stored by HumanikOS and is not returned.
+
+        **The old key keeps working for 24 hours**, then stops on its own.
+        Offices that are running hold the old key until they restart, and this
+        gap keeps them working. An office that is still running after 24 hours
+        loses access to Humanik Cloud until it restarts.
+
+        Rotate when you think the key may have been exposed. The call takes no
+        body.
+      responses:
+        '200':
+          description: Rotated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  accessKeyId:
+                    type: string
+                    description: The new key's access key ID.
+                  previousKeyId:
+                    type: string
+                    nullable: true
+                  previousExpiresAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: When the old key stops working.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500':
+          description: |
+            The new key was made but could not be saved. The old key still works
+            until its expiry. Rotate again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/api-keys/{apiKeyId}:
+    delete:
+      tags: [API keys]
+      summary: Revoke an API key
+      operationId: revokeCloudApiKey
+      description: |
+        Deletes a key that is not in use. Requires `cloud:manage` at `console`.
+        Anything still using it stops working within 10 minutes.
+
+        The key in use cannot be revoked (`409`). Rotate it instead.
+      parameters:
+        - name: apiKeyId
+          in: path
+          required: true
+          description: |
+            The access key ID. From
+            [List API keys](/docs/api-reference/cloud/api-keys/listCloudApiKeys).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: This is the key in use. Rotate it instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

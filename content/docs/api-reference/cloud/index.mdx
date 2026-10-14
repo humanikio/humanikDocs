@@ -82,12 +82,21 @@ one service or for the whole account. Start at
 Reading a value needs `cloud:manage`, not `cloud:read`, so a read only role can
 see which secrets exist without seeing what is in them.
 
-## What is not here yet
+## API keys
 
-**API keys** are part of this surface and are not documented, deliberately.
-Every Humanik Cloud key is an **admin key** with full account access, and the `scopes` field on the create surface is not
-enforced. Documenting a scoped key that is not scoped would be worse than
-documenting nothing, so that surface waits until the work in progress lands.
+There is no Humanik Cloud key for you to obtain or copy. HumanikOS holds your
+account's key, encrypted, and uses it for you; every person and service account
+reaches the cloud through these endpoints with their own role. A key can never
+be viewed, through the console or the API.
+
+| To | Use | You need |
+| --- | --- | --- |
+| See the keys and which one is in use | [List API keys](/docs/api-reference/cloud/api-keys/listCloudApiKeys) | `cloud:read` @ `console` |
+| Replace the key in use | [Rotate the key](/docs/api-reference/cloud/api-keys/rotateCloudApiKey) | `cloud:manage` @ `console` |
+| Remove a key that is not in use | [Revoke an API key](/docs/api-reference/cloud/api-keys/revokeCloudApiKey) | `cloud:manage` @ `console` |
+
+**After a rotation the old key keeps working for 24 hours**, so offices that are
+running are not cut off. They pick up the new key the next time they start.
 
 ## Two things not to do here
 
