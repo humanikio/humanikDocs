@@ -1,21 +1,23 @@
 ---
 title: Introduction
-description: HumanikOS gives every AI employee its own machine, its own identity, and one place to run all of them.
+description: HumanikOS gives every AI employee its own office, its own identity, and one place to run all of them.
 ---
 
 HumanikOS is the infrastructure an AI agent needs in order to hold a job.
 
-You name an employee and real infrastructure appears: an isolated machine with
-its own filesystem and terminal, its own identity in the permission system, its
-own vault, and its own explicit list of what it may reach. It sleeps when there
-is no work and wakes with its state intact. One workspace runs all of them.
+In Humanik an AI employee is called a **huma** (plural **humi**). You name a huma
+and real infrastructure appears: an office, which is the computer the huma works
+in, with its own filesystem, terminal and vault. The huma has its own identity in
+the permission system and its own explicit list of what it may reach. The office
+sleeps when there is no work and wakes with its state intact. One workspace runs
+all of them.
 
 ## What you actually get
 
 ```
    Workspace
      ├─ People              your colleagues, with roles
-     ├─ AI employees        one machine each, each an identity
+     ├─ AI employees        one office each, each an identity
      │    ├─ its own filesystem, terminal and vault
      │    ├─ the integrations, skills and rules you attach
      │    └─ a framework and a model, chosen per employee
@@ -43,9 +45,8 @@ conversation instead of taking you somewhere else.
 
 ## Four things an employee needs, and the platform builds all four
 
-**Its own machine.** Two employees are two machines, not two processes with a
-tenant column. One cannot read another's files, reach another's credentials, or
-use another's tools, because there is no shared surface on which it could.
+**Its own office.** Each huma works in its own office: a separate computer with
+its own files, terminal and vault, not a process with a tenant column.
 
 **Its own identity.** An employee holds role assignments in the same form a
 person does. It can be scoped to a single table and nothing else, or given a
@@ -76,7 +77,7 @@ you connected.
 
 <Cards>
   <Card title="Frameworks and models" href="/docs/frameworks" description="What runs inside an office, and what survives a change." />
-  <Card title="Offices and employees" href="/docs/offices-and-employees" description="The machine, and everything that attaches to it." />
+  <Card title="Offices and employees" href="/docs/offices-and-employees" description="The huma, the office it works in, and what attaches to it." />
 </Cards>
 
 ---
