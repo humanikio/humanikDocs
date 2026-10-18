@@ -1,0 +1,249 @@
+---
+title: Install humanikd and the app
+description: One command installs humanikd, and on macOS and Windows the Humanik OS desktop app with it.
+---
+
+Two programs make a computer of yours into a device. **humanikd** does the work:
+it connects to HumanikOS and runs jobs on this computer. **Humanik OS** is the
+desktop app on top of it, for chats, this machine's settings, updates and
+notifications.
+
+<TwoPrograms />
+
+One command installs both. It is the same command the console shows in
+**Resources → Devices → Install**.
+
+<Platforms />
+
+## Before you start
+
+- **An enrolment code.** In the console, open **Resources → Devices** and choose
+  **Add machine**. It makes a one-time code and waits until this computer
+  connects. You can also get the code during setup.
+- **The program that will do the work.** A device serves one kind of work, and
+  each kind needs its own program on this computer: Ollama for a local model,
+  Claude Code (installed and signed in) for an agent, or Docker for OpenClaw. See
+  [Three kinds of device](/docs/devices#three-kinds-of-device). `humanikd setup`
+  checks for it and prints the install command if it is missing. It never
+  installs anything for you.
+
+## Install
+
+<Steps>
+<Step>
+
+### Run the install command
+
+<Tabs items={['macOS', 'Windows', 'Linux']}>
+<Tab value="macOS">
+
+In Terminal:
+
+```bash
+curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh
+```
+
+humanikd goes in `/usr/local/bin`. If that folder needs it, the installer asks for
+your password. The app goes in `/Applications/Humanik OS.app` (or `Applications`
+in your home folder if you cannot write to `/Applications`) and opens.
+
+</Tab>
+<Tab value="Windows">
+
+In **PowerShell**, not Command Prompt:
+
+```powershell
+irm https://github.com/humanikio/humanikd-dist/releases/latest/download/install.ps1 | iex
+```
+
+humanikd goes in `%LOCALAPPDATA%\Programs\humanikd` and is added to your PATH. The
+app goes in `%LOCALAPPDATA%\Programs\Humanik OS`, with a Start menu shortcut, and
+opens. No administrator rights are needed.
+
+The window you ran it in can use `humanikd` straight away. Other open windows
+cannot until you reopen them, because Windows reads PATH when a window starts.
+
+The macOS and Linux command does not work in PowerShell: there, `curl` is a
+different program that rejects those options.
+
+</Tab>
+<Tab value="Linux">
+
+In a terminal:
+
+```bash
+curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh
+```
+
+humanikd goes in `/usr/local/bin`. If that folder needs it, the installer asks for
+your password. There is no Linux app.
+
+</Tab>
+</Tabs>
+
+The installer picks the build for your chip, and checks every file against the
+checksum published with the release. It refuses to install a file that does not
+match.
+
+</Step>
+<Step>
+
+### Set it up
+
+```bash
+humanikd setup
+```
+
+Setup walks the steps in order and stops at the first one that needs you: the
+system check, which kind of device this is, the program that does the work, the
+enrolment code, the config file, and starting automatically. Its last step offers
+to install the service that runs humanikd in the background and starts it when
+you log in.
+
+</Step>
+<Step>
+
+### Sign in to Claude once (agent devices)
+
+If this computer runs the Claude Code agent, sign in a single time:
+
+```bash
+claude
+```
+
+Jobs fail with `authentication_failed` until you do.
+
+</Step>
+<Step>
+
+### Check it
+
+```bash
+humanikd verify     # is everything this device needs in place? Spends no model quota
+humanikd status     # what this device is advertising right now
+```
+
+In the console the machine shows as online. Assign it to a workspace on its own
+page, and it starts receiving work. See
+[Bring your own compute](/docs/models/your-own-compute).
+
+</Step>
+</Steps>
+
+## Install humanikd without the app
+
+<Tabs items={['macOS', 'Windows']}>
+<Tab value="macOS">
+
+```bash
+curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh -s -- --no-app
+```
+
+</Tab>
+<Tab value="Windows">
+
+```powershell
+$env:HUMANIKD_NO_APP = '1'; irm https://github.com/humanikio/humanikd-dist/releases/latest/download/install.ps1 | iex
+```
+
+</Tab>
+</Tabs>
+
+The app is optional. humanikd runs the same with or without it.
+
+## Download a file instead
+
+If you would rather not run a script, download humanikd from the
+[latest release](https://github.com/humanikio/humanikd-dist/releases/latest), make
+it runnable (`chmod +x` on macOS and Linux), and put it on your PATH as
+`humanikd`. Then run `humanikd setup`.
+
+| System | File |
+| --- | --- |
+| macOS, Apple silicon | `humanikd-darwin-arm64` |
+| macOS, Intel | `humanikd-darwin-amd64` |
+| Linux, x86_64 | `humanikd-linux-amd64` |
+| Linux, ARM64 | `humanikd-linux-arm64` |
+| Windows, x64 | `humanikd-windows-amd64.exe` |
+
+**The app has no download button yet.** It is not signed by Apple or Microsoft,
+and a file downloaded in a browser is marked as coming from the internet. macOS
+and Windows block or warn about unsigned apps with that mark, and on macOS the
+message says the app "is damaged", which is not true. The install command
+downloads without that mark, so use it for the app.
+
+## Verify a download
+
+Every file in a release, humanikd and the app alike, has two files beside it: a
+`.sha256` checksum and a `.sigstore.json` [cosign](https://docs.sigstore.dev/)
+bundle. The installers check the checksum for you. To check a file by hand:
+
+<Tabs items={['macOS', 'Windows', 'Linux']}>
+<Tab value="macOS">
+
+```bash
+shasum -a 256 -c humanikd-darwin-arm64.sha256
+```
+
+</Tab>
+<Tab value="Windows">
+
+In PowerShell. The two lines must match:
+
+```powershell
+(Get-FileHash humanikd-windows-amd64.exe -Algorithm SHA256).Hash; Get-Content humanikd-windows-amd64.exe.sha256
+```
+
+</Tab>
+<Tab value="Linux">
+
+```bash
+sha256sum -c humanikd-linux-amd64.sha256
+```
+
+</Tab>
+</Tabs>
+
+To confirm the file was built by the Humanik release workflow and not changed
+since:
+
+```bash
+cosign verify-blob humanikd-linux-amd64 \
+  --bundle humanikd-linux-amd64.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/humanikio/humanikd/\.github/workflows/release\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+## Updating
+
+Run the install command again. It replaces humanikd and the app with the newest
+release, keeps your settings and enrolment, and restarts the background service if
+it was running. Before replacing humanikd, it checks that the new version can read
+your config file.
+
+- `humanikd upgrade` checks for a newer release and prints the command.
+- In the app, **This machine › Updates** updates humanikd and lists the version of
+  each program this computer uses for work (Claude Code, OpenClaw, Ollama).
+
+## Uninstall
+
+**humanikd:** run `humanikd service uninstall` to stop it starting at login, then
+delete the `humanikd` program file. Its settings and this machine's key are in
+`~/.humanikd`. To remove the machine from your account, revoke it in the console.
+
+**The app:** turn off **Profile › Notifications › Open at login**, quit it from the
+menu bar or tray, then delete it (`/Applications/Humanik OS.app`, or the
+`%LOCALAPPDATA%\Programs\Humanik OS` folder and its Start menu shortcut).
+Uninstalling the app does not touch humanikd or the machine's enrolment.
+
+## Releases and the README
+
+Every release is published on GitHub at
+[humanikio/humanikd-dist](https://github.com/humanikio/humanikd-dist), with release
+notes, the files for each system, and their checksums and signatures. The
+repository's [README](https://github.com/humanikio/humanikd-dist#readme) and its
+[docs folder](https://github.com/humanikio/humanikd-dist/tree/main/docs) cover
+humanikd in more depth: how it connects, security, files and logs,
+notifications, the desktop app, and troubleshooting.
+
+The source code is private. That repository holds the released programs only.

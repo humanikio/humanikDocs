@@ -11,6 +11,16 @@ Nothing about that connection lets HumanikOS reach into the machine. The daemon
 dials out; there is no inbound port, and no job may widen what it is allowed to
 do.
 
+## What you install
+
+Two programs, from one install command. **humanikd** does the work, on macOS,
+Windows and Linux. **Humanik OS** is the desktop app on top of it, on macOS and
+Windows, and is optional.
+
+<TwoPrograms />
+
+To install them, see [Install humanikd and the app](/docs/devices/install).
+
 ## Three kinds of device
 
 A machine serves exactly one of these. The shape of its config file is the
@@ -139,7 +149,9 @@ steps and what to check when a tool is missing are on
 
 In the console, open **Resources → Devices**. The **Install** tab shows the command for your
 system, the latest version, and its release notes, and **Add machine** gives you the
-enrolment code and waits until the machine connects.
+enrolment code and waits until the machine connects. Every step, what goes where on
+each system, and how to update and uninstall are on
+[Install humanikd and the app](/docs/devices/install).
 
 macOS or Linux:
 
@@ -185,6 +197,11 @@ occasionally a surprise.
 ## Where to go next
 
 <Cards>
+  <Card
+    title="Install humanikd and the app"
+    href="/docs/devices/install"
+    description="One command on macOS, Windows or Linux, then humanikd setup."
+  />
   <Card
     title="How work reaches your machine"
     href="/docs/devices/how-work-reaches-it"

@@ -16,6 +16,7 @@ import {
   WhereToolsRun,
 } from '@/components/device-diagrams';
 import { EmployeeShapes, EmployeeStates, WhoIsWho } from '@/components/huma-figures';
+import { Platforms, TwoPrograms } from '@/components/install-figures';
 import type { MDXComponents } from 'mdx/types';
 
 // Components available in every MDX file without an import. Anything used in
@@ -46,6 +47,8 @@ export function getMDXComponents(components?: MDXComponents) {
     WhoIsWho,
     EmployeeShapes,
     EmployeeStates,
+    Platforms,
+    TwoPrograms,
     ...components,
   } satisfies MDXComponents;
 }

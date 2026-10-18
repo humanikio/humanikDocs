@@ -1,0 +1,84 @@
+---
+title: humanikd
+description: The program that runs on your device, what it does, how it runs, and its commands.
+---
+
+**humanikd** is the program that turns a computer you own into a device. It runs
+in the background, holds one outbound connection to HumanikOS, waits for jobs,
+and runs each one on this computer with the program that does the work: Ollama,
+Claude Code, or OpenClaw.
+
+It runs on macOS, Windows and Linux. To install it, see
+[Install humanikd and the app](/docs/devices/install).
+
+## What it does, and what it does not
+
+- **It dials out.** There is no inbound port. HumanikOS cannot open a connection to
+  the machine, only answer the one humanikd opened. See
+  [How work reaches your machine](/docs/devices/how-work-reaches-it).
+- **It proves who it is with a key that stays here.** At enrolment it makes a key
+  pair and sends only the public half. Each connection signs a challenge with the
+  private half.
+- **It holds the ceiling.** What a job may do on this computer is set in a file on
+  this computer, and no job can widen it. See
+  [The rule that makes this safe](/docs/devices#the-rule-that-makes-this-safe).
+- **It never installs software for you.** When something is missing, it prints the
+  command and waits.
+
+## How it runs
+
+Day to day, humanikd runs as a background service: no terminal to keep open. It
+starts when you log in, and starts again after the computer wakes or the program
+stops. `humanikd setup` offers to install the service, or install it yourself:
+
+```bash
+humanikd service install      # agent device: runs as you, no sudo or admin
+sudo humanikd service install # local model device: a system service
+humanikd service status
+```
+
+**An agent device runs as you, not as a system service.** Claude Code's sign-in
+belongs to your account (the macOS login keychain, or your Windows user profile),
+and a system service cannot read it. On macOS it is a LaunchAgent, on Windows a
+logon task. The result is the same on both: it runs while you are logged in, and
+logging out stops it.
+
+`humanikd serve` runs it in the foreground instead. That is for a quick test; it
+stops when you close the terminal.
+
+## Commands
+
+| Command | Does |
+| --- | --- |
+| `humanikd setup` | Guided first run. Start here |
+| `humanikd enroll --code <CODE>` | Pair this machine with your account, with a code from the console |
+| `humanikd verify` | Checks everything this device needs. Spends no model quota |
+| `humanikd status` | What this device is advertising: the backend, its tools, enrolment, version |
+| `humanikd service <install\|uninstall\|start\|stop\|status>` | The background service |
+| `humanikd serve` | Run in the foreground, for a test |
+| `humanikd chrome <link\|unlink\|status>` | Tie browser jobs to the Chrome on this computer. See [Browser](/docs/devices/browser) |
+| `humanikd fix claude` | Fix a config line that names a Claude Code that has moved. `verify` and `status` say when it is needed |
+| `humanikd upgrade` | Check for a newer release and print the command to install it |
+| `humanikd version` | The installed version, and whether a newer one exists |
+
+`humanikd fix claude` is in v0.1.29 and later.
+
+## Its files
+
+Everything humanikd writes is in `~/.humanikd` (on Windows,
+`%USERPROFILE%\.humanikd`):
+
+| File | Is |
+| --- | --- |
+| `config.yaml` | Which kind of device this is, and its ceiling. `humanikd setup` writes it |
+| `identity.json` | This machine's key. **Back it up.** It cannot be issued again |
+| `serve.log` | The log. The first place to look when something is wrong |
+
+**The config file is read once, when humanikd starts.** After editing it, restart
+the service. The desktop app's settings pages save and restart for you.
+
+## With or without the app
+
+The [Humanik OS app](/docs/devices/desktop-app) shows humanikd's status, settings,
+log and updates in a window, on macOS and Windows. It is a separate program:
+quitting the app does not stop humanikd, and humanikd does not need the app.

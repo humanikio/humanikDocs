@@ -30,7 +30,7 @@ What is in these docs:
   delegation, integrations, Humanik Cloud, and billing and budgets.
 - Platform behaviour: the response format, errors, pagination and rate limits.
 - Access control: roles, permissions, workspaces, service accounts and how Nova acts for you.
-- Devices: connecting a computer you own so work can run on it.
+- Devices: connecting a computer you own so work can run on it. Installing humanikd (the program that does the work) and the Humanik OS desktop app, and how work reaches them.
 - API reference: one page per system, each with its permissions and its endpoints.
 
 Every page is also available as markdown at /llms.mdx/docs/<path>/content.md.`;

@@ -2,7 +2,12 @@
   "title": "Devices",
   "root": true,
   "pages": [
+    "---Get started---",
     "index",
+    "install",
+    "humanikd",
+    "desktop-app",
+    "---How it works---",
     "trust",
     "how-work-reaches-it",
     "tool-calls",

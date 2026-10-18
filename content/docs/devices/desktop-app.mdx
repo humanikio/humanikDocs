@@ -1,0 +1,75 @@
+---
+title: The Humanik OS app
+description: The desktop app for macOS and Windows that sits on top of humanikd.
+---
+
+**Humanik OS** is the desktop app for macOS and Windows. It runs next to
+[humanikd](/docs/devices/humanikd) and gives you one window for your chats, this
+machine and its notifications. You sign in with your Humanik account.
+
+The install command installs it with humanikd. See
+[Install humanikd and the app](/docs/devices/install). There is no Linux app.
+
+**The app and humanikd are separate programs.** Quitting the app does not stop
+humanikd, and humanikd does not need the app. The app is a window onto it.
+
+## What is in it
+
+| Area | What it shows |
+| --- | --- |
+| **Chats** | Chats with the employees in a workspace, split into the ones that run on this machine and the ones that run in the cloud |
+| **This machine** | Whether humanikd is running and connected, and its tabs: Overview, Agent, Access, Sleep, Service, Link and key, Settings file, Logs, Updates |
+| **Frameworks** | Claude Code and OpenClaw, the agent programs that can run whole jobs here |
+| **Models** | Ollama, a model on this computer that answers with text |
+| **Profile** | Your account, the app's notifications, and opening at login |
+
+Anything the app does not have (group chats, the console, billing, members) opens
+in your browser. The app asks first: the first click shows an **Open in browser**
+button, and only that button opens the browser.
+
+### This machine
+
+- **Overview** lists what needs you, such as humanikd not running, a framework that
+  is too old, or a Claude Code that cannot be found.
+- **Agent** chooses which kind of work this computer serves. **Access** sets what
+  jobs may do here: the same [ceiling](/docs/devices#the-rule-that-makes-this-safe)
+  as the config file, in a form.
+- **Sleep** decides when humanikd keeps the computer awake: never, while a job runs
+  (the default), or all the time.
+- **Settings file** shows the config file itself. Every settings page can show
+  the change to the file before you save. Saving keeps the old file as
+  `config.yaml.bak` and restarts humanikd.
+- **Updates** updates humanikd, and lists the version of each program this
+  computer uses for work. One older than humanikd works with is flagged, and
+  Claude Code can be updated from there.
+
+## Open at login
+
+The app opens when you log in, hidden in the menu bar (macOS) or the system tray
+(Windows), with no window, so notifications keep coming after a restart. Turn it
+off in **Profile › Notifications › Open at login**.
+
+## Closing and quitting
+
+Closing the window hides it. The app keeps running in the menu bar or tray and
+keeps showing notifications. To stop it, choose **Quit** from the menu bar or tray
+icon.
+
+## Updating
+
+Run the install command again. It replaces the app with the newest release and
+opens it. Your sign-in, workspace and settings are kept.
+
+## If a screen shows an error
+
+The app says "Something went wrong in Humanik OS" and shows the error. **Try
+again** redraws the screen, and **Reload the app** starts the window over. If it
+keeps happening, **Copy details** copies the error, where it happened and your
+system version, ready to send to us. It contains no passwords or keys.
+
+humanikd keeps running either way. `humanikd status` shows whether it is serving.
+
+## Uninstall
+
+See [Uninstall](/docs/devices/install#uninstall). Removing the app does not touch
+humanikd or this machine's enrolment.
