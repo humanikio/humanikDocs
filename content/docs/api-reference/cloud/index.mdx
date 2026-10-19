@@ -54,6 +54,28 @@ If your tenant has never used Humanik Cloud, the account is provisioned on the
 first call and the request retries. A first call may be slower than later ones.
 That is not an error.
 
+## One permission covers the whole account
+
+`cloud:read` and `cloud:manage` are granted at `console` scope only. Every
+`/cloud` call is made for your whole Humanik Cloud account, so a caller holding
+`cloud:manage` at `console` has full control of it: every project, every service,
+every office machine, every cron and every secret, including reading secret values.
+
+**There is no grant for one project or one service.** A service ID that is not a
+valid ID is answered with `400`, and one that is not in your account with `404`.
+That check keeps callers inside your own account; it does not narrow what they can
+reach inside it.
+
+The narrower grants are elsewhere:
+
+| To limit someone to | Grant |
+| --- | --- |
+| One office's machine settings, instances and logs | `instance:read` or `instance:manage` @ that office, on the [office routes](/docs/api-reference/offices/machine/getOfficeComputeConfig) |
+| Account-wide secrets, without the rest of the cloud | `secrets:list`, `secrets:read` or `secrets:write` @ `console`, on [Account secrets](/docs/api-reference/cloud/account-secrets/listAccountSecrets) |
+
+Give `cloud:manage` only to people and service accounts that should be able to
+change or delete anything you run on Humanik Cloud.
+
 ## Responses come from Humanik Cloud unchanged
 
 These endpoints forward to Humanik Cloud and return its response verbatim. Two
@@ -71,7 +93,9 @@ web service. Start at
 
 **Secrets** are encrypted values a service reads when its machine starts, for
 one service or for the whole account. Start at
-[List secrets](/docs/api-reference/cloud/secrets/listCloudSecrets).
+[List secrets](/docs/api-reference/cloud/secrets/listCloudSecrets). The guides are
+[Scheduled requests](/docs/cloud/scheduled-requests) and
+[Environment variables and secrets](/docs/cloud/environment-and-secrets).
 
 | To | You need |
 | --- | --- |
@@ -81,6 +105,28 @@ one service or for the whole account. Start at
 
 Reading a value needs `cloud:manage`, not `cloud:read`, so a read only role can
 see which secrets exist without seeing what is in them.
+
+### Account-wide secrets have a second path
+
+A secret with no `serviceId` belongs to the whole account. A web service does not
+read it until you
+[copy it to the service](/docs/api-reference/cloud/secrets/transferCloudSecret).
+Office integrations can point at it directly.
+
+The same account-wide secrets are also reached under `/tenant/secrets`, gated on
+`secrets:*` rather than `cloud:*`:
+
+| To | `/cloud/secrets/protected` | `/tenant/secrets` |
+| --- | --- | --- |
+| List names and fields | `cloud:read` @ `console` | `secrets:list` or `secrets:read` @ `console` |
+| Read a value | `cloud:manage` @ `console` | `secrets:read` @ `console` |
+| Create or change | `cloud:manage` @ `console` | `secrets:write` @ `console` |
+| Delete a secret | `cloud:manage` @ `console` | Not available. Use `/cloud/secrets/protected` |
+| Groups reached | Every group, with `environment` | The original group only |
+
+Either permission set reaches the same values, so review both when you decide who
+can read account-wide secrets. Start at
+[List account secrets](/docs/api-reference/cloud/account-secrets/listAccountSecrets).
 
 ## API keys
 

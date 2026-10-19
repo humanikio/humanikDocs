@@ -5,14 +5,18 @@ info:
   version: v1
   summary: Credit, usage history, and what your machines cost.
   description: |
-    Two meters, reported separately.
+    Two meters, paid from one prepaid credit balance held for your account.
 
-    **Model use** is paid from a prepaid credit balance held for your account.
-    **Compute** is the cost of an office being awake, billed by runtime.
+    **Model use** is charged to the balance when each piece of work finishes.
+    **Compute** is the machine time of offices, cloud browsers, web services
+    and containers on Humanik Cloud, charged to the same balance once an hour.
+    If the balance is below zero after an hourly charge and any automatic top
+    up, every running machine on the account is stopped until the balance is
+    $1 or more.
 
-    They are measured by different systems and reported through different
-    endpoints, and **nothing here adds them into one figure**. A total spend
-    number is something you assemble yourself from both.
+    The two are reported through different endpoints, and **nothing here adds
+    them into one figure**. The usage series and the compute charge series use
+    the same bucket keys, so they can be joined on `key`.
 
     Everything on this page is account-wide and checked at `console` scope.
     That includes **Budgets**, which manage spending limits at every scope (the
@@ -34,7 +38,7 @@ security:
 
 tags:
   - name: Credit
-    description: The prepaid balance model use is paid from.
+    description: The prepaid balance that model use and machine time are paid from.
   - name: Usage
     description: What has been spent on models, and the invoices behind it.
   - name: Budgets
@@ -42,7 +46,9 @@ tags:
       Spending limits on model use, for the whole account, one workspace, or
       one employee. See [Budgets](/docs/spend/budgets) for how they behave.
   - name: Compute
-    description: What your offices cost while awake.
+    description: |
+      Machine time on Humanik Cloud: what was charged to your credit each hour,
+      a running time estimate, and the settings that decide the cost.
 
 components:
   securitySchemes:
@@ -146,7 +152,9 @@ components:
       properties:
         balanceUsd:
           type: number
-          description: What is available to spend on models right now.
+          description: |
+            What is available right now. Model use and machine time are both
+            taken from it, and it can be below zero.
         autoReload:
           oneOf:
             - $ref: '#/components/schemas/AutoReload'
@@ -237,7 +245,7 @@ components:
                 name: { type: string }
                 serviceId:
                   type: [string, 'null']
-                  description: The machine the office runs on, for matching against compute spend.
+                  description: The machine the office runs on. Matches `serviceId` on compute charges.
                 projectId: { type: [string, 'null'] }
             browser:
               type: [object, 'null']
@@ -453,6 +461,225 @@ components:
           type: [number, 'null']
           description: Always null today. Reserved for the expected cost of the refused work.
 
+    ComputeCharge:
+      type: object
+      description: One service's machine time in one billed hour.
+      properties:
+        id:
+          type: string
+          description: The line's ID. Send it as `startAfter` to page.
+        billId:
+          type: string
+          description: |
+            The hourly bill this line belongs to. Matches `billId` on
+            [List compute bills](/docs/api-reference/billing/compute/listComputeBills).
+        serviceId:
+          type: string
+          description: |
+            The Humanik Cloud service that ran. Matches `serviceId` on
+            [List services](/docs/api-reference/cloud/services/listCloudServices).
+        serviceType:
+          type: string
+          description: |
+            The service's type when it was charged, for example `cloudClaw` for
+            an office or `webservice`. `origin.kind` is the readable form.
+        officeId:
+          type: [string, 'null']
+          description: The office that ran on this service. `null` when the service is not an office.
+        workspaceId:
+          type: [string, 'null']
+          description: That office's workspace. `null` when the service is not an office.
+        hourStartMs:
+          type: integer
+          description: Start of the hour charged, epoch milliseconds.
+        hourEndMs:
+          type: integer
+          description: End of the hour charged, epoch milliseconds.
+        seconds:
+          type: number
+          description: Seconds the service ran in that hour.
+        rate:
+          type: number
+          description: |
+            US dollars per hour. When the rate changed inside the hour, this is
+            the time weighted average, so `rate` times hours run equals
+            `amountUsd`.
+        amountUsd:
+          type: number
+          description: US dollars taken from credit for this line.
+        chargedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the hour was charged.
+        origin: { $ref: '#/components/schemas/ComputeOrigin' }
+      required: [id, billId, serviceId, serviceType, officeId, workspaceId, hourStartMs, hourEndMs, seconds, rate, amountUsd, chargedAt, origin]
+
+    ComputeOrigin:
+      type: object
+      description: What used the machine time, with names looked up at read time.
+      properties:
+        kind:
+          type: string
+          enum: [office, webservice, browser, container, service]
+          description: |
+            Decided by the service type, so a line whose office has since been
+            deleted is still `office`. `service` covers any other type.
+        service:
+          type: object
+          properties:
+            id: { type: string }
+            name:
+              type: [string, 'null']
+              description: |
+                The service's current name. `null` when it could not be looked
+                up. If `missing` is empty at the same time, Humanik Cloud could
+                not be reached for this read.
+            type: { type: string }
+            projectId:
+              type: [string, 'null']
+              description: |
+                The project the service is in. From
+                [List projects](/docs/api-reference/cloud/projects/listCloudProjects).
+          required: [id, name, type, projectId]
+        office:
+          description: The office's current name and workspace. `null` for a service that is not an office, or when the office was not found.
+          oneOf:
+            - type: object
+              properties:
+                id: { type: string }
+                name: { type: string }
+                workspaceId: { type: string }
+                workspaceName: { type: [string, 'null'] }
+              required: [id, name, workspaceId, workspaceName]
+            - type: 'null'
+        missing:
+          type: array
+          description: |
+            Parts that could not be found. `service`: the service no longer
+            exists on your Humanik Cloud account. `office`: the line names an
+            office that could not be found.
+          items:
+            type: string
+            enum: [service, office]
+      required: [kind, service, office, missing]
+
+    ComputeChargeBucket:
+      type: object
+      properties:
+        key:
+          type: string
+          description: |
+            The bucket, in your timezone. `YYYY-MM-DDTHH` for an hour,
+            `YYYY-MM-DD` for a day, the Monday as `YYYY-MM-DD` for a week, and
+            `YYYY-MM` for a month. The same key as the usage series.
+        label:
+          type: string
+          description: A short axis label, for example `14:00`, `9/14`, `Sep 8` or `Sep`.
+        computeUsd: { type: number, description: US dollars taken from credit. }
+        runtimeMs: { type: integer, description: Machine time charged, in milliseconds. }
+        lineCount: { type: integer, description: Charge lines counted. One per service per hour. }
+      required: [key, label, computeUsd, runtimeMs, lineCount]
+
+    ComputeBill:
+      type: object
+      description: One hour of machine time across every service, as charged.
+      properties:
+        billId:
+          type: string
+          description: The bill's ID. Send it as `startAfter` to page.
+        hourStartMs:
+          type: integer
+          description: Start of the hour billed, epoch milliseconds.
+        hourEndMs:
+          type: integer
+          description: End of the hour billed, epoch milliseconds.
+        chargedUsd:
+          type: number
+          description: US dollars taken from credit for the whole hour.
+        lineCount:
+          type: integer
+          description: How many services ran in the hour. Each is one line on List compute charges.
+        balanceBeforeUsd:
+          type: number
+          description: The balance just before the charge.
+        balanceAfterDebitUsd:
+          type: number
+          description: The balance right after the charge, before any top up. Can be below zero.
+        balanceUsd:
+          type: [number, 'null']
+          description: The balance after the top up attempt. `null` when that step did not finish.
+        refill:
+          description: What automatic top up did after the charge. `null` when that step did not finish.
+          oneOf:
+            - type: object
+              properties:
+                status:
+                  type: string
+                  enum: [not_needed, not_enabled, succeeded, failed]
+                  description: |
+                    `not_enabled`: automatic top up is off. `not_needed`: the
+                    balance was at or above your threshold. `succeeded`: your
+                    card was charged and credit added. `failed`: it was tried
+                    and did not add credit.
+                amountUsd:
+                  type: number
+                  description: Credit added. Present when `status` is `succeeded`.
+                reason:
+                  type: string
+                  enum: [no_card, card_declined, deposit_failed_after_charge, error]
+                  description: |
+                    Present when `status` is `failed`. `no_card`: no saved card.
+                    `card_declined`: the card was declined. `deposit_failed_after_charge`:
+                    the card was charged but the credit was not added; our team
+                    is alerted and corrects it. `error`: anything else.
+              required: [status]
+            - type: 'null'
+        standing:
+          description: |
+            `negative` when `balanceUsd` was below zero, which stops your
+            running machines. `null` when that step did not finish.
+          oneOf:
+            - type: string
+              enum: [ok, negative]
+            - type: 'null'
+        chargedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the hour was charged.
+      required: [billId, hourStartMs, hourEndMs, chargedUsd, lineCount, balanceBeforeUsd, balanceAfterDebitUsd, balanceUsd, refill, standing, chargedAt]
+
+    ComputeEstimateService:
+      type: object
+      description: One service's running time and estimate for the period. Not what was charged.
+      properties:
+        serviceId:
+          type: string
+          description: The Humanik Cloud service.
+        serviceName: { type: string }
+        serviceType: { type: string }
+        totalRuntimeMs: { type: number, description: Machine time recorded in the period, in milliseconds. }
+        estimatedCostUsd: { type: number, description: The running time priced at today's price. }
+        isActive: { type: boolean, description: Whether a machine is running now. }
+        sessionCount: { type: integer, description: Sessions for this service in the period. }
+      additionalProperties: true
+
+    ServiceUsageBucket:
+      type: object
+      properties:
+        key:
+          type: string
+          description: |
+            The bucket, in your timezone. `YYYY-MM-DD` of the first day for a
+            day or a week (weeks start on Monday), `YYYY-MM` for a month.
+        startMs: { type: integer, description: Start of the bucket, epoch milliseconds. }
+        computeUsd: { type: number, description: US dollars taken from credit for this service's machine time. }
+        runtimeMs: { type: integer, description: Machine time charged, in milliseconds. }
+        hourCount: { type: integer, description: Hours charged. }
+        llmBilledUsd: { type: number, description: The employee's model use charged to your credit. Zero when the service runs no office. }
+        llmByokEstimateUsd: { type: number, description: What the employee's model use on your own model account cost you there. }
+        llmRunCount: { type: integer, description: Model use records counted. }
+      required: [key, startMs, computeUsd, runtimeMs, hourCount, llmBilledUsd, llmByokEstimateUsd, llmRunCount]
+
 paths:
   /billing/balance:
     get:
@@ -460,16 +687,19 @@ paths:
       summary: Get the balance
       tags: [Credit]
       description: |
-        What is available to spend on model use, and how automatic top ups are
-        configured.
+        What is available to spend, and how automatic top ups are configured.
 
         **Calling this creates the balance if it does not exist**, so a brand
         new account gets a zero balance rather than an error. `exists` tells you
         which happened on the call before this one.
 
-        This balance covers **model use only**. It is not drawn down by the cost
-        of running machines, which is reported under
-        [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary).
+        **Model use and machine time both draw on this balance.** Machine time
+        is taken once an hour, about 2 minutes after the hour ends. Each of
+        those charges, with the balance before and after it, is on
+        [List compute bills](/docs/api-reference/billing/compute/listComputeBills).
+        A charge for machine time can take the balance below zero. If it is
+        still below zero after any automatic top up, every running machine on
+        the account is stopped until the balance is $1 or more.
 
         **Permission:** `billing:read` @ `console`
       responses:
@@ -589,6 +819,12 @@ paths:
         > attempted without blocking, and a decline surfaces as an out of credit
         > error on the *next* piece of work rather than the one in progress. So
         > a card problem appears later than you would expect, and somewhere else.
+
+        Top ups also run after each hourly charge for machine time, with the
+        same settings. There the top up is finished before Humanik Cloud
+        decides whether the balance is below zero, so a top up that succeeds
+        keeps your machines running. What each one did is on
+        [List compute bills](/docs/api-reference/billing/compute/listComputeBills).
 
         **Permission:** `billing:manage` @ `console`
       requestBody:
@@ -839,9 +1075,10 @@ paths:
       description: |
         Invoices for credit added to the account, newest first.
 
-        These cover top ups. They are **not** invoices for machine time, which
-        are separate and listed by
-        [List compute invoices](/docs/api-reference/billing/compute/listComputeInvoices).
+        These record credit coming in: purchases, automatic top ups and trial
+        credit. The credit pays for both model use and machine time. What
+        machine time took out of the balance each hour is on
+        [List compute bills](/docs/api-reference/billing/compute/listComputeBills).
 
         **Permission:** `billing:read` @ `console`
       parameters:
@@ -1430,25 +1667,490 @@ paths:
         '404': { $ref: '#/components/responses/BudgetNotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /billing/compute:
+    get:
+      operationId: listComputeCharges
+      summary: List compute charges
+      tags: [Compute]
+      description: |
+        The machine time taken from your credit, one line per service per hour,
+        newest hour first.
+
+        Once an hour, Humanik Cloud sends one bill for the time your services
+        ran in the hour before. The total comes off the same credit balance that
+        model use draws from. Each line here is one service's share of one of
+        those bills. To see the bill as a whole, with the balance before and
+        after, use [List compute bills](/docs/api-reference/billing/compute/listComputeBills).
+
+        **An hour is charged a few minutes after it ends.** The hour in progress
+        never appears, and the hour that just ended can take a few minutes to
+        show up. Hours from before compute billing started were never charged
+        and have no lines.
+
+        Each line says **what used the time** in `origin`: an office (with its
+        current name and workspace), a web service, a cloud browser or a
+        container. Names are looked up when you read, so a renamed office shows
+        its new name on old charges. A name that cannot be found is `null`, and
+        `origin.missing` says which part was not found. A service you have
+        since deleted keeps its ID and type.
+
+        **Filter by one thing at a time.** Send at most one of `serviceId`,
+        `officeId` or `workspaceId`. If you send more than one, only the first
+        in that order is applied and the others are ignored without an error.
+        `from` and `to` combine with any of them.
+
+        Paginated with a cursor. Take the last entry's `id` from one page and
+        send it as `startAfter` to get the next.
+
+        This list is the money. The figures on
+        [Get estimated compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
+        are a running time estimate at today's price, and do not match it.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: |
+            How many lines to return. Defaults to 50. Values below 1 are raised
+            to 1 and values above 200 are lowered to 200, without an error.
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+        - name: startAfter
+          in: query
+          required: false
+          description: |
+            The `id` of the last line on the previous page. Omit for the first
+            page. **An ID that does not exist is ignored** and you get the first
+            page again, so stop when `hasMore` is false rather than when a page
+            repeats.
+          schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          description: |
+            Only hours that started at or after this time, in epoch
+            milliseconds. Compared with `hourStartMs`.
+          schema: { type: integer }
+        - name: to
+          in: query
+          required: false
+          description: |
+            Only hours that started before this time, in epoch milliseconds.
+            Not included.
+          schema: { type: integer }
+        - name: serviceId
+          in: query
+          required: false
+          description: |
+            Only this Humanik Cloud service. From
+            [List services](/docs/api-reference/cloud/services/listCloudServices).
+            Wins over `officeId` and `workspaceId` when more than one is sent.
+          schema: { type: string }
+        - name: officeId
+          in: query
+          required: false
+          description: |
+            Only the machine time of this office. From
+            [List offices](/docs/api-reference/offices/offices/listOffices).
+            Ignored when `serviceId` is sent.
+          schema: { type: string }
+        - name: workspaceId
+          in: query
+          required: false
+          description: |
+            Only offices in this workspace. From
+            [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+            Web services, browsers and containers belong to no workspace, so
+            they never match. Ignored when `serviceId` or `officeId` is sent.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/ComputeCharge' }
+                  hasMore:
+                    type: boolean
+                    description: Whether another page exists.
+                required: [success, entries, hasMore]
+              examples:
+                oneOffice:
+                  value:
+                    success: true
+                    hasMore: true
+                    entries:
+                      - id: nt_7Qp2_1792252800000_svc_4f9a
+                        billId: nt_7Qp2_1792252800000
+                        serviceId: svc_4f9a
+                        serviceType: cloudClaw
+                        officeId: off_9c1e7d
+                        workspaceId: ws_a1b2c3
+                        hourStartMs: 1792252800000
+                        hourEndMs: 1792256400000
+                        seconds: 3600
+                        rate: 0.12
+                        amountUsd: 0.12
+                        chargedAt: '2026-10-18T14:02:11.418Z'
+                        origin:
+                          kind: office
+                          service: { id: svc_4f9a, name: research-office, type: cloudClaw, projectId: prj_2b7d }
+                          office: { id: off_9c1e7d, name: Research, workspaceId: ws_a1b2c3, workspaceName: Operations }
+                          missing: []
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/compute/series:
+    get:
+      operationId: getComputeChargeSeries
+      summary: Get a compute charge series
+      tags: [Compute]
+      description: |
+        The machine time taken from your credit, bucketed over a window you
+        choose, for charts.
+
+        Both bounds are **required**, as epoch milliseconds. The window includes
+        `from` and excludes `to`.
+
+        **Buckets use the same keys as
+        [Get a usage series](/docs/api-reference/billing/usage/getUsageSeries)**
+        for the same `from`, `to`, `granularity` and `timezone`. To chart model
+        use and machine time together, make both calls with the same values and
+        join the buckets on `key`. Nothing on the server adds them into one
+        figure.
+
+        Each charge counts in the bucket of **the hour the machine ran**, not
+        the time it was charged. The 23:00 hour is charged a few minutes after
+        midnight and still counts on the day it ran.
+
+        The window is adjusted rather than refused. A `to` at or before `from`
+        becomes `from` plus one day, and a window longer than 750 days is
+        shortened from the start. The `fromMs` and `toMs` on the response are
+        the window actually used.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start of the window, epoch milliseconds.
+          schema: { type: integer }
+        - name: to
+          in: query
+          required: true
+          description: End of the window, epoch milliseconds. Not included.
+          schema: { type: integer }
+        - name: granularity
+          in: query
+          required: false
+          description: |
+            Bucket size. Defaults to `auto`, which picks `hour` for a window of
+            up to 2 days, `day` for up to 92 days, and `month` beyond that. It
+            never picks `week`. Anything unrecognised is treated as `auto`
+            rather than rejected, and the bucket size actually used comes back
+            on the response.
+          schema:
+            type: string
+            enum: [hour, day, week, month, auto]
+            default: auto
+        - name: timezone
+          in: query
+          required: false
+          description: |
+            An IANA timezone name. Decides where day, week and month boundaries
+            fall. Weeks start on Monday. Defaults to UTC. **A name that is not a
+            real timezone fails with `500`**, not `400`.
+          schema: { type: string, examples: ['America/Toronto'] }
+        - name: serviceId
+          in: query
+          required: false
+          description: |
+            Only this Humanik Cloud service. From
+            [List services](/docs/api-reference/cloud/services/listCloudServices).
+            Omit it for the whole account.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  granularity:
+                    type: string
+                    enum: [hour, day, week, month]
+                    description: The bucket size used, which may differ from what you asked for.
+                  fromMs:
+                    type: integer
+                    description: Start of the window actually used.
+                  toMs:
+                    type: integer
+                    description: End of the window actually used. Not included.
+                  buckets:
+                    type: array
+                    description: |
+                      Every bucket in the window, oldest first, including ones
+                      with nothing charged.
+                    items: { $ref: '#/components/schemas/ComputeChargeBucket' }
+                  totals:
+                    type: object
+                    description: The whole window.
+                    properties:
+                      computeUsd: { type: number, description: US dollars taken from credit. }
+                      runtimeMs: { type: integer, description: Machine time charged, in milliseconds. }
+                      lineCount: { type: integer, description: Charge lines counted. One per service per hour. }
+                required: [success, granularity, fromMs, toMs, buckets, totals]
+              examples:
+                twoDays:
+                  value:
+                    success: true
+                    granularity: day
+                    fromMs: 1792195200000
+                    toMs: 1792368000000
+                    buckets:
+                      - { key: '2026-10-17', label: '10/17', computeUsd: 2.88, runtimeMs: 86400000, lineCount: 24 }
+                      - { key: '2026-10-18', label: '10/18', computeUsd: 1.44, runtimeMs: 43200000, lineCount: 12 }
+                    totals: { computeUsd: 4.32, runtimeMs: 129600000, lineCount: 36 }
+        '400':
+          description: '`from` or `to` is missing or not a number.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: from and to (epoch ms) are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/compute/bills:
+    get:
+      operationId: listComputeBills
+      summary: List compute bills
+      tags: [Compute]
+      description: |
+        The hourly bills for machine time, newest hour first. One bill covers
+        every service that ran in that hour.
+
+        Each bill records the balance before the charge, the balance right
+        after it, and what happened next: whether
+        [automatic top up](/docs/api-reference/billing/credit/updateAutoReload)
+        ran, and whether the account was left in credit.
+
+        **The balance can go below zero.** A bill is always taken in full, even
+        when it is more than the balance. When the balance is still below zero
+        after any top up, `standing` is `negative` and **Humanik Cloud stops
+        your running machines** and will not start new ones until the balance
+        is back to at least $1. While starts are paused, a request to a sleeping
+        service answers `402` with an `error` that says so. Adding credit is
+        enough: the next start checks the balance and goes ahead. This list is
+        how you find out why your machines stopped.
+
+        `balanceUsd`, `refill` and `standing` are written after the top up
+        attempt. In the rare case the charge was taken but that step did not
+        finish, they are `null`, and `balanceAfterDebitUsd` is the last balance
+        recorded.
+
+        Paginated with a cursor. Take the last bill's `billId` from one page and
+        send it as `startAfter` to get the next.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: |
+            How many bills to return. Defaults to 50. Values below 1 are raised
+            to 1 and values above 200 are lowered to 200, without an error.
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+        - name: startAfter
+          in: query
+          required: false
+          description: |
+            The `billId` of the last bill on the previous page. Omit for the
+            first page. **An ID that does not exist is ignored** and you get the
+            first page again.
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  bills:
+                    type: array
+                    items: { $ref: '#/components/schemas/ComputeBill' }
+                  hasMore:
+                    type: boolean
+                    description: Whether another page exists.
+                required: [success, bills, hasMore]
+              examples:
+                toppedUp:
+                  value:
+                    success: true
+                    hasMore: false
+                    bills:
+                      - billId: nt_7Qp2_1792252800000
+                        hourStartMs: 1792252800000
+                        hourEndMs: 1792256400000
+                        chargedUsd: 0.36
+                        lineCount: 3
+                        balanceBeforeUsd: 10.2
+                        balanceAfterDebitUsd: 9.84
+                        balanceUsd: 59.84
+                        refill: { status: succeeded, amountUsd: 50 }
+                        standing: ok
+                        chargedAt: '2026-10-18T14:02:11.418Z'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /billing/compute/by-service:
+    get:
+      operationId: getComputeByService
+      summary: Get compute charges by service
+      tags: [Compute]
+      description: |
+        What each service took from your credit over a window, with the machine
+        time and the number of hours charged. Sorted by amount, largest first.
+
+        Both bounds are **required**, as epoch milliseconds. The window includes
+        `from` and excludes `to`, and is compared with the hour each charge is
+        for, the same rule as
+        [Get a compute charge series](/docs/api-reference/billing/compute/getComputeChargeSeries),
+        so a month here equals that month on a chart.
+
+        **Services are returned by ID only.** To show names, match `serviceId`
+        against [List services](/docs/api-reference/cloud/services/listCloudServices),
+        or read the `origin` on
+        [List compute charges](/docs/api-reference/billing/compute/listComputeCharges).
+        Only services charged in the window appear.
+
+        Unlike the series, the window is not adjusted. A `to` at or before
+        `from` returns an empty list, and there is no maximum length.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start of the window, epoch milliseconds.
+          schema: { type: integer }
+        - name: to
+          in: query
+          required: true
+          description: End of the window, epoch milliseconds. Not included.
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  fromMs: { type: integer, description: The `from` you sent. }
+                  toMs: { type: integer, description: The `to` you sent. }
+                  services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        serviceId:
+                          type: string
+                          description: |
+                            The Humanik Cloud service. Matches `serviceId` on
+                            [List services](/docs/api-reference/cloud/services/listCloudServices).
+                        computeUsd: { type: number, description: US dollars taken from credit. }
+                        runtimeMs: { type: integer, description: Machine time charged, in milliseconds. }
+                        hourCount: { type: integer, description: Hours charged for this service. }
+                      required: [serviceId, computeUsd, runtimeMs, hourCount]
+                  totals:
+                    type: object
+                    properties:
+                      computeUsd: { type: number }
+                      runtimeMs: { type: integer }
+                      hourCount: { type: integer }
+                required: [success, fromMs, toMs, services, totals]
+              examples:
+                month:
+                  value:
+                    success: true
+                    fromMs: 1790812800000
+                    toMs: 1793491200000
+                    services:
+                      - { serviceId: svc_4f9a, computeUsd: 41.76, runtimeMs: 1252800000, hourCount: 348 }
+                      - { serviceId: svc_8e21, computeUsd: 3.1, runtimeMs: 279000000, hourCount: 81 }
+                    totals: { computeUsd: 44.86, runtimeMs: 1531800000, hourCount: 429 }
+        '400':
+          description: '`from` or `to` is missing or not a number.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: from and to (epoch ms) are required
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /nexus/billing/summary:
     get:
       operationId: getComputeSpendSummary
-      summary: Get compute spend
+      summary: Get estimated compute spend
       tags: [Compute]
       description: |
-        What your machines have cost while awake, split by the thing running.
+        Running time for the current period, and an **estimate** of what it
+        costs at today's price, per service.
 
-        The response separates services it can match to an office from those it
-        cannot, which is what makes this readable: `offices` carries the office
-        name and workspace alongside the cost, and `misc` holds anything running
-        that is not an office.
+        **This is not what you paid.** Machine time is taken from your credit
+        once an hour, and those charges are the money. For them, use
+        [List compute charges](/docs/api-reference/billing/compute/listComputeCharges),
+        [List compute bills](/docs/api-reference/billing/compute/listComputeBills),
+        [Get a compute charge series](/docs/api-reference/billing/compute/getComputeChargeSeries)
+        or [Get compute charges by service](/docs/api-reference/billing/compute/getComputeByService).
+        The estimate here is useful for seeing what is running now. Running
+        time is recorded every five minutes, and once more when a machine
+        stops.
 
-        > **This is a different meter from credit, and nothing joins them.**
-        > Model use is drawn from your balance and can be capped by a spending
-        > limit. Machine time is neither. Adding the two together is something
-        > you do yourself.
+        **The per service split is opt in.** Without `includeServices=true`
+        the response carries only `summary`. With it, `summary.services` is
+        filled in, and two more lists are added: `offices`, the services
+        matched to an office with its name and workspace, and `misc`, anything
+        running that is not an office.
 
         **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: includeServices
+          in: query
+          required: false
+          description: |
+            Send `true` to get the per service breakdown, `offices` and
+            `misc`. Any other value, or none, returns `summary` alone.
+          schema: { type: string, enum: ['true'] }
+        - name: periodId
+          in: query
+          required: false
+          description: |
+            The period to report. Omit it for the current one. The value is
+            the `periodId` returned on an earlier `summary`.
+          schema: { type: string }
       responses:
         '200':
           description: OK.
@@ -1460,25 +2162,223 @@ paths:
                   success: { type: boolean, const: true }
                   summary:
                     type: object
+                    description: Account level running time and estimate for the period.
+                    properties:
+                      periodId:
+                        type: string
+                        description: The period reported. Send it back as `periodId` to ask for it again.
+                      totalRuntimeMs:
+                        type: number
+                        description: Machine time recorded in the period, in milliseconds.
+                      totalAccruedUsd:
+                        type: number
+                        description: The estimate for the period at today's price. Not what was taken from credit.
+                      activeSessionCount:
+                        type: integer
+                        description: Sessions running now.
+                      totalSessionCount:
+                        type: integer
+                        description: Sessions in the period.
+                      status:
+                        type: string
+                        description: The period's state, as reported by Humanik Cloud.
+                      carriedForwardUsd:
+                        type: number
+                        description: Part of the estimate. Not a charge to your credit.
+                      services:
+                        type: array
+                        description: Present only with `includeServices=true`.
+                        items: { $ref: '#/components/schemas/ComputeEstimateService' }
                     additionalProperties: true
-                    description: Account level totals as reported by the compute platform.
                   offices:
                     type: array
-                    description: Services matched to an office, with its name and workspace.
+                    description: |
+                      Present only with `includeServices=true`. Services
+                      matched to an office: each entry is the service's
+                      estimate plus the office fields below.
                     items:
-                      type: object
-                      properties:
-                        serviceId: { type: string }
-                        officeId: { type: string }
-                        officeName: { type: string }
-                        workspaceId: { type: string }
-                      additionalProperties: true
+                      allOf:
+                        - $ref: '#/components/schemas/ComputeEstimateService'
+                        - type: object
+                          properties:
+                            officeId: { type: string }
+                            officeName: { type: string }
+                            workspaceId: { type: string }
+                            workspaceName: { type: [string, 'null'] }
+                            projectId:
+                              type: [string, 'null']
+                              description: The Humanik Cloud project the office's service is in.
                   misc:
                     type: array
-                    description: Services with no matching office.
+                    description: |
+                      Present only with `includeServices=true`. Services with
+                      no matching office, such as web services and cloud
+                      browsers.
+                    items: { $ref: '#/components/schemas/ComputeEstimateService' }
+                required: [success, summary]
+              examples:
+                withServices:
+                  value:
+                    success: true
+                    summary:
+                      periodId: '2026-10'
+                      totalRuntimeMs: 1252800000
+                      totalAccruedUsd: 41.76
+                      activeSessionCount: 1
+                      totalSessionCount: 37
+                      carriedForwardUsd: 0
+                      services:
+                        - { serviceId: svc_4f9a, serviceName: research-office, serviceType: cloudClaw, totalRuntimeMs: 1252800000, estimatedCostUsd: 41.76, isActive: true, sessionCount: 37 }
+                    offices:
+                      - { serviceId: svc_4f9a, serviceName: research-office, serviceType: cloudClaw, totalRuntimeMs: 1252800000, estimatedCostUsd: 41.76, isActive: true, sessionCount: 37, officeId: off_9c1e7d, officeName: Research, workspaceId: ws_a1b2c3, workspaceName: Operations, projectId: prj_2b7d }
+                    misc: []
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /nexus/billing/services/{serviceId}/usage:
+    parameters:
+      - name: serviceId
+        in: path
+        required: true
+        description: |
+          The Humanik Cloud service. From
+          [List services](/docs/api-reference/cloud/services/listCloudServices),
+          or `serviceId` on
+          [List compute charges](/docs/api-reference/billing/compute/listComputeCharges).
+        schema: { type: string }
+    get:
+      operationId: getComputeServiceUsage
+      summary: Get usage for one service
+      tags: [Compute]
+      description: |
+        What one service cost, bucketed by day, week or month: the machine time
+        **charged** from your credit, and, when the service runs an office, that
+        employee's own model use in the same buckets.
+
+        The compute figures come from the hourly charges, the same ones as
+        [List compute charges](/docs/api-reference/billing/compute/listComputeCharges),
+        so they are money, not an estimate. Each charge counts in the bucket of
+        the hour the machine ran. The hour in progress has not been charged
+        yet, and hours from before compute billing started show zero.
+
+        The window always ends with the bucket that holds now, which is
+        partial, and goes back `count` buckets.
+
+        **Model use is the employee's own work only.** Nova working inside the
+        office is listed in `novaInOffice` and is not added to the buckets,
+        because that spend belongs to the person chatting with Nova.
+
+        A service that does not exist, or is not on your account, returns
+        zeros rather than `404`.
+
+        **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: granularity
+          in: query
+          required: false
+          description: Bucket size. Defaults to `month`. Anything else is treated as `month`.
+          schema: { type: string, enum: [day, week, month], default: month }
+        - name: count
+          in: query
+          required: false
+          description: |
+            How many buckets. For `day` 1 to 90, default 30. For `week` 1 to
+            26, default 12. For `month` 1 to 12, default 6. Values outside the
+            range are moved into it without an error.
+          schema: { type: integer }
+        - name: timezone
+          in: query
+          required: false
+          description: |
+            An IANA timezone name. Decides where day, week and month boundaries
+            fall. Weeks start on Monday. Defaults to UTC, and a name that is
+            not a real timezone is treated as UTC.
+          schema: { type: string, examples: ['America/Toronto'] }
+        - name: months
+          in: query
+          required: false
+          description: Kept for older clients. The same as `count` when `count` is not sent.
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  service:
+                    type: 'null'
+                    description: Always `null`. Read the service's name from [Get a service](/docs/api-reference/cloud/services/getCloudService).
+                  office:
+                    description: The office this service runs, or `null` when it runs no office.
+                    oneOf:
+                      - type: object
+                        properties:
+                          id: { type: string }
+                          name: { type: string }
+                          workspaceId: { type: string }
+                          workspaceName: { type: [string, 'null'] }
+                          projectId: { type: [string, 'null'] }
+                        required: [id, name, workspaceId, workspaceName, projectId]
+                      - type: 'null'
+                  granularity:
+                    type: string
+                    enum: [day, week, month]
+                  timezone:
+                    type: string
+                    description: The timezone the buckets were cut in.
+                  buckets:
+                    type: array
+                    description: Oldest first. The last bucket is the current one, and is partial.
+                    items: { $ref: '#/components/schemas/ServiceUsageBucket' }
+                  months:
+                    type: array
+                    description: |
+                      Kept for older clients. With `granularity=month`, the
+                      same buckets with `periodId` (equal to `key`) added.
+                      Empty for any other granularity.
                     items:
-                      type: object
-                      additionalProperties: true
+                      allOf:
+                        - $ref: '#/components/schemas/ServiceUsageBucket'
+                        - type: object
+                          properties:
+                            periodId: { type: string }
+                  computeSource:
+                    type: string
+                    const: charged
+                    description: Says the compute figures are charges taken from credit.
+                  recentRuns:
+                    type: array
+                    description: Up to 20 of the employee's most recent model use records in the window, newest first.
+                    items: { $ref: '#/components/schemas/UsageEntry' }
+                  novaInOffice:
+                    type: array
+                    description: Up to 20 recent records of Nova working in this office. Not counted in the buckets.
+                    items: { $ref: '#/components/schemas/UsageEntry' }
+                  asOf:
+                    type: string
+                    format: date-time
+                    description: When the figures were read.
+                required: [success, service, office, granularity, timezone, buckets, months, computeSource, recentRuns, novaInOffice, asOf]
+              examples:
+                twoDays:
+                  value:
+                    success: true
+                    service: null
+                    office: { id: off_9c1e7d, name: Research, workspaceId: ws_a1b2c3, workspaceName: Operations, projectId: prj_2b7d }
+                    granularity: day
+                    timezone: America/Toronto
+                    buckets:
+                      - { key: '2026-10-17', startMs: 1792209600000, computeUsd: 2.88, runtimeMs: 86400000, hourCount: 24, llmBilledUsd: 1.12, llmByokEstimateUsd: 0, llmRunCount: 9 }
+                      - { key: '2026-10-18', startMs: 1792296000000, computeUsd: 1.44, runtimeMs: 43200000, hourCount: 12, llmBilledUsd: 0.37, llmByokEstimateUsd: 0, llmRunCount: 3 }
+                    months: []
+                    computeSource: charged
+                    recentRuns: []
+                    novaInOffice: []
+                    asOf: '2026-10-18T15:20:00.000Z'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -1489,13 +2389,27 @@ paths:
       summary: List compute invoices
       tags: [Compute]
       description: |
-        Invoices for machine time.
+        Period records for machine time, kept by Humanik Cloud.
 
-        Separate from
-        [credit invoices](/docs/api-reference/billing/usage/listInvoices). The
-        two are issued by different systems and do not combine.
+        **These are not what was taken from your credit.** Machine time is paid
+        once an hour from your credit balance, and each of those charges is on
+        [List compute bills](/docs/api-reference/billing/compute/listComputeBills).
+        They are also separate from
+        [credit invoices](/docs/api-reference/billing/usage/listInvoices),
+        which record credit added.
 
         **Permission:** `billing:read` @ `console`
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Only records with this status.
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: How many to return.
+          schema: { type: integer }
       responses:
         '200':
           description: OK.
@@ -1530,7 +2444,15 @@ paths:
       summary: Get a compute invoice
       tags: [Compute]
       description: |
-        One invoice for machine time, itemised.
+        One period record for machine time, itemised by service. Each line item
+        that belongs to an office also carries `officeId` and `officeName`,
+        which are `null` otherwise.
+
+        Like the list, this is not what was taken from your credit. See
+        [List compute bills](/docs/api-reference/billing/compute/listComputeBills)
+        for the hourly charges.
+
+        An ID that cannot be read answers `500`, not `404`.
 
         **Permission:** `billing:read` @ `console`
       responses:
@@ -1544,11 +2466,21 @@ paths:
                   success: { type: boolean, const: true }
                   invoice:
                     type: object
+                    properties:
+                      lineItems:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            serviceId: { type: string }
+                            officeId: { type: [string, 'null'] }
+                            officeName: { type: [string, 'null'] }
+                          additionalProperties: true
                     additionalProperties: true
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
-          description: No such invoice on this account.
+          description: The record came back with no invoice in it.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1560,10 +2492,10 @@ paths:
         in: path
         required: true
         description: |
-          The service to act on. IDs appear as `serviceId` on
-          [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary),
-          and for an office they are also returned by
-          [List services](/docs/api-reference/cloud/services/listCloudServices).
+          The service to act on. IDs come from
+          [List services](/docs/api-reference/cloud/services/listCloudServices),
+          and appear as `serviceId` on
+          [List compute charges](/docs/api-reference/billing/compute/listComputeCharges).
         schema: { type: string }
 
     get:
@@ -1572,11 +2504,13 @@ paths:
       tags: [Compute]
       description: |
         The size and sleep settings that decide what a service costs while
-        awake.
+        awake, and the sizes it can be set to.
 
         For an office, prefer the office route, which is narrower and can be
         granted to someone responsible for one employee. See
         [Humanik Cloud](/docs/api-reference/cloud).
+
+        A service that cannot be read answers `500`, not `404`.
 
         **Permission:** `billing:read` @ `console`
       responses:
@@ -1588,16 +2522,38 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, const: true }
-                  userConfig:
+                  config:
                     type: object
-                    additionalProperties: true
+                    properties:
+                      serviceId: { type: string }
+                      serviceName: { type: string }
+                      serviceType: { type: string }
+                      userConfig:
+                        type: object
+                        description: The settings you can change, for example `instanceType` and `idleTimeoutMinutes`.
+                        properties:
+                          instanceType: { type: string }
+                          idleTimeoutMinutes: { type: number }
+                        additionalProperties: true
+                      instanceTypes:
+                        type: array
+                        description: The sizes this service can be set to.
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: The value to send as `instanceType`.
+                            displayName: { type: string }
+                            tier: { type: string }
+                            cpuKind: { type: string }
+                            cpus: { type: number }
+                            memoryMb: { type: number }
+                            description: { type: string }
+                    required: [serviceId, serviceName, serviceType, userConfig]
+                required: [success, config]
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404':
-          description: No such service on this account.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
         '500': { $ref: '#/components/responses/ServerError' }
 
     put:
@@ -1605,13 +2561,16 @@ paths:
       summary: Change a service's settings
       tags: [Compute]
       description: |
-        Changes size and sleep behaviour, which is the lever you actually have
-        on machine cost. A smaller machine costs less per second awake, and a
-        shorter idle timeout means fewer seconds awake.
+        Changes size and sleep behaviour, which is the lever you have on
+        machine cost. A smaller machine costs less per hour awake, and a
+        shorter idle timeout means fewer hours awake.
 
-        **This is the only control over compute spend.** There is no cap and no
-        alert for it, so the way to hold it down is to make offices smaller and
-        let them sleep sooner rather than to set a limit somewhere.
+        **No budget limits compute spend.** The only automatic stop is your
+        credit balance going below zero after an hourly charge, which stops
+        every machine on the account. To hold the cost down, make services
+        smaller and let them sleep sooner. A machine already running keeps the
+        price it started with, and a new size's price applies to the next
+        machine started.
 
         **Permission:** `billing:manage` @ `console`
       requestBody:
@@ -1625,9 +2584,11 @@ paths:
                   type: object
                   additionalProperties: true
                   description: |
-                    Required. The settings to apply. Read the current ones first
-                    and send them back changed, since this replaces rather than
-                    merges.
+                    Required. The settings to apply, for example
+                    `{ "instanceType": "pro", "idleTimeoutMinutes": 20 }`. Read
+                    the current ones with
+                    [Get a service's settings](/docs/api-reference/billing/compute/getComputeServiceConfig)
+                    first and send them back changed.
               required: [userConfig]
       responses:
         '200':
@@ -1650,4 +2611,10 @@ paths:
                     error: userConfig is required
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '500': { $ref: '#/components/responses/ServerError' }
+        '500':
+          description: |
+            Server side failure, including a setting Humanik Cloud refused.
+            Safe to retry with backoff.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }

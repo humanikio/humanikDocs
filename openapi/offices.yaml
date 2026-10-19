@@ -4044,17 +4044,24 @@ paths:
       summary: Shut down an office
       tags: [Machine]
       description: |
-        Stops the office gracefully, the same way it stops when it goes idle.
-        Work in progress is allowed to finish rather than being cut off.
+        Stops the office's machine, the same way it stops when it goes idle. It
+        does not wait for work in progress: an agent run that is still going is
+        ended.
 
-        The office is not deleted and nothing it holds is lost. It starts again
-        when something arrives for it, or when you
+        The office is not deleted and nothing it holds is lost. Its files are
+        saved before the machine stops. It starts again when something arrives
+        for it, or when you
         [wake it](/docs/api-reference/offices/machine/wakeOfficeMachine).
 
-        **This is the lever on machine cost.** An office that is awake costs
-        while it is awake, and that cost is not covered by a
-        [spending limit](/docs/spend). Shutting one down, or giving it a shorter
-        idle timeout, is the only way to bring it down.
+        **A keep-awake office starts again straight away.** An office with an
+        idle timeout of `0` is started on a new machine as soon as it is shut
+        down. To keep it off, set a non-zero idle timeout first, then call this.
+
+        **This is the lever on machine cost.** An office that is awake is charged
+        every hour it is awake, from your credit balance, and that cost is not
+        covered by a [spending limit](/docs/spend). Shutting one down, or giving
+        it a shorter idle timeout, is how you bring it down. See
+        [Machine lifecycle](/docs/cloud/lifecycle).
 
         **Permission:** `office:use` @ `office/{officeId}`
       requestBody:
@@ -4099,9 +4106,18 @@ paths:
 
         ## It replaces the machine rather than rebooting it
 
-        A fresh machine is built with the office's current settings, brought up,
-        checked, and only then is the old one stopped. There is no gap in
-        service.
+        The office's current machine is stopped first, then a fresh one is
+        started with the office's current settings. **There is a gap in service**
+        while the new machine starts, usually a few minutes. Work that arrives
+        during the gap waits for the new machine.
+
+        If the new machine is not ready within 20 minutes, it is stopped and the
+        restart fails. The old machine is already gone, so the office is left
+        asleep, and the next thing that arrives for it starts a new machine.
+
+        If the account's credit balance is below zero, the restart is accepted
+        and then fails with a message saying machine starts are paused. See
+        [Machine lifecycle](/docs/cloud/lifecycle#when-the-credit-balance-goes-below-zero).
 
         That indirection is the point. An office reads its settings once, when it
         starts, and holds them for as long as that machine lives. Rebooting the

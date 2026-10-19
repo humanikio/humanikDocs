@@ -12,8 +12,8 @@ employees work inside it without anyone approving each step.
 
 <Callout>
   **Budgets cover model use only.** [Machine time](/docs/cloud/pricing), the cost of
-  machines running, is not counted and cannot be limited by a budget. See
-  [What costs money](/docs/spend#what-costs-money).
+  machines running, is paid from the same credit but is not counted and cannot
+  be limited by a budget. See [What costs money](/docs/spend#what-costs-money).
 </Callout>
 
 ## The parts of a budget
@@ -471,7 +471,8 @@ month. Send `{ "untilReset": false }` to clear the pause early.
 ## What a budget does not do
 
 - **It does not count compute.** Machines running, including a cloud browser's,
-  cost money that no budget sees.
+  are charged to your credit once an hour, and no budget sees those charges. A
+  budget that counts credit counts only model use.
 - **It does not stop cloud browsers**, though their spend is counted.
 - **It does not cover phone calls or text messages.** Nothing meters them.
 - **It does not stop work mid-step.** The step that crosses the limit finishes,

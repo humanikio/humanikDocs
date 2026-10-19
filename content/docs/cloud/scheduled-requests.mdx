@@ -1,0 +1,210 @@
+---
+title: Scheduled requests
+description: Send a request to your web service, or run a command on it, on a schedule. What a run does, when it fires, and what happens when it fails.
+---
+
+A scheduled request sends a request to one of your services at a set time or on
+a repeating schedule. On a web service it can instead run a shell command on the
+machine. Use it for nightly reports, clean ups, and anything else your app should
+do without a visitor asking.
+
+In the API these are called **crons**, and they live under `/cloud/crons`.
+
+## Two kinds
+
+| | Request (`kind: "http"`, the default) | Command (`kind: "command"`) |
+| --- | --- | --- |
+| A run does | Sends the stored method, path and body to your service | Runs `command.run` with `sh -c` on the service's machine |
+| Works on | Any of your services | A web service whose `networkAccess` is `http` |
+| Result | The answer from your app | The command's exit code, kept on the machine, and its output in the logs |
+
+A command runs in your app's folder, as your app's user, with your app's
+environment variables plus `JOB_RUN_ID` and `JOB_CRON_ID`. A command can be up to
+4000 characters, and is stopped after `timeoutMinutes`: 1 to 720, default 60.
+
+A service with an empty `startCommand` runs no server and exists only for
+commands. See
+[A service with no server](/docs/cloud/web-services#a-service-with-no-server).
+
+## When it fires
+
+| `schedule.kind` | Fields | Fires |
+| --- | --- | --- |
+| `at` | `at`, an ISO 8601 time | Once |
+| `every` | `everyMs`, and optionally `anchorMs` | Repeatedly, every `everyMs` milliseconds |
+| `cron` | `expr`, and optionally `tz` | On a cron expression |
+
+**A cron expression has 5 fields** (minute, hour, day of month, month, day of
+week), or 6 with seconds first. Names such as `MON` and `JAN`, and shortcuts such
+as `@daily` and `@hourly`, are accepted. The expression is checked when you save
+it, and one that cannot be read is refused with `400`.
+
+**Always set `tz`** on a `cron` schedule, to an IANA time zone such as
+`America/Toronto`. Do not rely on the default.
+
+**`every` counts from 1 January 1970 UTC, not from when you saved it.** An
+`everyMs` of one hour fires on the hour. Send `anchorMs` to start the count from
+your own time.
+
+Schedules are checked about every 15 seconds, so a run can start up to about 15
+seconds after its time. Nothing fires more often than that.
+
+## What a run does to your service
+
+**A run wakes a sleeping service.** If no machine is running, one starts, with the
+full clone, install and build, before the request is sent. A run on a service
+that sleeps can therefore take minutes to reach your app. Keep that in mind for a
+schedule that runs every few minutes: each run may keep the service awake, and
+awake time is billed. See [Pricing](/docs/cloud/pricing).
+
+**A command keeps the machine awake until it ends.** Only one run of the same
+command happens at a time. If the previous run is still going, the new one is
+recorded as `skipped` and does not count as a failure.
+
+## When a run fails
+
+- **A failed run is not retried.** The next run happens at the next scheduled
+  time.
+- **Missed runs are not made up.** If runs could not happen for a while, the
+  schedule carries on from the next time after it resumes.
+- **After 10 failed runs in a row, a repeating schedule is turned off.** Its
+  `disabledReason` says why. Turning it back on resets the count, and it starts
+  from its next scheduled time rather than firing at once.
+- **A one-time `at` schedule is turned off after it runs**, whether it succeeded
+  or not.
+
+For a command, a run counts as `ok` once the command **starts**. Whether it
+succeeded is in
+[List command jobs](/docs/api-reference/cloud/services/listCloudServiceRunnerJobs)
+and in the service's logs, where each output line carries `job_run_id` and
+`cron_id`. The machine keeps its last 20 command runs in memory only, so that list
+is empty once the machine stops. The logs are kept.
+
+## Write handlers that can run twice
+
+**A run may, very rarely, happen twice.** Write the code a schedule calls so that
+running it a second time does no harm: check whether today's report already
+exists before you send it, or record the run and skip a repeat.
+
+## Recognising a scheduled request
+
+**Your app recognises a scheduled request only by a value you put in its body.**
+Store a value only your app knows in the request body, and have the handler
+refuse a request that does not carry it. A body is not sent for `GET` or `HEAD`,
+so use `POST` for a handler that checks one.
+
+The body is stored with the schedule as you sent it, and is returned whenever the
+schedule is read. Anyone holding `cloud:read` at `console` can see it. Use a value
+that is only for this purpose, not a credential you use anywhere else.
+
+Paths under `/__runner/` cannot be a request's target.
+
+## Permissions
+
+| To | You need |
+| --- | --- |
+| List and read schedules | `cloud:read` @ `console` |
+| Create, change, turn on or off, run now, or delete | `cloud:manage` @ `console` |
+
+Requests go to the HumanikOS API with a service account key, or a console login,
+holding that permission.
+
+## Create one with the API
+
+Get the service ID first:
+
+#### Request
+
+```bash
+curl "$HOS_API/cloud/services" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+### A request every weekday morning
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/cloud/crons" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceId": "svc_7f3a9c2e",
+    "name": "Morning report",
+    "schedule": { "kind": "cron", "expr": "0 7 * * 1-5", "tz": "America/Toronto" },
+    "request": {
+      "method": "POST",
+      "path": "/jobs/morning-report",
+      "body": { "scheduleToken": "c4e8a1f07b3d9e25", "format": "pdf" }
+    }
+  }'
+```
+
+#### Response `201 Created`
+
+```json
+{
+  "success": true,
+  "cronJob": {
+    "cronId": "Xk3pQ8vLm2RtY7wZ",
+    "serviceId": "svc_7f3a9c2e",
+    "name": "Morning report",
+    "enabled": true,
+    "schedule": { "kind": "cron", "expr": "0 7 * * 1-5", "tz": "America/Toronto" },
+    "request": {
+      "method": "POST",
+      "path": "/jobs/morning-report",
+      "body": { "scheduleToken": "c4e8a1f07b3d9e25", "format": "pdf" }
+    },
+    "nextRunAtMs": null,
+    "consecutiveErrors": 0
+  },
+  "timestamp": "2026-10-19T14:10:00.000Z",
+  "status": 201
+}
+```
+
+`nextRunAtMs` is `null` for up to about a minute after saving, until the schedule
+is first read.
+
+### A command every hour
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/cloud/crons" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceId": "svc_7f3a9c2e",
+    "name": "Prune old uploads",
+    "kind": "command",
+    "schedule": { "kind": "every", "everyMs": 3600000 },
+    "command": { "run": "node scripts/prune-uploads.js --older-than 30d", "timeoutMinutes": 15 }
+  }'
+```
+
+### Run one now
+
+The run happens at the next check, normally within about 15 seconds, not during
+the call. A schedule that is turned off is refused with `400`.
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/cloud/crons/Xk3pQ8vLm2RtY7wZ/trigger" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+### Turn one off
+
+#### Request
+
+```bash
+curl -X PATCH "$HOS_API/cloud/crons/Xk3pQ8vLm2RtY7wZ/source" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "enabled": false }'
+```
+
+Every operation is in the [Crons reference](/docs/api-reference/cloud/crons/listCloudCrons).

@@ -7,12 +7,27 @@ A web service is your own app running on Humanik Cloud. You point it at a GitHub
 repository and a branch, and Humanik Cloud builds it, runs it, gives it a public
 address, and stops it when nobody is using it.
 
+This page is the overview. Three pages go into detail:
+
+| Page | Covers |
+| --- | --- |
+| [Environment variables and secrets](/docs/cloud/environment-and-secrets) | What your app receives in its environment, account-wide and per service values, and reading them back |
+| [Scheduled requests](/docs/cloud/scheduled-requests) | Sending a request to your service, or running a command on it, on a schedule |
+| [Deployments and logs](/docs/cloud/deployments-and-logs) | What a deploy does, rolling back, and reading what your app printed |
+
 ## Before you start
 
 **Connect your GitHub account.** A web service is cloned with your account's own
 GitHub connection, never with a shared one. Connect it in the console under
-Humanik Cloud settings. A service whose repository your connection cannot read
-fails at the clone step.
+Humanik Cloud settings. Connecting asks GitHub for the `repo` scope, so that
+private repositories can be cloned.
+
+There is one GitHub connection for your whole Humanik Cloud account. Connecting
+and disconnecting is done in the console by a signed-in person holding
+`settings:manage`. A service account key cannot do it.
+
+A service whose repository your connection cannot read fails at the clone step.
+Without a connection, only public repositories clone.
 
 ## How a deploy works
 
@@ -20,18 +35,28 @@ fails at the clone step.
   deploy ──▶ clone the commit ──▶ install ──▶ build ──▶ start ──▶ ready
 ```
 
-**Every machine runs the same commit.** A deploy records the exact commit at the
-tip of your branch, and every machine started for that deploy clones that commit,
-including machines started later when the service wakes from sleep. Pushing to the
-branch does not change a running service. Deploy again to pick up the new commit.
+**A deploy fixes the commit.** A deploy looks up the commit at the tip of your
+branch once, and every machine started afterwards checks out that commit,
+including machines started later when the service wakes from sleep. Pushing to
+the branch does not change a running service. Deploy again to pick up the new
+commit.
+
+This needs the repository to be on `github.com` and readable through your GitHub
+connection. If the commit cannot be looked up, for example because there is no
+connection or the branch name is wrong, the deploy still goes ahead. A service
+that has never had its commit fixed then clones the tip of the branch each time a
+machine starts, so two machines started an hour apart can run different code. See
+[Deployments and logs](/docs/cloud/deployments-and-logs#which-commit-runs).
 
 **A deploy replaces the machines, and the service is down while it does.** The
 running machines are stopped first, then new ones start with the new commit. Until
 a new machine is ready, the service is not serving. Deploy at a time when that
 gap is acceptable.
 
-**A deploy that does not become ready within 20 minutes fails.** Its machines are
-stopped. Read the deploy's logs, fix the cause, and deploy again.
+**A deploy that does not become ready within 20 minutes fails.** A broken install
+or build is also only marked failed when the 20 minutes are up, so read the logs
+while the deploy runs rather than waiting for its status. See
+[Deployments and logs](/docs/cloud/deployments-and-logs#following-a-deploy).
 
 ## Build and run settings
 
@@ -40,25 +65,54 @@ stopped. Read the deploy's logs, fix the cause, and deploy again.
 | `gitRepoUrl` | Required | The repository to clone |
 | `gitBranch` | `main` | The branch a deploy takes its commit from |
 | `rootDirectory` | `.` | The folder inside the repository the app lives in. Commands run from here. Use it for a monorepo, with one service per folder |
-| `runtime` | `nodejs` | `nodejs` or `python` |
+| `runtime` | `nodejs` | `nodejs` or `python`. It does not change the commands below |
 | `installCommand` | `npm ci` | Installs dependencies. `npm ci` needs a lockfile. Set `npm install`, `pnpm install` or `yarn install` to match your repository |
-| `buildCommand` | `npm install && npm run build` | Builds the app |
-| `startCommand` | `npm start` | Starts the server |
+| `buildCommand` | `npm install && npm run build` | Builds the app. An empty string skips the build |
+| `startCommand` | `npm start` | Starts the server. An empty string starts no server: see below |
+
+Commands run with `sh -c`, so `&&` and `$PORT` work in them. They run as an
+ordinary user, never as root.
 
 <Callout type="warn">
-  **Use `gitBranch`, not `branch`.** `branch` is still accepted so older services
-  keep working, but nothing reads it. A service with only `branch` set deploys
-  `main`.
+  **Use `gitBranch`, not `branch`.** `branch` is an older name, still accepted so
+  older services keep working. When both are set, only `gitBranch` counts.
 </Callout>
+
+### What is installed
+
+Every machine has Node.js 22 and Python 3.14, with `uv` and `uvx`. `git` is
+installed too.
+
+**The default commands are Node.js commands, whatever `runtime` says.** A Python
+service must set all three commands itself. For example:
+
+| Setting | Value |
+| --- | --- |
+| `installCommand` | `uv venv && uv pip install -r requirements.txt` |
+| `buildCommand` | An empty string |
+| `startCommand` | `.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port $PORT` |
+
+### A service with no server
+
+Set `startCommand` to an empty string and the service runs as a worker: install
+and build run, no app server starts, and the service exists to run
+[scheduled commands](/docs/cloud/scheduled-requests#two-kinds). Leaving
+`startCommand` out is not the same thing: the default, `npm start`, applies.
 
 ## What your app must do
 
 **Listen on `PORT`.** Your app receives the port to listen on in the `PORT`
 environment variable. Read it from the environment. Setting `PORT` yourself has
-no effect: the platform sets it last.
+no effect: the platform sets it last. `PORT` is set only when your app runs, not
+during install or build.
 
-**Answer on it.** The service is ready once your app answers on `PORT`. Until
-then, requests wait.
+**Answer on it within about 60 seconds of starting.** The machine is ready once
+your app answers any request on `PORT`, even with a `404`. If nothing answers
+within about a minute of the start command running, the start fails.
+
+**Stay up.** If your app exits, it is restarted, at most 3 times in the life of
+one machine. After that it stays down until the machine is replaced, by a deploy
+or when the machine stops and a new one starts.
 
 **Leave a few paths free.** These paths are answered by the platform and never
 reach your app:
@@ -81,12 +135,24 @@ reach your app over HTTPS, and wake the service if it is asleep.
 
 ## Environment variables and secrets
 
-Your app receives the environment variables and secrets you set on the service.
-It does not receive any platform credentials, so nothing you deploy can act as
-Humanik Cloud.
+Every variable you set is stored encrypted, so there is no separate store for
+secrets. Your app receives the variables set on its own service, the platform's
+`PORT` and `NODE_ENV`, and its build settings. It does not receive account-wide
+variables unless you copy them to the service, and it does not receive any
+platform credentials.
 
-Secrets are read when a machine starts. Changing one applies to machines started
-after the change. Deploy again to apply it straight away.
+Variables are read when a machine starts. A change applies to machines started
+after it. Deploy again to apply it straight away.
+
+Read [Environment variables and secrets](/docs/cloud/environment-and-secrets)
+before you rely on a value: it covers line breaks in values, which group a
+machine reads, and who can read a value back.
+
+## Scheduled requests
+
+A web service can be sent a request on a schedule, or have a command run on it,
+for nightly jobs and clean ups. A scheduled run wakes a sleeping service. See
+[Scheduled requests](/docs/cloud/scheduled-requests).
 
 ## Network access
 
@@ -95,13 +161,14 @@ after the change. Deploy again to apply it straight away.
 | `http` (default) | The service can receive requests at its public address |
 | `none` | No inbound connections at all. For a service that only reaches out, such as a worker that polls a queue |
 
-It applies the next time a machine starts.
+It applies the next time a machine starts. Scheduled commands need `http`.
 
 ## Size, scaling and cost
 
 A web service is sized by vCPU and memory, chosen separately, from 0.25 vCPU with
 512 MB up to 4 vCPU with 16 GB. It runs on one machine, and sleeps after 20
-minutes without requests unless you change its idle timeout.
+minutes without requests unless you change its idle timeout. The build runs on
+that same machine, at that size, every time a machine starts.
 
 | Page | Covers |
 | --- | --- |
@@ -116,32 +183,65 @@ minutes without requests unless you change its idle timeout.
   [Scaling and sleep](/docs/cloud/scaling#keeping-a-service-awake).
 </Callout>
 
-## Managing a web service with a key
+## Managing a web service with the API
 
-Everything in the console is also available with a service account key holding
+Everything in the console except the GitHub connection is also available through
+the HumanikOS API, with a service account key or a console login holding
 `cloud:read` or `cloud:manage` at `console`.
+
+`cloud:manage` at `console` reaches every service in your account. There is no
+grant for one project or one service. See
+[Humanik Cloud API](/docs/api-reference/cloud#one-permission-covers-the-whole-account).
 
 | To | Use |
 | --- | --- |
 | Create a service, or create and deploy in one call | [Create a service](/docs/api-reference/cloud/services/createCloudService), [Create and deploy](/docs/api-reference/cloud/services/createAndDeployCloudService) |
 | Change its size, timeout or build settings | [Update service settings](/docs/api-reference/cloud/services/updateCloudServiceUserConfig) |
 | Deploy for the first time | [Deploy a service](/docs/api-reference/cloud/deployments/deployCloudService) |
-| Deploy again, or roll back to a commit | [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService) with `gitSha` |
+| Deploy again, or roll back to a commit | [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService) with `gitSha`. There is no rollback control in the console |
 | Follow a deploy | [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments), [Get a deployment](/docs/api-reference/cloud/deployments/getCloudDeployment) |
 | See what is running | [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances) |
-| Read its logs | [Get service logs](/docs/api-reference/cloud/services/getCloudServiceLogs). Pass `serviceType=webservice` |
-| See what it costs | [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary) |
+| Read its logs | [Get service logs](/docs/api-reference/cloud/services/getCloudServiceLogs) |
+| Set its variables | [Environment variables and secrets](/docs/cloud/environment-and-secrets#managing-variables-with-the-api) |
+| Schedule work on it | [Create a cron](/docs/api-reference/cloud/crons/createCloudCron) |
+| See what it costs | [Pricing](/docs/cloud/pricing) |
+
+Get the service ID first:
 
 #### Request
 
 ```bash
-curl "$HOS_API/cloud/services/svc_3b8e1f/logs?serviceType=webservice&level=error&limit=50" \
+curl "$HOS_API/cloud/services" \
   -H "Authorization: Bearer $HOS_KEY"
 ```
+
+Then read the last hour of its logs, searching for a word your app prints when
+something goes wrong:
+
+#### Request
+
+```bash
+curl "$HOS_API/cloud/services/svc_7f3a9c2e/logs?startTime=2026-10-19T13:00:00Z&search=Error&limit=200" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Do not filter your app's output with `level=error`. Lines your app prints carry
+no level, so that filter hides them. See
+[Deployments and logs](/docs/cloud/deployments-and-logs#reading-logs).
 
 ## Where to go next
 
 <Cards>
+  <Card
+    title="Environment variables and secrets"
+    href="/docs/cloud/environment-and-secrets"
+    description="What your app receives, and how to set it."
+  />
+  <Card
+    title="Deployments and logs"
+    href="/docs/cloud/deployments-and-logs"
+    description="Deploy, roll back, and read what your app printed."
+  />
   <Card
     title="Machine sizes"
     href="/docs/cloud/sizes"

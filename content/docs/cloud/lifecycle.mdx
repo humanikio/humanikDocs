@@ -1,0 +1,166 @@
+---
+title: Machine lifecycle
+description: How a machine starts, runs, stops, is replaced and recovers, for offices, cloud browsers and web services, and what a request sees at each step.
+---
+
+Every service on Humanik Cloud runs on machines that come and go. This page
+follows one machine from start to stop, and says what a request sees at each
+step. The rules for how many machines a service runs and how long each stays
+awake are on [Scaling and sleep](/docs/cloud/scaling).
+
+```
+                 request arrives
+                       │
+                       ▼
+   asleep ──────▶ starting ──────▶ running ──────▶ stopping ──────▶ asleep
+   (no machine,      │         (serving work)   (idle timeout,   (no machine,
+    no charge)       │                │          shut down,        no charge)
+                     │                │          restart, deploy)
+                     ▼                ▼
+               not ready in     stops responding
+               time: 503        or crashes: removed
+                                from service, next
+                                request starts a
+                                new machine
+```
+
+## Starting
+
+A service with no machine running is asleep. It starts when something arrives
+for it:
+
+| Service | What starts it |
+| --- | --- |
+| Office | Something arriving for the employee, such as a message, or [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine) |
+| Cloud browser | A request to the browser |
+| Web service | A request to its public address, or a deploy |
+
+The request that starts a machine is held open while the machine starts, and is
+served once the machine is ready. The wait has a limit:
+
+| Service | Longest wait |
+| --- | --- |
+| Office | 300 seconds |
+| Web service | 240 seconds |
+| Cloud browser | 180 seconds |
+
+If no machine is ready by then, the request gets a `503`:
+
+```json
+{ "success": false, "error": "No available instances after scaling timeout" }
+```
+
+Billing starts when the machine is started, not when it is ready. See
+[Pricing](/docs/cloud/pricing#which-time-is-billed).
+
+## Running
+
+A running machine reads its settings once, when it starts, and keeps them until
+it stops. A change to a size, an idle timeout or an environment variable applies
+the next time a machine starts.
+
+To see whether a service has a machine running, use
+[List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances).
+Reading it never wakes a service.
+
+## Going idle and stopping
+
+A machine stops on its own when it has had no work for its idle timeout. The
+machine checks once a minute, so it stops between the timeout and one minute
+after it. What counts as work is on
+[Scaling and sleep](/docs/cloud/scaling#idle-timeout). An idle timeout of `0`
+means the machine never stops on its own.
+
+When a machine stops, for any reason, it first stops receiving new requests and
+then shuts down. It does not wait for work in progress:
+
+- **An office** ends any agent run that is still going, then saves its files so
+  the next machine can restore them.
+- **A web service** sends your app a `SIGTERM` and gives it 5 seconds to exit
+  before it is stopped by force. Close connections and finish writes in that
+  window.
+
+## Restarts and deploys
+
+Restarting an office and deploying a web service again both work the same way:
+**the old machine is stopped first, then a new one is started.** There is a gap
+in service while the new machine starts, usually a few minutes. Requests that
+arrive during the gap wait for the new machine, up to the limits above.
+
+| Action | What happens |
+| --- | --- |
+| [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine) | Stops the office's machine and starts a new one with the current settings |
+| Deploy a web service again | Stops the running machine and starts a new one from the commit you deployed. See [Web services](/docs/cloud/web-services) |
+| [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine) | Stops the machine. The office starts again when something arrives for it |
+
+Both a restart and a deploy return before the work is done. The new machine must
+become ready within 20 minutes. If it does not, it is stopped and the deploy is
+marked failed. The old machine was already stopped, so the service is left with
+no machine running, and the next request starts one.
+
+**Shutting down a keep-awake office starts it again.** An office with an idle
+timeout of `0` is started on a new machine as soon as it is shut down. To keep it
+off, set a non-zero idle timeout first, then shut it down.
+
+## When a machine crashes
+
+A machine that crashes is not restarted in place. What happens next depends on
+how it failed:
+
+- **The machine shuts itself down after an error.** A keep-awake service (idle
+  timeout `0`) gets a new machine straight away. Any other service stays asleep
+  until the next request starts a new machine.
+- **The machine is ended without warning**, for example by running out of
+  memory. Nothing starts a replacement, even for a keep-awake service. The next
+  request starts a new machine.
+
+A web service has one more case, because your app runs inside the machine:
+
+- **Your app exits.** It is started again, up to 3 times over the life of the
+  machine, 2 seconds apart. Requests are not sent to it while it restarts.
+  After the third failure the machine stays running but receives no requests, so
+  requests wait and then get the `503` above. The machine is billed until its
+  idle timeout stops it, or until you deploy again. Read the service's logs,
+  fix the cause, and deploy again.
+- **The build fails.** The machine stays running so its logs can be read, and
+  receives no requests. It stops at its idle timeout. A new request can start
+  another machine, which fails the same way until the cause is fixed, and each
+  one is billed while it runs.
+
+## A machine that stops responding
+
+A machine that stops responding is removed from service within about 30
+seconds, so no new requests are sent to it. Billing for it ends within about
+five minutes. The next request starts a new machine.
+
+## When the credit balance goes below zero
+
+Machine time is charged every hour from your prepaid credit balance. See
+[How you are charged](/docs/cloud/pricing#how-you-are-charged).
+
+If the balance is below zero after an hourly charge, and after any automatic top
+up, **every machine on the account is stopped and new starts are refused** until
+the balance is $1 or more. Every refusal carries the same message:
+
+> Machine starts are paused for this account: its credit balance went below
+> zero. Machines start again once the balance is $1 or more. Add credit and the
+> service starts on the next request.
+
+What you see depends on how the start was asked for:
+
+| Start asked for by | Response |
+| --- | --- |
+| A request to a sleeping web service, office or browser | `402` straight away, with the message in `error` |
+| [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine) | `502`, with the message in `error` |
+| A web service deploy, or [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine) | Accepted, then the deploy is marked failed with the message |
+
+A deploy refused this way still records the commit you deployed, so the next
+machine that starts uses it.
+
+To clear the pause, add credit until the balance is $1 or more. Nothing else is
+needed: the next request starts the service. Starts can take up to about 15
+seconds to resume after the credit arrives.
+
+## Where machines run
+
+Offices and web services run in the United States.

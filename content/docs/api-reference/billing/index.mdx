@@ -3,7 +3,7 @@ title: Billing
 description: Credit, usage history, budgets, and what your machines cost.
 ---
 
-Two meters, reported separately.
+Two meters, paid from one credit balance and reported separately.
 
 <ApiSetup />
 
@@ -18,17 +18,25 @@ Two meters, reported separately.
 
 | | Model use | Compute |
 | --- | --- | --- |
-| Priced | Per token, paid from prepaid credit | Per hour of machine time, by size. See [Pricing](/docs/cloud/pricing) |
-| Balance | [Get the balance](/docs/api-reference/billing/credit/getBalance) | Not a balance |
-| History | [List model usage](/docs/api-reference/billing/usage/listUsage) | [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary) |
-| Invoices | [Credit invoices](/docs/api-reference/billing/usage/listInvoices) | None |
-| Can be limited | Yes, by [budgets](#budgets) | No |
+| Priced | Per token, paid from prepaid credit | Per hour of machine time, by size, paid from the same credit once an hour. See [Pricing](/docs/cloud/pricing) |
+| Balance | [Get the balance](/docs/api-reference/billing/credit/getBalance) | The same balance |
+| History | [List model usage](/docs/api-reference/billing/usage/listUsage) | [List compute charges](/docs/api-reference/billing/compute/listComputeCharges), one line per service per hour |
+| Receipts | [Credit invoices](/docs/api-reference/billing/usage/listInvoices), for credit added | [List compute bills](/docs/api-reference/billing/compute/listComputeBills), one per hour, with the balance before and after |
+| Can be limited | Yes, by [budgets](#budgets) | Not by a budget. Every machine stops if the balance is below zero after an hourly charge |
 
 <Callout type="warn">
-  **Nothing adds the two together.** There is no combined total anywhere in this
-  API. A figure for what an account spent is something you assemble from both
-  sides, and the two use different units.
+  **No call adds the two together.** A figure for what an account spent is
+  something you assemble from both sides. The usage series and the compute
+  charge series use the same bucket keys for the same window, so they can be
+  joined on `key`.
 </Callout>
+
+**Charged figures and the estimate are different things.**
+[Get estimated compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
+prices running time at today's price, and is not what you paid. For money, use
+the compute charge, bill and series operations. The newest hour can be up to
+about an hour behind on those, because each hour is charged a few minutes after
+it ends.
 
 ## Everything here is account-wide
 
@@ -75,11 +83,13 @@ The two meters need different tools.
 employee. A budget can stop work at its limit, warn and let it continue, or only
 send alerts.
 
-**Compute** has no cap. The only lever is
+**Compute** has no budget. The lever is
 [Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig):
 a smaller size has a lower hourly price, and a shorter idle timeout means fewer
-hours awake. A service nobody stops keeps costing until it sleeps. The rules are
-in [Pricing](/docs/cloud/pricing).
+hours awake. A service nobody stops keeps costing until it sleeps. The only
+automatic stop is the credit balance going below zero after an hourly charge,
+which stops every machine on the account until the balance is $1 or more. The
+rules are in [Pricing](/docs/cloud/pricing#how-you-are-charged).
 
 ## What is not here
 

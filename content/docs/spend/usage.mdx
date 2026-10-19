@@ -8,8 +8,11 @@ tokens it used, what it cost, who paid, and who did the work. Records are writte
 for work on our model account **and** for work on your own model account, so one
 list shows all model use whoever paid for it.
 
-Usage records cover model use only. The cost of an office being awake is
-reported separately; see [Compute](/docs/spend#compute).
+Usage records cover model use only. Machine time, the cost of an office or other
+service being awake, is taken from the same credit once an hour and recorded
+separately, as compute charge records. See [Machine time](/docs/spend#machine-time),
+and read them with
+[List compute charges](/docs/api-reference/billing/compute/listComputeCharges).
 
 ## What one record says
 
@@ -101,8 +104,10 @@ cost them about seven cents with their provider. To get the next page, send the
 last entry's `id` as `startAfter`.
 
 `office.serviceId` is the machine the employee runs on. It matches `serviceId`
-in [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary),
+in [List compute charges](/docs/api-reference/billing/compute/listComputeCharges),
 which is how to put an employee's model use next to its machine time.
+[Get usage for one service](/docs/api-reference/billing/compute/getComputeServiceUsage)
+does that join for you, for one service at a time.
 
 ## Totals and charts
 
@@ -114,6 +119,11 @@ to your credit (`platformUsd`) and what work on your own model account cost
 | --- | --- |
 | [Get a usage summary](/docs/api-reference/billing/usage/getUsageSummary) | Totals for each of the last few months, the month so far, and a total for every day |
 | [Get a usage series](/docs/api-reference/billing/usage/getUsageSeries) | Totals for any window you choose, by hour, day, week or month |
+
+For machine time charged over the same window, call
+[Get a compute charge series](/docs/api-reference/billing/compute/getComputeChargeSeries)
+with the same `from`, `to`, `granularity` and `timezone`. Its buckets use the
+same keys, so the two can be joined on `key`.
 
 Both take a `timezone`, so days and months line up with the calendar of whoever
 is reading them. Without one they use UTC.

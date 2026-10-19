@@ -1,0 +1,229 @@
+---
+title: Deployments and logs
+description: What a deploy does to a web service, which commit runs, rolling back, following a deploy, and reading your app's logs.
+---
+
+This page covers shipping code to a [web service](/docs/cloud/web-services) and
+reading what it printed. Every call goes to the HumanikOS API with a service
+account key, or a console login, holding `cloud:read` (to read) or
+`cloud:manage` (to deploy) at `console`.
+
+## First deploy and redeploy
+
+| | [Deploy a service](/docs/api-reference/cloud/deployments/deployCloudService) | [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService) |
+| --- | --- | --- |
+| Use it | Once, for a service that has never run | Every time after that |
+| Commit | The tip of `gitBranch` | The tip of `gitBranch`, or the exact `gitSha` you send |
+| Settings in the body | No | Yes: `userConfig` is saved first |
+| If machines already exist | Refused with `409`. Use redeploy | Stopped first, then replaced |
+
+[Create and deploy](/docs/api-reference/cloud/services/createAndDeployCloudService)
+does the first two steps, creating the service and its first deploy, in one call.
+
+**Both are refused with `402` while machine starts are paused** for an unpaid
+balance. A redeploy checks this before it stops anything, so a refused redeploy
+leaves the running machines alone, although the new commit and settings are
+still saved (see below). See [Pricing](/docs/cloud/pricing).
+
+## What a deploy does
+
+1. Looks up the commit to run and saves it on the service, along with any
+   settings sent in the body.
+2. Stops the service's running machines. The service is down from here.
+3. Starts a new machine, which clones that commit, installs, builds and starts
+   your app.
+4. Waits for the machine to answer. The deploy succeeds once the machine has
+   been healthy for a few seconds in a row.
+
+A deploy moves through these statuses:
+
+| `status` | Console label | Meaning |
+| --- | --- | --- |
+| `pending` | Waiting | Recorded, not started |
+| `deploying` | Deploying | Machines are starting |
+| `deployed` | Deployed | A new machine is serving |
+| `failed` | Failed | It did not become ready, or could not start. `errorMessage` says why |
+
+**A deploy that does not become ready within 20 minutes fails**, and its new
+machines are stopped.
+
+**A failed redeploy is not undone.** Step 1 happens before the billing check and
+before any machine is stopped. After a redeploy that fails, or that is refused
+with `402`, the service keeps the new
+commit and settings, and the next machine to start, for example when the service
+next wakes, runs them. To go back, redeploy the commit you want with `gitSha`.
+
+## Which commit runs
+
+A deploy looks up the commit at the tip of the branch once, and every machine
+started afterwards checks out that commit, including a machine started hours
+later because a request woke the service.
+
+**That needs the commit to be found.** The lookup needs a repository on
+`github.com` and a GitHub connection that can read it. If the lookup fails (no
+connection, a repository hosted somewhere else, a branch name that does not exist,
+or GitHub not answering), the deploy still goes ahead and the commit is not
+changed:
+
+| Before this deploy | Machines started afterwards run |
+| --- | --- |
+| A commit was saved by an earlier deploy | That earlier commit, not the tip of the branch |
+| No commit was ever saved | The tip of the branch at the moment each machine starts |
+
+The second case means two machines started an hour apart can run different code.
+Each machine's logs record the commit it is actually running, in the `commit`
+field. Check it after a deploy if you are not sure.
+
+### Rolling back
+
+Send the commit you want as `gitSha` to
+[Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService).
+That commit is used as given, with no branch lookup, and stays in place for every
+later machine start until a redeploy **without** `gitSha` looks up the branch tip
+again.
+
+- **There is no rollback control in the console.** Rolling back is through the API.
+- **The deployment history does not record the commit.** Keep your own record of
+  which commit you deployed, or read the `commit` field on a log line from that
+  time.
+- **The commit must still be on GitHub.** Each machine fetches it at start. A
+  commit removed by a force push cannot be fetched, and the machine fails to
+  start.
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/cloud/services/svc_7f3a9c2e/redeploy" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "gitSha": "3f9c2a7e5b1d4c8a9e0f6b2d7a1c5e8f4b3a2d1c" }'
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "success": true,
+  "deploymentId": "dep_8a41c7e2",
+  "routeId": "r7k2m9q4",
+  "message": "Terminated 1 old instance(s) and deployed 1 new",
+  "timestamp": "2026-10-19T14:20:00.000Z"
+}
+```
+
+## Following a deploy
+
+**Read the logs while a deploy runs. Do not wait for its status.** A broken
+install or build stops the machine from ever becoming ready, but the deploy is
+only marked `failed` when the 20 minutes are up. The logs show the failure within
+seconds: the platform writes a line such as
+`[runner] BOOT FAILED at build: build failed (exit 1)` with `level` set to
+`error`.
+
+A machine whose start failed stays up, marked unhealthy, so its logs stay
+readable. It stops later on its idle timeout.
+
+Read the deploy's own record with
+[Get a deployment](/docs/api-reference/cloud/deployments/getCloudDeployment),
+using the `deploymentId` the deploy returned:
+
+#### Request
+
+```bash
+curl "$HOS_API/cloud/services/svc_7f3a9c2e/deployments/dep_8a41c7e2" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Then read that deploy's logs, oldest first:
+
+#### Request
+
+```bash
+curl "$HOS_API/cloud/services/svc_7f3a9c2e/logs?deploymentId=dep_8a41c7e2&order=asc&limit=500" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+[List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments)
+returns the history, newest first, 50 by default.
+
+### When your app keeps crashing
+
+If your app exits, it is restarted, at most 3 times in the life of one machine,
+a couple of seconds apart. Each exit writes `[runner] app exited` to the logs.
+After the third restart the app stays down until the machine is replaced. Fix the
+cause and redeploy.
+
+## Reading logs
+
+[Get service logs](/docs/api-reference/cloud/services/getCloudServiceLogs) reads
+the logs of every machine the service has run. Reading logs never wakes a service,
+and logs are kept after a machine stops.
+
+**What is captured:**
+
+| `source` | What | Has `level` |
+| --- | --- | --- |
+| `application` | Everything your app prints to standard output and standard error, the output of install and build, and the output of [scheduled commands](/docs/cloud/scheduled-requests) | **No** |
+| `runner` | The platform's own lines: the clone, the commit, start failures | Yes |
+
+**Do not filter your app's output by `level`.** Your app's lines have no level,
+so `level=error` returns only the platform's lines and hides your app's own
+errors and stack traces. Use `search` for your app's output instead.
+
+Each of your app's lines also carries `instance_id` (the machine), `commit` (the
+commit that machine runs) and, for a machine started by a deploy,
+`deployment_id`. A machine started because the service woke from sleep has no
+`deployment_id`, so filtering by `deploymentId` leaves its lines out.
+
+### Filters
+
+| Parameter | What it does |
+| --- | --- |
+| `startTime`, `endTime` | ISO 8601 times. **With neither, only the last 15 minutes are returned** |
+| `search` | Lines whose message contains this text. At most 200 characters, with no backslash |
+| `instanceId` | Lines from one machine, from [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances) |
+| `deploymentId` | Lines from machines one deploy started |
+| `level` | `debug`, `info`, `warn` or `error`. Matches the platform's lines only |
+| `order` | `desc` (newest first, the default) or `asc` |
+| `limit` | Lines per call. Default 100, at most 1000 |
+
+Any other parameter is refused with `400`.
+
+**To read further back, move the time window.** Passing back the `cursor` from a
+response does not return the next page. Set `endTime` to the `_time` of the oldest
+line you have, and call again.
+
+#### Request
+
+```bash
+curl "$HOS_API/cloud/services/svc_7f3a9c2e/logs?startTime=2026-10-19T13:00:00Z&endTime=2026-10-19T14:00:00Z&search=TypeError" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "success": true,
+  "logs": [
+    {
+      "_time": "2026-10-19T13:42:07.118Z",
+      "message": "TypeError: Cannot read properties of undefined (reading 'id')",
+      "source": "application",
+      "service_id": "svc_7f3a9c2e",
+      "instance_id": "inst_4c9d2e",
+      "commit": "3f9c2a7e5b1d4c8a9e0f6b2d7a1c5e8f4b3a2d1c"
+    }
+  ],
+  "hasMore": false,
+  "count": 1,
+  "timestamp": "2026-10-19T14:25:00.000Z"
+}
+```
+
+### In the console
+
+The service's Logs tab shows the last 48 hours, 200 lines at a time, and checks
+for new lines every 5 seconds. Pick a range from 15 minutes to 30 days, or your
+own. The Errors and Warnings buttons filter by `level`, so they show only the
+platform's lines, the same as the API.

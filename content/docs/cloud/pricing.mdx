@@ -1,15 +1,17 @@
 ---
 title: Pricing
-description: What every machine on Humanik Cloud costs per hour and per month, exactly which time is billed, and worked examples.
+description: What every machine on Humanik Cloud costs per hour and per month, exactly which time is billed, how it is charged to your credit, and worked examples.
 ---
 
 On Humanik Cloud you pay for one thing: **the time a machine is running**, at the
 hourly price of its size. A machine that is asleep costs nothing to run. There is
 no charge per request, per deploy or per service.
 
-This is separate from model use. Machine time is not drawn from your
-[credit balance](/docs/spend/credit), and no [budget](/docs/spend/budgets) counts
-it. See [Billing and budgets](/docs/spend) for how the two fit together.
+Machine time is paid from the same prepaid
+[credit balance](/docs/spend/credit) as model use. It is taken once an hour, as
+described in [How you are charged](#how-you-are-charged). No
+[budget](/docs/spend/budgets) counts it. See [Billing and budgets](/docs/spend)
+for how the two fit together.
 
 ## The rule
 
@@ -116,6 +118,43 @@ is already running. The new price applies to the next machine started.
 The same is true of a change to our prices: a machine already running keeps the
 price it started with.
 
+## How you are charged
+
+Machine time is measured for each machine on its own, and taken from your credit
+once an hour.
+
+1. **Each hour is charged about 2 minutes after it ends.** All the machine time
+   your account used in that hour is taken from your credit balance as one
+   hourly charge, with one line for each service that ran.
+2. **Automatic top ups run next.** If the charge left the balance below your
+   threshold, [automatic top ups](/docs/spend/credit#automatic-top-ups) add
+   credit, with the same settings as for model use.
+3. **If the balance is still below zero, machines stop.** Every running machine
+   on the account is stopped, and new machine starts are refused until the
+   balance is $1 or more.
+
+An hourly charge is always taken in full, even when it is more than the balance,
+so the balance can go below zero.
+
+### When machine starts are paused
+
+While starts are paused, a request to a service that is asleep is refused with
+`402`:
+
+```json
+{
+  "success": false,
+  "error": "Machine starts are paused for this account: its credit balance went below zero. Machines start again once the balance is $1 or more. Add credit and the service starts on the next request."
+}
+```
+
+Adding credit is enough to end the pause. The next start checks the balance and
+goes ahead once it is $1 or more. Nothing else needs to be switched back on.
+
+**Model work shares the balance.** An hourly charge for machine time can also
+take the balance low enough that model work is refused for low credit. See
+[When the balance runs low](/docs/spend/credit#when-the-balance-runs-low).
+
 ## Worked examples
 
 **An office that works in bursts.** A `pro` office ($0.25 per hour) with a
@@ -140,23 +179,40 @@ and 365 hours at $0.1260: about $70.37.
 
 ## Seeing what you have spent
 
-The console shows machine time for the current month on the Billing page and on
-each service's Usage tab, broken down by service. Each office is matched to its
-employee, so you can see which employee a cost belongs to.
+The console shows machine time on the Billing page and on each service's Usage
+tab, broken down by service. Each office is matched to its employee, so you can
+see which employee a cost belongs to.
 
-Running time is recorded every five minutes, and once more when the machine
-stops, so the figure for a machine that is running can be up to five minutes
-behind.
+There are two kinds of figure, and only one of them is money:
 
-With a key, use
-[Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary).
-It needs `billing:read` at `console`.
+| Figure | What it is | Up to date to |
+| --- | --- | --- |
+| **Charged** | What was taken from your credit, hour by hour | The last hour charged. The newest hour can be up to about an hour behind |
+| **Estimate** | Running time so far, priced at today's price | Running time is recorded every five minutes, and once more when a machine stops |
+
+For what you paid, use the charged figures:
+
+| To see | Call |
+| --- | --- |
+| Each service's charge for each hour | [List compute charges](/docs/api-reference/billing/compute/listComputeCharges) |
+| Charges over a window, for a chart | [Get a compute charge series](/docs/api-reference/billing/compute/getComputeChargeSeries) |
+| Each hourly charge, with the balance before and after and what top ups did | [List compute bills](/docs/api-reference/billing/compute/listComputeBills) |
+| What each service was charged over a window | [Get compute charges by service](/docs/api-reference/billing/compute/getComputeByService) |
+| One service's charges and its employee's model use, together | [Get usage for one service](/docs/api-reference/billing/compute/getComputeServiceUsage) |
+
+[Get estimated compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
+is the running time estimate. Use it to see what is running now, not to answer
+what you paid.
+
+All of these need `billing:read` at `console`.
 
 ## Keeping the cost down
 
 <Callout type="warn">
-  **Nothing caps machine time.** A budget covers model use only. A service kept
-  awake, or one that keeps receiving work, keeps costing until it stops.
+  **No budget caps machine time.** A budget covers model use only. A service kept
+  awake, or one that keeps receiving work, keeps costing until it stops. The only
+  automatic stop is your credit balance going below zero, which stops every
+  machine on the account.
 </Callout>
 
 Two settings decide what a service costs, and they are the only levers:

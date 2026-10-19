@@ -11,15 +11,18 @@ and how long each stays awake after its last piece of work.
 
 | Service | Machines |
 | --- | --- |
-| Office | One. An office is one employee's machine |
-| Cloud browser | One |
-| Web service | One |
+| Office | At most one. An office is one employee's machine |
+| Cloud browser | At most one |
+| Web service | Normally one. A second can start only when the first cannot be reached |
 
 None of these add machines when they are busy. A busy web service gets more
 capacity from a larger [size](/docs/cloud/sizes), not from more machines.
 
-When a service has no machine running, the next request starts one and waits for
-it. Nothing is refused because the service was asleep.
+When a service has no machine running, the next request starts one and waits
+while it starts: up to 300 seconds for an office, 240 seconds for a web service
+and 180 seconds for a cloud browser. A request still waiting after that gets a
+`503`. If the account's credit balance is below zero, the request gets a `402`
+straight away instead. See [Machine lifecycle](/docs/cloud/lifecycle#starting).
 
 ## Idle timeout
 
@@ -32,8 +35,12 @@ When it runs out, the machine stops, and a stopped machine costs nothing.
 | Cloud browser | 0, 5, 10, 20, 60, 120 | 20 |
 | Web service | 0, 5, 10, 20, 60 | 20 |
 
-**What counts as work** is a request reaching the service. For a web service,
-that is any request to its public address.
+**What counts as work** depends on the service:
+
+- **An office**: an agent run. The timer restarts when a run ends. Other calls to
+  the office, such as reading its status or waking it, do not reset it.
+- **A web service**: a request your app is handling, from when it arrives until
+  the response ends.
 
 A short timeout means fewer hours awake and more waits for a machine to start. A
 long one means the reverse. The right value depends on whether somebody is
@@ -66,7 +73,7 @@ ready. See [Pricing](/docs/cloud/pricing#which-time-is-billed).
 
 | Service | How |
 | --- | --- |
-| Office | [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine). Work in progress finishes first |
+| Office | [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine). Work in progress is ended, not finished. A keep-awake office starts again on a new machine, so set a non-zero idle timeout first |
 | Web service | It stops after its idle timeout. Setting the timeout to 5 minutes is the shortest wait |
 
 To see whether a service has a machine running, use

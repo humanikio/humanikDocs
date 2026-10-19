@@ -33,9 +33,10 @@ deploy or per service.
 | Cloud browser | `standard`, 2 vCPU, 4 GB | $0.25 | $182.50 |
 | Web service | 1 vCPU, 2 GB | $0.0668 | $48.73 |
 
-Machine time is separate from model use: it is not drawn from your credit and no
-budget limits it. [Pricing](/docs/cloud/pricing) has every size, exactly which
-time is billed, and worked examples.
+Machine time is charged every hour from your prepaid credit balance, and no
+budget limits it. See [How you are charged](/docs/cloud/pricing#how-you-are-charged).
+[Pricing](/docs/cloud/pricing) has every size, exactly which time is billed, and
+worked examples.
 
 ## What every service has in common
 
@@ -47,8 +48,9 @@ service does not slow down an idle one.
 
 **It sleeps when it has no work.** A machine that has had no work for its idle
 timeout stops, and a stopped machine costs nothing. The next request starts it
-again and waits for it rather than failing. You can also keep a service awake all
-the time. See [Scaling and sleep](/docs/cloud/scaling).
+again and waits while it starts, up to a limit. You can also keep a service awake
+all the time. See [Scaling and sleep](/docs/cloud/scaling) and
+[Machine lifecycle](/docs/cloud/lifecycle).
 
 **Its size is a setting.** You pick how much CPU and memory each machine gets.
 The size decides the hourly price. See [Machine sizes](/docs/cloud/sizes).
@@ -93,6 +95,11 @@ The console shows when a service has changes that are not applied yet.
     title="Scaling and sleep"
     href="/docs/cloud/scaling"
     description="Instances, idle timeouts, and keeping a service awake."
+  />
+  <Card
+    title="Machine lifecycle"
+    href="/docs/cloud/lifecycle"
+    description="How a machine starts, stops, restarts and recovers, and what a request sees."
   />
   <Card
     title="Humanik Cloud API"

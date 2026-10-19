@@ -16,8 +16,11 @@ info:
 
     The guides explain the platform these endpoints manage:
     [Humanik Cloud](/docs/cloud), [Web services](/docs/cloud/web-services),
+    [Environment variables and secrets](/docs/cloud/environment-and-secrets),
+    [Scheduled requests](/docs/cloud/scheduled-requests),
+    [Deployments and logs](/docs/cloud/deployments-and-logs),
     [Machine sizes](/docs/cloud/sizes), [Scaling and sleep](/docs/cloud/scaling)
-    and [Compute billing](/docs/spend/compute).
+    and [Pricing](/docs/cloud/pricing).
 
     Every fact in this document is resolved from source. Endpoints whose request
     shape has not been verified are absent rather than guessed at.
@@ -47,7 +50,25 @@ tags:
     description: |
       Encrypted values your services read when their machines start. A secret
       is a named group of fields, kept either for the whole account or for one
-      service.
+      service. Each field becomes one environment variable. A web service reads
+      only its own service's secrets; copy an account-wide one to the service
+      to give it to the app. See
+      [Environment variables and secrets](/docs/cloud/environment-and-secrets).
+  - name: Account secrets
+    description: |
+      The account-wide secrets, reached with `secrets:*` permissions instead of
+      `cloud:*`. These are the same values as the account-wide secrets under
+      [Secrets](/docs/api-reference/cloud/secrets/listCloudSecrets) with no
+      `serviceId` and no `environment`, and the tenant vault that office
+      integrations point at. See
+      [Integrations](/docs/integrations#two-vaults-and-the-choice-matters).
+
+      **Every failure here is `400`**, including a secret or field that does not
+      exist and a name already taken. Read `error` for the reason.
+
+      To delete an account-wide secret, use
+      [Delete a secret](/docs/api-reference/cloud/secrets/deleteCloudSecret) with
+      no `serviceId`. No route removes a single field.
   - name: API keys
     description: |
       The key HumanikOS holds for your Humanik Cloud account. Nobody can view
@@ -191,23 +212,41 @@ components:
           description: Web services only. The GitHub repository to clone with your connected GitHub account.
         gitBranch:
           type: string
-          description: Web services only. The branch a deploy takes its commit from. Default `main`. Use this, not `branch`.
+          description: Web services only. The branch a deploy takes its commit from. Default `main`. Use this, not `branch`, an older name that counts only when `gitBranch` is not set.
         rootDirectory:
           type: string
           description: Web services only. The folder inside the repository the app lives in. Default `.`.
         runtime:
           type: string
           enum: [nodejs, python]
-          description: Web services only. Default `nodejs`.
+          description: |
+            Web services only. Default `nodejs`. **It does not change the
+            default commands**, which are Node.js commands, so a Python service
+            must set `installCommand`, `buildCommand` and `startCommand` itself.
+            Every machine has Node.js 22, and Python 3.14 with `uv`.
         installCommand:
           type: string
           description: Web services only. Default `npm ci`, which needs a lockfile.
         buildCommand:
           type: string
-          description: Web services only. Default `npm install && npm run build`.
+          description: Web services only. Default `npm install && npm run build`. An empty string skips the build.
         startCommand:
           type: string
-          description: Web services only. Default `npm start`. The app must listen on the `PORT` environment variable.
+          description: |
+            Web services only. Default `npm start`. The app must listen on the
+            `PORT` environment variable and answer within about 60 seconds of
+            starting. An empty string starts no server: the service runs only
+            [scheduled commands](/docs/cloud/scheduled-requests). Leaving the
+            field out is not the same; the default applies.
+        secretEnvironment:
+          type: string
+          enum: [dev, prod]
+          description: |
+            Web services only. Which group of secrets a machine reads when it
+            starts. Unset, the default, reads the original group and `prod`
+            together, with `prod` winning on a clash. `prod` or `dev` reads only
+            that group. Any other value is treated as unset. See
+            [Environment variables and secrets](/docs/cloud/environment-and-secrets#groups-for-production-and-sandbox).
         networkAccess:
           type: string
           enum: [http, none]
@@ -239,21 +278,49 @@ components:
 
     LogEntry:
       type: object
-      description: One log line. Fields beyond these depend on what the service writes.
+      description: |
+        One log line. Which fields appear depends on the service type and on
+        who wrote the line. For a web service, `source` says which.
       properties:
         _time:
           type: string
           format: date-time
+        source:
+          type: string
+          enum: [application, runner]
+          description: |
+            Web services. `application` for what your app printed, including
+            install, build and scheduled command output. `runner` for the
+            platform's own lines.
         level:
           type: string
           enum: [debug, info, warn, error]
+          description: |
+            **Absent on a web service's `application` lines.** Only the
+            platform's lines carry a level.
         message:
           type: string
         instance_id:
           type: string
           description: The machine that wrote it. From [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances).
-        service_name:
+        service_id:
           type: string
+        deployment_id:
+          type: string
+          description: |
+            The deploy that started the machine. Absent on a machine started
+            because the service woke from sleep.
+        commit:
+          type: string
+          description: The commit the machine is running.
+        job_run_id:
+          type: string
+          description: On output from a scheduled command. The run's ID.
+        cron_id:
+          type: string
+          description: |
+            On output from a scheduled command. Look it up with
+            [Get a cron](/docs/api-reference/cloud/crons/getCloudCron).
       additionalProperties: true
 
     Error:
@@ -276,7 +343,7 @@ components:
         | --- | --- | --- |
         | `at` | `at` | Once, at that time. A time in the past fires at the next check |
         | `every` | `everyMs`, `anchorMs` | Repeatedly, every `everyMs` milliseconds |
-        | `cron` | `expr`, `tz` | On a standard five field cron expression |
+        | `cron` | `expr`, `tz` | On a cron expression of five fields, or six with seconds first |
         | `workflowWait` | `resumeAtMs` | Once. Written by workflow wait steps; not for direct use |
 
         **The schedule is checked when you save**, and a schedule that is not
@@ -328,8 +395,8 @@ components:
             tz:
               type: string
               description: |
-                An IANA time zone such as `America/Toronto`. Without it the
-                expression is read in UTC.
+                An IANA time zone such as `America/Toronto`. Always set it; do
+                not rely on the default.
           required: [kind, expr]
         - type: object
           title: workflowWait
@@ -641,12 +708,10 @@ components:
           type: object
           description: Firestore timestamp (`_seconds`, `_nanoseconds`).
         lastUsedAt:
-          type: object
-          nullable: true
+          type: [object, 'null']
           description: Firestore timestamp, or `null` if never used.
         expiresAt:
-          type: object
-          nullable: true
+          type: [object, 'null']
           description: |
             Set on a key that was rotated out: the time it stops working.
             `null` for a key in use.
@@ -684,6 +749,70 @@ components:
               value:
                 success: false
                 error: Failed to reach Humanik Cloud
+    ServiceIdInvalid:
+      description: '`serviceId` is not a valid service ID: only letters, digits, `_` and `-`, up to 128 characters.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalid:
+              value:
+                success: false
+                error: Invalid serviceId
+
+    ServiceNotFound:
+      description: |
+        No service with this ID exists in your account. A service in another
+        account reads the same way.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notFound:
+              value:
+                success: false
+                error: Service not found
+
+    AccountSecretsForbidden:
+      description: The caller lacks the `secrets:*` permission this operation needs at console scope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    AccountSecretFailed:
+      description: |
+        Any failure: a required field is missing, the secret or field does not
+        exist, the name is already taken, the value is empty, or Humanik Cloud
+        could not be reached. Read `error`.
+
+        The names `ANTHROPIC_BYOK` and `OPENROUTER_BYOK` hold
+        [your own model keys](/docs/models/your-own-key) and cannot be created,
+        changed or deleted here. Those calls also carry `code: BYOK_MANAGED`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing:
+              value:
+                success: false
+                error: secretName is required
+
+    ServerError:
+      description: Something failed on the HumanikOS side.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            internal:
+              value:
+                success: false
+                error: Internal server error
+
     CronNotFound:
       description: |
         No cron with this ID exists in your account. A cron in another account
@@ -908,6 +1037,8 @@ paths:
       responses:
         '200':
           description: The service.
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -943,9 +1074,10 @@ paths:
       responses:
         '200':
           description: Updated.
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          description: Nothing to change, or a `userConfig` value is not allowed.
+          description: Nothing to change, a `userConfig` value is not allowed, or `serviceId` is not a valid service ID.
           content:
             application/json:
               schema:
@@ -978,6 +1110,8 @@ paths:
       responses:
         '200':
           description: Deleted.
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1032,9 +1166,10 @@ paths:
       responses:
         '200':
           description: Updated.
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          description: '`userConfig` is missing.'
+          description: '`userConfig` is missing, a value is not allowed, or `serviceId` is not a valid service ID.'
           content:
             application/json:
               schema:
@@ -1072,6 +1207,8 @@ paths:
       responses:
         '200':
           description: Running instances, if any.
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1089,14 +1226,19 @@ paths:
         Log lines from every machine of this service, newest first. Requires
         `cloud:read`.
 
-        **Pass `serviceType`.** Logs for each kind of service are kept apart, and
-        this parameter picks which to read. Without it the call reads the wrong
-        place and returns no lines, with a `200`. Get the type from
-        [Get a service](/docs/api-reference/cloud/services/getCloudService).
+        **With no time range, it returns only the last 15 minutes.** Narrow to
+        one machine with `instanceId`, or to one deploy with `deploymentId`.
+        Reading logs never wakes a service. Any parameter not listed here is
+        refused with `400`.
 
-        With no time range, it returns the last 15 minutes. Narrow to one machine
-        with `instanceId`, or to one deploy with `deploymentId`. Reading logs never
-        wakes a service.
+        **On a web service, `level` hides your app's output.** Lines your app
+        prints carry no level, so `level=error` returns only the platform's
+        lines. Use `search` instead. A machine started because the service woke
+        from sleep has no deployment, so `deploymentId` leaves its lines out.
+
+        **To read further back, move `endTime`.** Passing back `cursor` does not
+        return the next page. Set `endTime` to the `_time` of the oldest line you
+        have. See [Deployments and logs](/docs/cloud/deployments-and-logs#reading-logs).
 
         A service that has never run returns `success: true` with no lines and a
         note in `error` that no logs exist yet.
@@ -1104,7 +1246,8 @@ paths:
         - name: serviceType
           in: query
           required: false
-          description: The service's type, such as `webservice` or `cloudClaw`. Set it; see above.
+          deprecated: true
+          description: Ignored. The type is taken from the service itself.
           schema:
             type: string
         - name: instanceId
@@ -1119,7 +1262,7 @@ paths:
             type: string
         - name: startTime
           in: query
-          description: ISO 8601 time. Default 15 minutes ago.
+          description: ISO 8601 time. Default 15 minutes ago, when `endTime` is also absent.
           schema:
             type: string
             format: date-time
@@ -1131,11 +1274,12 @@ paths:
             format: date-time
         - name: search
           in: query
-          description: Only lines containing this text.
+          description: Only lines whose message contains this text. At most 200 characters, with no backslash or control character.
           schema:
             type: string
         - name: level
           in: query
+          description: Only lines at this level. A web service's own output has no level and never matches.
           schema:
             type: string
             enum: [debug, info, warn, error]
@@ -1148,7 +1292,7 @@ paths:
             maximum: 1000
         - name: cursor
           in: query
-          description: The `cursor` from the previous page, to read the next one.
+          description: Accepted, but does not return a further page. Move `endTime` instead.
           schema:
             type: string
         - name: order
@@ -1173,7 +1317,7 @@ paths:
                       $ref: '#/components/schemas/LogEntry'
                   cursor:
                     type: string
-                    description: Pass back as `cursor` to read the next page. Absent on the last page.
+                    description: Returned, but passing it back does not return a further page.
                   hasMore:
                     type: boolean
                   count:
@@ -1185,19 +1329,29 @@ paths:
                 success: true
                 logs:
                   - _time: '2026-10-13T14:02:11.482Z'
-                    level: info
                     message: Server listening on 8080
+                    source: application
+                    service_id: svc_7f3a9c2e
                     instance_id: inst_4c9d2e
-                    service_name: orders-api
+                    commit: 3f9c2a7e5b1d4c8a9e0f6b2d7a1c5e8f4b3a2d1c
                 hasMore: false
                 count: 1
                 timestamp: '2026-10-13T14:05:00.000Z'
         '400':
-          description: '`level`, `order` or `limit` has a value that is not allowed.'
+          description: |
+            A filter has a value that is not allowed, a parameter not listed
+            here was sent, or `serviceId` is not a valid service ID. The
+            `error` names the parameter.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              examples:
+                badFilter:
+                  value:
+                    success: false
+                    error: 'Invalid query parameter: level'
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1217,12 +1371,22 @@ paths:
         [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService).
 
         Takes the commit at the tip of the service's `gitBranch`, and every
-        machine started for this deploy runs that commit. The first deploy also
-        creates the public address. Your account must have GitHub connected. See
-        [How a deploy works](/docs/cloud/web-services#how-a-deploy-works).
+        machine started afterwards runs that commit, including after sleep. The
+        first deploy also creates the public address. Your account must have
+        GitHub connected. This call takes no `gitSha`.
+
+        If the commit cannot be looked up (a repository not on `github.com`, no
+        GitHub connection, or a branch that does not exist), the deploy still
+        goes ahead, and each machine clones the tip of the branch when it
+        starts. See
+        [Which commit runs](/docs/cloud/deployments-and-logs#which-commit-runs).
+
+        **A broken install or build is marked `failed` only after 20 minutes.**
+        Read the [logs](/docs/api-reference/cloud/services/getCloudServiceLogs)
+        while the deploy runs.
 
         Billing starts when the machine starts. See
-        [Compute billing](/docs/spend/compute).
+        [Pricing](/docs/cloud/pricing).
       responses:
         '200':
           description: Deployment started.
@@ -1239,6 +1403,20 @@ paths:
                           type: string
                       instanceCount:
                         type: integer
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
+        '402':
+          description: Machine starts are paused for an unpaid balance. Nothing was started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The service already has machines. Use [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1257,12 +1435,22 @@ paths:
 
         **The service is down while this runs.** The running machines are
         stopped first, then new ones start. A deploy that does not become ready
-        within 20 minutes fails and its machines are stopped.
+        within 20 minutes fails and its machines are stopped. A broken install
+        or build is also marked `failed` only when the 20 minutes are up, so
+        read the [logs](/docs/api-reference/cloud/services/getCloudServiceLogs)
+        while it runs.
 
         **Which commit.** Without `gitSha`, the commit at the tip of `gitBranch`.
         With `gitSha`, that exact commit, which is how you roll back to a known
-        good version. Every machine started afterwards, including after sleep,
-        runs the commit this deploy chose.
+        good version; there is no rollback control in the console. Every
+        machine started afterwards, including after sleep, runs the commit this
+        deploy chose, until a redeploy without `gitSha`. If the tip cannot be
+        looked up, the commit from the last deploy that found one stays in
+        place. See [Which commit runs](/docs/cloud/deployments-and-logs#which-commit-runs).
+
+        **The commit and settings are saved before any machine is stopped.** A
+        redeploy that then fails, or is refused with `402`, is not undone: the
+        next machine to start runs the new commit and settings.
 
         Also use it when the code has not changed but secrets or settings have,
         since both are read when a machine starts. `userConfig` in the body is
@@ -1279,8 +1467,11 @@ paths:
                   type: string
                   description: |
                     A full commit SHA from the service's repository. From the
-                    repository, or from an earlier deploy in
-                    [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments).
+                    repository, or from the `commit` field of a
+                    [log line](/docs/api-reference/cloud/services/getCloudServiceLogs)
+                    written while that commit ran. The deployment history does
+                    not record it. The commit must still be on GitHub: each
+                    machine fetches it when it starts.
                 userConfig:
                   $ref: '#/components/schemas/UserConfig'
             example:
@@ -1292,6 +1483,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeployResult'
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
+        '402':
+          description: |
+            Machine starts are paused for an unpaid balance. No machine was
+            stopped, but the commit and any `userConfig` were already saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1305,10 +1506,20 @@ paths:
       tags: [Deployments]
       summary: List deployments
       operationId: listCloudDeployments
-      description: The deployment history for a service. Requires `cloud:read`.
+      description: |
+        The deployment history for a service, newest first, 50 by default.
+        Requires `cloud:read`.
+
+        Each deployment has a `deploymentId`, a `status` (`pending`,
+        `deploying`, `deployed` or `failed`), `instanceIds`, `errorMessage`,
+        `createdAt` and `updatedAt`. **It does not record the commit.** To see
+        which commit a machine ran, read the `commit` field on its
+        [log lines](/docs/api-reference/cloud/services/getCloudServiceLogs).
       responses:
         '200':
           description: Deployments.
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1328,10 +1539,18 @@ paths:
       tags: [Deployments]
       summary: Get a deployment
       operationId: getCloudDeployment
-      description: Requires `cloud:read`.
+      description: |
+        One deployment and its `status`. Requires `cloud:read`.
+
+        A broken install or build stays `deploying` until the 20 minute limit,
+        then becomes `failed`. Read the
+        [logs](/docs/api-reference/cloud/services/getCloudServiceLogs) with this
+        `deploymentId` to see the failure sooner.
       responses:
         '200':
           description: The deployment.
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -2733,9 +2952,8 @@ paths:
         `console`.
 
         Returns names and IDs only, never spend. `office` is `null` for a
-        service that is not an office's (a web service or a cloud browser), and
-        also for a service ID that does not exist: this call does not check that
-        the service is real.
+        service that is not an office's, such as a web service or a cloud
+        browser. A service that is not in your account is `404`.
       responses:
         '200':
           description: The office, or `null`.
@@ -2765,9 +2983,13 @@ paths:
                   value:
                     success: true
                     office: null
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
         '500':
           description: The lookup failed.
           content:
@@ -2798,9 +3020,7 @@ paths:
         output line carries `job_run_id` and `cron_id`.
 
         Meant for web services. What a different service type returns here has
-        not been verified. A service ID that is not in your account returns
-        either an error or `running: false` with an empty list, so an empty
-        answer does not prove the service is yours.
+        not been verified. A service that is not in your account is `404`.
       responses:
         '200':
           description: The kept runs, or an empty list when no machine is running.
@@ -2840,6 +3060,8 @@ paths:
                     success: true
                     running: false
                     jobs: []
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '404': { $ref: '#/components/responses/ServiceNotFound' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -2884,6 +3106,18 @@ paths:
                       $ref: '#/components/schemas/CloudApiKey'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+        '502':
+          description: Humanik Cloud could not be reached, or your account is not linked to it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notLinked:
+                  value:
+                    success: false
+                    error: Humanik Cloud account is not linked for this tenant
 
   /cloud/api-keys/rotate:
     post:
@@ -2915,12 +3149,10 @@ paths:
                     type: string
                     description: The new key's access key ID.
                   previousKeyId:
-                    type: string
-                    nullable: true
+                    type: [string, 'null']
                   previousExpiresAt:
-                    type: string
+                    type: [string, 'null']
                     format: date-time
-                    nullable: true
                     description: When the old key stops working.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2974,3 +3206,412 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  # ───────────────────────── Account secrets ─────────────────────────
+
+  /tenant/secrets:
+    get:
+      tags: [Account secrets]
+      summary: List account secrets
+      operationId: listAccountSecrets
+      description: |
+        Every account-wide secret, with its field names and no values. Requires
+        `secrets:list` or `secrets:read` at `console`.
+
+        Lists the original group only. Account-wide secrets saved under `dev`
+        or `prod` are listed by
+        [List secrets](/docs/api-reference/cloud/secrets/listCloudSecrets) with
+        `environment`. Unlike that route, `tenantId` here is your HumanikOS
+        tenant ID.
+      responses:
+        '200':
+          description: The account-wide secrets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      tenantId:
+                        type: string
+                        description: Your HumanikOS tenant ID.
+                      secrets:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SecretSummary'
+                      count:
+                        type: integer
+        '400': { $ref: '#/components/responses/AccountSecretFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/AccountSecretsForbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [Account secrets]
+      summary: Create an account secret
+      operationId: createAccountSecret
+      description: |
+        Creates an empty account-wide secret. Requires `secrets:write` at
+        `console`. Add values with
+        [Add an account secret field](/docs/api-reference/cloud/account-secrets/addAccountSecretField).
+
+        A web service does not read account-wide secrets. Copy one to a service
+        with [Copy an account-wide secret to a service](/docs/api-reference/cloud/secrets/transferCloudSecret).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                  description: |
+                    Your name for the secret. Used in the path of every other
+                    call. Cannot contain `/`, `?`, `#`, `%` or `\`.
+              required: [secretName]
+            example:
+              secretName: sendgrid
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      tenantId:
+                        type: string
+                        description: Your account's ID on Humanik Cloud. Not your HumanikOS tenant ID.
+                      serviceId:
+                        type: 'null'
+                      created:
+                        type: boolean
+                        const: true
+                      timestamp:
+                        type: string
+                        format: date-time
+        '400': { $ref: '#/components/responses/AccountSecretFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/AccountSecretsForbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tenant/secrets/{secretName}/fields:
+    parameters:
+      - name: secretName
+        in: path
+        required: true
+        description: |
+          The account-wide secret. From
+          [List account secrets](/docs/api-reference/cloud/account-secrets/listAccountSecrets).
+        schema:
+          type: string
+    get:
+      tags: [Account secrets]
+      summary: List account secret fields
+      operationId: listAccountSecretFields
+      description: |
+        The field names of one account-wide secret, without values. Requires
+        `secrets:list` or `secrets:read` at `console`.
+      responses:
+        '200':
+          description: The field names, as a list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: array
+                    items:
+                      type: string
+              example:
+                success: true
+                data: [SENDGRID_API_KEY, SENDGRID_FROM]
+        '400': { $ref: '#/components/responses/AccountSecretFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/AccountSecretsForbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [Account secrets]
+      summary: Add an account secret field
+      operationId: addAccountSecretField
+      description: |
+        Adds one encrypted field to an existing account-wide secret. Requires
+        `secrets:write` at `console`.
+
+        Create the secret first with
+        [Create an account secret](/docs/api-reference/cloud/account-secrets/createAccountSecret).
+        A field that already exists fails; change it with
+        [Update an account secret field](/docs/api-reference/cloud/account-secrets/updateAccountSecretField).
+        An empty `fieldValue` is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldName:
+                  type: string
+                  description: Your name for the field.
+                fieldValue:
+                  type: string
+                  minLength: 1
+                  description: The value to encrypt and store.
+              required: [fieldName, fieldValue]
+            example:
+              fieldName: SENDGRID_API_KEY
+              fieldValue: SG.k7Qb2xT9
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      fieldName:
+                        type: string
+                      created:
+                        type: boolean
+                        const: true
+                      dekVersion:
+                        type: integer
+                        description: A counter that starts at 1 and goes up by one on every update of this field.
+                      timestamp:
+                        type: string
+                        format: date-time
+        '400': { $ref: '#/components/responses/AccountSecretFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/AccountSecretsForbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tenant/secrets/{secretName}/fields/{fieldName}:
+    parameters:
+      - name: secretName
+        in: path
+        required: true
+        description: |
+          The account-wide secret. From
+          [List account secrets](/docs/api-reference/cloud/account-secrets/listAccountSecrets).
+        schema:
+          type: string
+      - name: fieldName
+        in: path
+        required: true
+        description: |
+          One field of the secret. From
+          [List account secret fields](/docs/api-reference/cloud/account-secrets/listAccountSecretFields).
+        schema:
+          type: string
+    get:
+      tags: [Account secrets]
+      summary: Read an account secret field
+      operationId: readAccountSecretField
+      description: |
+        **Returns the field's decrypted value in plain text.** Requires
+        `secrets:read` at `console`. `secrets:list` is enough to see names, but
+        not to read a value.
+      responses:
+        '200':
+          description: The decrypted value.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      fieldName:
+                        type: string
+                      value:
+                        type: string
+                        description: The plain text value.
+                      secretName:
+                        type: string
+              example:
+                success: true
+                data:
+                  fieldName: SENDGRID_API_KEY
+                  value: SG.k7Qb2xT9
+                  secretName: sendgrid
+        '400': { $ref: '#/components/responses/AccountSecretFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/AccountSecretsForbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      tags: [Account secrets]
+      summary: Update an account secret field
+      operationId: updateAccountSecretField
+      description: |
+        Replaces one field's value. Requires `secrets:write` at `console`. The
+        field must already exist. An empty `fieldValue` is refused.
+
+        **Offices that use it are told to restart.** Every office whose
+        integrations point at this secret is marked as needing a restart, and
+        the console shows that prompt on the office. A running office keeps the
+        old value until it restarts. Web services do not read account-wide
+        secrets, so a copy on a service is not changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fieldValue:
+                  type: string
+                  minLength: 1
+              required: [fieldValue]
+            example:
+              fieldValue: SG.p2Wd8yR4
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      secretName:
+                        type: string
+                      fieldName:
+                        type: string
+                      updated:
+                        type: boolean
+                        const: true
+                      dekVersion:
+                        type: integer
+                        description: Goes up by one on every update of this field.
+                      timestamp:
+                        type: string
+                        format: date-time
+        '400': { $ref: '#/components/responses/AccountSecretFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/AccountSecretsForbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tenant/secrets/{secretName}/consumers:
+    parameters:
+      - name: secretName
+        in: path
+        required: true
+        description: |
+          The account-wide secret. From
+          [List account secrets](/docs/api-reference/cloud/account-secrets/listAccountSecrets).
+        schema:
+          type: string
+    get:
+      tags: [Account secrets]
+      summary: List what uses an account secret
+      operationId: listAccountSecretConsumers
+      description: |
+        Every integration template and office integration that points at this
+        account-wide secret. Requires `secrets:list` or `secrets:read` at
+        `console`. Check it before you change or delete a secret.
+
+        The name is not checked against your secrets: a name nothing points at,
+        or that does not exist, returns two empty lists.
+      responses:
+        '200':
+          description: What points at the secret.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    properties:
+                      templates:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            globalIntegrationId:
+                              type: string
+                              description: |
+                                The integration template. Look it up with
+                                [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).
+                            name:
+                              type: string
+                            platform:
+                              type: string
+                      offices:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            workspaceId:
+                              type: string
+                              description: |
+                                The office's workspace. Use it with
+                                [Get a workspace](/docs/api-reference/workspaces/workspaces/getWorkspace).
+                            officeId:
+                              type: string
+                              description: |
+                                The office. Use it with
+                                [Get an office](/docs/api-reference/offices/offices/getOffice).
+                            integrationId:
+                              type: string
+                              description: The office's integration that points at the secret.
+                            integrationName:
+                              type: string
+                            integrationPlatform:
+                              type: string
+              example:
+                success: true
+                data:
+                  templates:
+                    - globalIntegrationId: gi_3c81f0
+                      name: SendGrid
+                      platform: sendgrid
+                  offices:
+                    - workspaceId: ws_91c0d7
+                      officeId: off_2b8e41
+                      integrationId: int_7d20a5
+                      integrationName: SendGrid
+                      integrationPlatform: sendgrid
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/AccountSecretsForbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }

@@ -1,4 +1,4 @@
 {
   "title": "Humanik Cloud",
-  "pages": ["index", "pricing", "offices", "web-services", "sizes", "scaling"]
+  "pages": ["index", "pricing", "offices", "web-services", "environment-and-secrets", "scheduled-requests", "deployments-and-logs", "sizes", "scaling", "lifecycle"]
 }

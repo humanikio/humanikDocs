@@ -59,8 +59,9 @@ week is not an event the employee experiences.
 
 ### The first request after sleeping waits
 
-Waking is not instant. A request arriving at a sleeping office does not fail, it
-waits while the machine starts, and then it is served.
+Waking is not instant. A request arriving at a sleeping office waits while the
+machine starts, and then it is served. The wait is limited to 300 seconds. See
+[Machine lifecycle](/docs/cloud/lifecycle#starting).
 
 How long depends on the size of the machine and what it has to load. For
 interactive work this is the one thing worth designing around: if somebody is
@@ -77,10 +78,12 @@ If that matters, keep the office awake rather than trying to make waking faster.
 
 ## The two levers on cost
 
-An office is billed for the time it is awake, at the hourly price of its size, and
-unlike model spend it **cannot be capped**. A [spending limit](/docs/spend) does
-not reach it. [Pricing](/docs/cloud/pricing) has the prices and the exact
-rules for when billing starts and stops.
+An office is billed for the time it is awake, at the hourly price of its size,
+charged every hour from your credit balance. See
+[How you are charged](/docs/cloud/pricing#how-you-are-charged). Unlike model
+spend it **cannot be capped**: a [spending limit](/docs/spend) does not reach
+it. [Pricing](/docs/cloud/pricing) has the prices and the exact rules for when
+billing starts and stops.
 
 So the controls are structural rather than a ceiling:
 
@@ -95,11 +98,16 @@ handles inbound calls during business hours and one that runs a nightly
 reconciliation want opposite answers, and they can have them.
 
 An office left running with a long timeout is the usual explanation for a
-compute bill nobody expected. Nothing will stop it, and nothing will warn you.
+compute bill nobody expected. No spending limit stops it. Only a credit balance
+below zero does, and that stops every machine on the account. See
+[Machine lifecycle](/docs/cloud/lifecycle#when-the-credit-balance-goes-below-zero).
 
 You can also stop one directly with
-[Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine),
-which is graceful: work in progress finishes rather than being cut off.
+[Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine).
+It does not wait for work in progress: an agent run that is still going is
+ended. An office with an idle timeout of `0` is started again on a new machine
+straight after a shut down, so set a non-zero idle timeout first if you want it
+to stay off.
 
 ## Configuration is read at startup
 
@@ -114,12 +122,14 @@ that machine lives.
 <Callout type="warn">
   **Restarting means replacing the machine, not rebooting it.**
   [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine)
-  builds a fresh machine with the current settings, brings it up, checks it, and
-  only then stops the old one. Rebooting the existing machine would keep what it
-  was built with, which is exactly what you are trying to change.
+  stops the old machine, then starts a fresh one with the current settings.
+  Rebooting the existing machine would keep what it was built with, which is
+  exactly what you are trying to change.
 </Callout>
 
-There is no gap in service while that happens.
+There is a gap in service while the new machine starts, usually a few minutes.
+Work that arrives during the gap waits for the new machine. See
+[Machine lifecycle](/docs/cloud/lifecycle#restarts-and-deploys).
 
 You do not have to remember which changes are waiting. When something has been
 changed and not yet applied, the console says so and names the specific changes,
