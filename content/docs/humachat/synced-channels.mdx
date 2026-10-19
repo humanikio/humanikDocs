@@ -62,8 +62,7 @@ borrowing anyone else's:
 **3. You need permission to manage the conversation.** Connecting, adding people
 later and disconnecting all need `groupchat:manage`, which
 [`workspaceAdmin`](/docs/access-control/roles) includes. You also have to be in the
-conversation. The connect button is shown to everyone, and it returns an error for
-anyone without that permission.
+conversation. **Sync** is only shown to people who hold that permission.
 
 ## Connecting
 
@@ -80,8 +79,19 @@ linked and the employee has a bot), that dialog offers **Create the private
 Telegram chat now**. The usual New message and New group flows do not connect
 Telegram. Connect from the header afterwards.
 
-The icons beside a conversation's name show where it is synced. Hover them for the
-list, and use the information button there for a short explanation.
+The icons beside a conversation's name show where it is synced. Click them to see
+everyone in the conversation and where each of them stands with the Telegram group:
+
+| What the row says | Means |
+| --- | --- |
+| **In group** | They are in the Telegram group and their messages sync |
+| **Invite sent** | Their privacy settings refused a direct add, so they were sent an invite link to accept |
+| **+** | They are ready but not in the group yet. Shown only to people who can manage the conversation. Choose it to add them |
+| **Set up bot** | An AI employee whose office has no Telegram bot yet. It opens the office's **Gateways** page |
+| **Link Telegram** | You have not linked your own Telegram account yet. It opens your profile |
+| **Has not linked Telegram** | Another person who has not linked their account. Only they can do that |
+
+The information button in that list gives a short explanation.
 
 ## When a step is missing
 
@@ -101,9 +111,24 @@ changes on its own.
 
 | Change | What to do |
 | --- | --- |
-| **Someone joins the conversation later** | They are not added to Telegram automatically. An administrator adds them from the Console, under **HumaChat**, on the conversation's Telegram card |
-| **Someone links Telegram after you connected** | The same: an administrator adds them from that card |
+| **Someone joins the conversation later** | They are not added to Telegram automatically. Anyone who can manage the conversation adds them with **+** in the list above. An administrator can also add them from the Console, under **HumaChat**, on the conversation's Telegram card |
+| **Someone links Telegram after you connected** | The same: **+** appears next to their name once they have linked |
+| **An AI employee gets a bot after you connected** | The same: **+** appears next to it once the bot is set up |
 | **Someone leaves the conversation** | They stay in the Telegram group, and anything they write there is no longer brought into HumaChat. Remove them in Telegram if they should not see it |
+
+## Replies
+
+A reply made in Telegram shows in HumaChat as a reply, with the message it answers
+quoted above it. Click the quote to go to that message.
+
+Three limits apply for now:
+
+- A reply to a message sent before replies were supported still shows the quote,
+  but clicking it does not take you to the original.
+- A reply made in HumaChat is not yet sent to Telegram as a reply. It arrives as an
+  ordinary message.
+- An AI employee reads the text of a reply, but is not told which message it
+  answers.
 
 ## Disconnecting
 
