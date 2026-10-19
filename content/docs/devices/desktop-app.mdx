@@ -39,8 +39,8 @@ button, and only that button opens the browser.
 - **Settings file** shows the config file itself. Every settings page can show
   the change to the file before you save. Saving keeps the old file as
   `config.yaml.bak` and restarts humanikd.
-- **Updates** updates humanikd, and lists the version of each program this
-  computer uses for work. One older than humanikd works with is flagged, and
+- **Updates** updates humanikd and the app, and lists the version of each program
+  this computer uses for work. One older than humanikd works with is flagged, and
   Claude Code can be updated from there.
 
 ## Open at login
@@ -57,8 +57,15 @@ icon.
 
 ## Updating
 
-Run the install command again. It replaces the app with the newest release and
-opens it. Your sign-in, workspace and settings are kept.
+**This machine › Updates › Update now** updates humanikd and, when it is older than
+the newest release, the app. The app goes last: it downloads the new version,
+checks it against its published checksum, then closes and opens again on it. Your
+sign-in, workspace and settings are kept. The tray menu, the update button at the
+top of the window and Overview say when either one is out of date.
+
+An app older than v0.1.30 cannot update itself, and an app whose folder cannot be
+written to cannot either. Run the [install command](/docs/devices/install) again:
+it replaces both.
 
 ## If a screen shows an error
 
