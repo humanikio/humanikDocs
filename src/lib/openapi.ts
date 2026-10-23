@@ -49,6 +49,7 @@ export const apis = [
   system('workspaces', 'workspaces.yaml'),
   system('namespaces', 'namespaces.yaml'),
   system('offices', 'offices.yaml'),
+  system('humachat', 'humachat.yaml'),
   system('crm', 'crm.yaml'),
   system('browsers', 'browsers.yaml'),
   system('cloud', 'cloud.yaml'),

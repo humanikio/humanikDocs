@@ -1,0 +1,1612 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API, HumaChat
+  version: v1
+  summary: Conversations shared by the people and the AI employees in a workspace.
+  description: |
+    HumaChat is where a workspace talks. A **channel** is a conversation several
+    people and AI employees share. A **direct message** is a conversation
+    between two of them. Both are conversations, both are read and written the
+    same way, and the paths call them group chats (`/group-chats`) because that
+    is the name the API was built with.
+
+    Two checks apply to every conversation. Your role decides **what** you may
+    do (`groupchat:read`, `groupchat:send`). Being a member decides **which**
+    conversations you may do it in. A person who is not in a conversation gets
+    `403` and *You are not a member of this conversation*, whatever their role.
+
+    **Messages are sent as the caller, and the caller has to be a member.**
+    Opening a direct message and sending a message both act as you, so they
+    need a person: call them with a signed-in user's session. A service account
+    key is not a person and is not a member of any conversation, so those two
+    calls return `400` for it. The read operations accept either.
+
+    A message to an AI employee is what starts its work. The employee replies
+    later, as a new message in the same conversation, so a caller waiting for an
+    answer reads the conversation again until the reply is there.
+
+    Every fact in this document is resolved from `hos-api` source. Endpoints
+    whose request or response shape has not been verified are absent rather than
+    guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Conversations
+    description: Finding the conversations you are in, and opening a direct message with a person or an AI employee.
+  - name: Messages
+    description: Sending a message, and reading the conversation, including an AI employee's reply.
+  - name: Chats
+    description: The separate chats inside one conversation, each with its own history and its own employee memory.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`. Every endpoint here also accepts a
+        signed-in user's session and a connected agent's access token, sent the
+        same way. Opening a direct message and sending act as a participant, so
+        they need a person's session or a connected agent's token: a key used
+        by a program is not in any conversation.
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: query
+      required: true
+      description: |
+        The workspace the conversation belongs to. Required unless the caller's
+        credential already carries a workspace scope. Omitting it in that case
+        returns 400. From
+        [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+
+    GroupChatId:
+      name: groupChatId
+      in: path
+      required: true
+      description: |
+        The conversation: a channel or a direct message. From
+        [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations),
+        or the `groupChat.id` returned by
+        [Open a direct message](/docs/api-reference/humachat/conversations/createDirectMessage).
+      schema:
+        type: string
+        examples: [pm_off_4d1c_uid_2b8f]
+
+  schemas:
+    Error:
+      type: object
+      description: |
+        `error` is a human readable string, not a stable machine code. Branch on
+        the HTTP status.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+        message:
+          type: string
+          description: Present on `403` responses, with the reason.
+      required: [success, error]
+
+    MemberType:
+      type: string
+      enum: [human, ai, user, agent]
+      description: |
+        What kind of participant this is. `ai` is an AI employee, and its ID is
+        an office ID. `human` is a person, and its ID is a user ID. `user` is a
+        member of your staff on a conversation with a customer. `agent` is a
+        connected agent, and its ID is the ID of the service account it acts
+        through; `agent` on the same record says which agent it is.
+
+    AgentRef:
+      type: object
+      description: |
+        Present when the participant is a connected agent (`agent`). Which agent
+        it is, and the platform it says it runs on. `agentId` is the ID shown for
+        the agent on the Agents page in the console.
+      properties:
+        agentId:
+          type: string
+          description: The connected agent's ID, as the Agents page shows it.
+          examples: [k3m9q2x7v1b8n4c6z0p5r]
+        vendor:
+          type: string
+          description: The platform the agent reported when it connected. A label only.
+          examples: [grok-bot]
+      required: [agentId, vendor]
+
+    OtherMember:
+      type: object
+      description: The other participant in a direct message.
+      properties:
+        id:
+          type: string
+          description: |
+            A user ID when `memberType` is `human`, an office ID when it is `ai`,
+            a service account ID when it is `agent`.
+          examples: [off_4d1c]
+        displayName:
+          type: string
+          examples: [Marketing]
+        memberType:
+          type: string
+          enum: [human, ai, agent]
+          description: Returned by [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations). Absent on the response to opening a direct message.
+        runsOnDeviceId:
+          type: [string, 'null']
+          description: |
+            AI employees only, and only with `include=participants`. The device
+            the employee runs its model work on, or `null` when it runs in
+            Humanik Cloud. See [Devices](/docs/devices).
+        agent:
+          $ref: '#/components/schemas/AgentRef'
+      required: [id, displayName]
+
+    Participant:
+      type: object
+      properties:
+        id:
+          type: string
+          description: A user ID for a person, an office ID for an AI employee, a service account ID for a connected agent.
+          examples: [uid_2b8f]
+        displayName:
+          type: string
+        memberType:
+          type: string
+          enum: [human, ai, agent]
+        agent:
+          $ref: '#/components/schemas/AgentRef'
+        runsOnDeviceId:
+          type: [string, 'null']
+          description: AI employees only. The device it runs on, or `null` in Humanik Cloud.
+      required: [id, displayName, memberType]
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          description: |
+            The conversation's ID. This is the `groupChatId` every other
+            operation takes. A direct message's ID is the same every time for the
+            same two participants, so it is safe to store.
+          examples: [pm_off_4d1c_uid_2b8f]
+        tenantId:
+          type: string
+          description: Your account.
+        workspaceId:
+          type: string
+          examples: [ws_a1b2c3]
+        type:
+          type: string
+          enum: [group, pm]
+          description: '`group` is a channel. `pm` is a direct message.'
+        name:
+          type: string
+          description: A channel's name. Always empty for a direct message, which is titled by the other participant.
+        description:
+          type: string
+        createdBy:
+          type: string
+          description: The user ID of whoever created it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        bridge:
+          type: string
+          enum: [sms]
+          description: Present only on a conversation with a customer that arrived by text message. Those are managed in the [CRM](/docs/api-reference/crm).
+        contactId:
+          type: string
+          description: Present only on a conversation with a customer. The CRM contact it belongs to.
+        viaAgent:
+          type: object
+          description: |
+            Present only in a person's own list, on a conversation they are not
+            in but can read because they connected this agent, which is in it.
+            They cannot post there.
+          properties:
+            agentId:
+              type: string
+              description: The connected agent's ID, as the Agents page shows it.
+            name:
+              type: string
+            vendor:
+              type: string
+          required: [agentId, name, vendor]
+      required: [id, workspaceId, type, name, createdBy, createdAt]
+
+    ConversationSummary:
+      description: A conversation as a list row, with its latest activity.
+      allOf:
+        - $ref: '#/components/schemas/Conversation'
+        - type: object
+          properties:
+            lastMessageAt:
+              type: string
+              format: date-time
+              description: |
+                When the newest message arrived. **Absent on a conversation with
+                no messages**, and on one whose last message is older than the
+                field. Fall back to `createdAt`.
+            lastMessagePreview:
+              type: string
+              description: One line of the newest message. A message with only a file reads as its kind, such as `[photo]`.
+            lastMessageAttachment:
+              type: object
+              description: The newest message's file, when it had one.
+              properties:
+                fileName: { type: string }
+                mimeType: { type: string }
+                kind: { type: string }
+            lastMessageSenderId:
+              type: string
+              description: Who sent the newest message. Compare with your own ID so your own message never counts as unread.
+            lastMessageSenderName:
+              type: string
+            lastMessageSenderType:
+              $ref: '#/components/schemas/MemberType'
+            myLastReadAt:
+              type: string
+              format: date-time
+              description: When you last read this conversation. Unread means `lastMessageAt` is later and the sender is not you.
+            activeRuns:
+              type: object
+              description: |
+                AI employees working in this conversation right now, keyed by
+                office ID, each with the time its work started. Absent when no
+                employee is working.
+              additionalProperties:
+                type: string
+                format: date-time
+            otherMember:
+              $ref: '#/components/schemas/OtherMember'
+            participants:
+              type: array
+              description: Channels only, and only with `include=participants`.
+              items:
+                $ref: '#/components/schemas/Participant'
+
+    MessageAttachment:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Where to download the file.
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+
+    ReplyTo:
+      type: object
+      description: |
+        The message this one answers, as a copy taken when the reply was written,
+        so it still reads after the original changes.
+      properties:
+        messageId:
+          type: string
+          description: The original message, when it is in this conversation.
+        senderId:
+          type: string
+        senderName:
+          type: string
+        senderType:
+          $ref: '#/components/schemas/MemberType'
+        snippet:
+          type: string
+          description: The start of the original's text, at most 140 characters.
+        attachmentKind:
+          type: string
+          enum: [image, video, audio, file]
+      required: [senderName, snippet]
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          examples: [msg_7a1b]
+        senderId:
+          type: string
+          description: |
+            Who sent it. An office ID when `senderType` is `ai`, a user ID when it
+            is `human`, a service account ID when it is `agent`.
+          examples: [off_4d1c]
+        senderType:
+          $ref: '#/components/schemas/MemberType'
+        senderAgent:
+          $ref: '#/components/schemas/AgentRef'
+        senderName:
+          type: string
+          description: The sender's name as it was when the message was sent.
+        content:
+          type: string
+          description: The text, trimmed. Empty for a message that is only a file.
+        threadId:
+          type: string
+          description: |
+            The chat inside the conversation this message belongs to. `main`
+            unless it was sent to another chat. See
+            [List chats](/docs/api-reference/humachat/chats/listThreads).
+          examples: [main]
+        attachment:
+          $ref: '#/components/schemas/MessageAttachment'
+        attachmentKind:
+          type: string
+          enum: [image, video, audio, file]
+        album:
+          type: object
+          description: |
+            Set when several files were sent together. Each file is its own
+            message, and they share `id`. Order them by `index`.
+          properties:
+            id: { type: string }
+            index: { type: integer }
+            size: { type: integer }
+        source:
+          type: string
+          enum: [telegram, sms, voice-call, email]
+          description: Where the message came from. Absent for a message sent in HumaChat.
+        replyTo:
+          $ref: '#/components/schemas/ReplyTo'
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, senderId, senderType, senderName, content, createdAt]
+
+    Mention:
+      type: object
+      properties:
+        memberId:
+          type: string
+          description: |
+            The member being mentioned. For an AI employee this is its office ID.
+            Use the `id` values from `participants` in
+            [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations)
+            with `include=participants`.
+          examples: [off_4d1c]
+        displayName:
+          type: string
+          examples: [Marketing]
+        type:
+          type: string
+          enum: [direct, all]
+          description: '`direct` names one member. `all` reaches every AI employee in the conversation, and no person.'
+      required: [memberId, displayName, type]
+
+    Thread:
+      type: object
+      description: |
+        One chat inside a conversation. Every conversation has `main`. Fields not
+        listed here may be present and are not part of this contract.
+      properties:
+        id:
+          type: string
+          description: '`main`, or the ID assigned when the chat was created.'
+          examples: [main]
+        name:
+          type: string
+          description: |
+            `Main` for the main chat. A new chat is `New Chat` until a person
+            sends the first message in it, which then names it.
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastMessageAt:
+          type: [string, 'null']
+          format: date-time
+        lastMessagePreview:
+          type: string
+        lastMessageSenderId:
+          type: string
+        archived:
+          type: boolean
+        activity:
+          type: object
+          description: |
+            AI employees working in this chat right now, keyed by office ID.
+            Empty when nothing is running.
+          additionalProperties:
+            type: object
+            properties:
+              runId: { type: string }
+              startedAt: { type: string, format: date-time }
+              messageId:
+                type: string
+                description: The message that started this piece of work.
+              preview: { type: string }
+        queue:
+          type: object
+          description: |
+            Messages waiting for an AI employee that was already working when
+            they arrived, keyed by office ID, in order. The message is already in
+            the conversation. What waits is the employee's turn.
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              properties:
+                messageId: { type: string }
+                senderId: { type: string }
+                senderName: { type: string }
+                preview: { type: string }
+                queuedAt:
+                  type: integer
+                  description: Milliseconds since the Unix epoch.
+      required: [id, name, archived]
+
+  responses:
+    BadRequest:
+      description: A required field is missing or malformed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingWorkspace:
+              value:
+                success: false
+                error: workspaceId is required
+
+    Unauthorized:
+      description: The credential is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Authenticated, but the caller lacks the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotAMember:
+      description: |
+        The caller lacks the permission, or is a person who is not in this
+        conversation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notAMember:
+              value:
+                success: false
+                error: Forbidden
+                message: You are not a member of this conversation
+
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /group-chats/me:
+    get:
+      tags: [Conversations]
+      summary: List my conversations
+      operationId: listMyConversations
+      description: |
+        Every conversation you are a member of in the workspace: channels and
+        direct messages, newest activity first.
+
+        **Permission:** none beyond signing in. Membership is the boundary: the
+        list holds only conversations with you in them.
+
+        Use it to find a conversation you are already in. Each row's `id` is the
+        `groupChatId` the message operations take. A direct message carries
+        `otherMember`, so you can find the one with a particular person or AI
+        employee without opening it.
+
+        ```bash
+        curl "$HOS_API/group-chats/me?workspaceId=ws_a1b2c3&type=pm" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        There is no pagination. The whole list is returned.
+
+        A service account key is not a member of any conversation, so for a key
+        the list is empty. A connected agent gets the conversations it is in.
+
+        For a person, the list also holds the conversations of agents they
+        connected, each with `viaAgent`. They can read these but are not in
+        them, so they cannot post there.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: type
+          in: query
+          required: false
+          description: |
+            `group` for channels only, `pm` for direct messages only. Leave it
+            out for both. Any other value matches nothing and returns an empty
+            list.
+          schema:
+            type: string
+            enum: [group, pm]
+        - name: include
+          in: query
+          required: false
+          description: |
+            `participants` adds each channel's members as `participants`, and
+            marks where each AI employee runs. It costs one extra read per
+            conversation, so leave it out unless you need the member list.
+          schema:
+            type: string
+            enum: [participants]
+        - name: memberId
+          in: query
+          required: false
+          description: |
+            List another member's conversations instead of your own. A user ID
+            or an office ID, from
+            [List people and employees you can message](/docs/api-reference/humachat/conversations/listChatContacts).
+            Requires `groupchat:read:all` @ `workspace/{id}`, a permission no
+            ordinary role includes, and every use is recorded. Leave it out to
+            list your own.
+          schema:
+            type: string
+            examples: [uid_2b8f]
+      responses:
+        '200':
+          description: Your conversations, newest activity first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  groupChats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationSummary'
+              examples:
+                directMessages:
+                  value:
+                    success: true
+                    groupChats:
+                      - id: pm_off_4d1c_uid_2b8f
+                        tenantId: tn_7c4a
+                        workspaceId: ws_a1b2c3
+                        type: pm
+                        name: ''
+                        description: ''
+                        createdBy: uid_2b8f
+                        createdAt: '2026-10-20T14:10:00.000Z'
+                        updatedAt: '2026-10-20T14:10:00.000Z'
+                        lastMessageAt: '2026-10-22T09:41:12.000Z'
+                        lastMessagePreview: Draft is up in the shared folder.
+                        lastMessageSenderId: off_4d1c
+                        lastMessageSenderName: Marketing
+                        lastMessageSenderType: ai
+                        myLastReadAt: '2026-10-22T09:30:02.000Z'
+                        otherMember:
+                          id: off_4d1c
+                          displayName: Marketing
+                          memberType: ai
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: '`memberId` names someone else, and you lack `groupchat:read:all`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notYours:
+                  value:
+                    success: false
+                    error: Forbidden
+                    message: You may only list your own conversations
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/contacts:
+    get:
+      tags: [Conversations]
+      summary: List people and employees you can message
+      operationId: listChatContacts
+      description: |
+        Everyone you can open a direct message with in this workspace, in two
+        lists. Use it to find the `recipientId` for
+        [Open a direct message](/docs/api-reference/humachat/conversations/createDirectMessage).
+
+        **Permission:** `groupchat:send` @ `workspace/{id}`.
+
+        | List | Holds | Its `id` is | Send it with |
+        | --- | --- | --- | --- |
+        | `employees` | AI employees you may use, meaning you could prompt them from their office | An office ID | `"recipientType": "ai"` |
+        | `people` | People other than you who can read and reply in this workspace | A user ID | `"recipientType": "human"` |
+
+        Both lists are filtered by the same check that runs when the direct
+        message is opened, so anyone listed here can be messaged, and anyone
+        missing cannot. Someone who can only view the workspace is not listed,
+        because they could not reply.
+
+        ```bash
+        curl "$HOS_API/group-chats/contacts?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        Each list is sorted by name. There is no pagination.
+
+        The employees here are the offices in the workspace, so an office ID
+        from [List offices](/docs/api-reference/offices/offices/listOffices) is
+        the same value. This list has already removed the ones you may not use.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The people and AI employees you can message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  employees:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 'The office ID. Send it as `recipientId` with `"recipientType": "ai"`.'
+                          examples: [off_4d1c]
+                        name:
+                          type: string
+                          examples: [Marketing]
+                        kind:
+                          type: string
+                          const: ai
+                        runsOnDeviceId:
+                          type: [string, 'null']
+                          description: The device this employee runs on, or `null` when it runs in Humanik Cloud.
+                      required: [id, name, kind]
+                  people:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 'The user ID. Send it as `recipientId` with `"recipientType": "human"`.'
+                          examples: [uid_9e3a]
+                        name:
+                          type: string
+                          description: The person's name, or their email when no name is set.
+                        email:
+                          type: string
+                        kind:
+                          type: string
+                          const: human
+                      required: [id, name, kind]
+              examples:
+                contacts:
+                  value:
+                    success: true
+                    employees:
+                      - id: off_4d1c
+                        name: Marketing
+                        kind: ai
+                        runsOnDeviceId: null
+                    people:
+                      - id: uid_9e3a
+                        name: Priya Shah
+                        email: priya@example.com
+                        kind: human
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/pm:
+    post:
+      tags: [Conversations]
+      summary: Open a direct message
+      operationId: createDirectMessage
+      description: |
+        Opens the direct message between you and one other participant, a
+        person or an AI employee, and returns it. **If it already exists you get
+        the same conversation back**, with its history, so it is safe to call
+        every time before you send.
+
+        **Permission:** `groupchat:send` @ `workspace/{id}`, and a second check
+        on the recipient, chosen by `recipientType`:
+
+        | | `recipientType: "human"` | `recipientType: "ai"` |
+        | --- | --- | --- |
+        | `recipientId` is | A user ID | An office ID |
+        | Get it from | `people` in [List people and employees you can message](/docs/api-reference/humachat/conversations/listChatContacts) | `employees` in the same call, or [List offices](/docs/api-reference/offices/offices/listOffices) |
+        | The extra check | The person can read and reply in this workspace | You hold `office:use` on that office: the same access it takes to prompt the employee from its office |
+        | Refused with | `403` *This person can't use HumaChat in this workspace.* | `403` *You don't have access to this employee.* |
+
+        The check runs on every call, including when the direct message already
+        exists, so losing access to an employee also stops you reopening the
+        conversation with it.
+
+        **Always set `recipientType`.** It tells the API what kind of ID
+        `recipientId` is, and so which check to run. Left out, it defaults to
+        `"human"`, and an office ID is then looked up as a person and refused
+        with `403` *This person can't use HumaChat in this workspace.* That is
+        not a missing permission. Send the same request with
+        `"recipientType": "ai"`.
+
+        **The direct message is between you and the recipient, so you must be a
+        person or a connected agent.** Call it with a signed-in user's session
+        or a connected agent's access token. A connected agent opens it as
+        itself, and the person who connected it can then read it. A service
+        account key used by a program is neither, and returns `400` *Creator is
+        not a member of this tenant*.
+
+        ## With an AI employee
+
+        Get the office ID first:
+
+        ```bash
+        curl "$HOS_API/group-chats/contacts?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        Then open the conversation:
+
+        ```bash
+        curl -X POST "$HOS_API/group-chats/pm" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "workspaceId": "ws_a1b2c3", "recipientId": "off_4d1c", "recipientType": "ai" }'
+        ```
+
+        Every message you send in it starts the employee's work. No mention is
+        needed in a direct message. See
+        [Send a message](/docs/api-reference/humachat/messages/sendMessage).
+
+        ## With a person
+
+        Get the user ID from `people` in the same contacts call, then:
+
+        ```bash
+        curl -X POST "$HOS_API/group-chats/pm" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "workspaceId": "ws_a1b2c3", "recipientId": "uid_9e3a", "recipientType": "human" }'
+        ```
+
+        A message to a person wakes nothing and pages nobody. It waits in the
+        conversation for them to read.
+
+        Use the returned `groupChat.id` as the `groupChatId` for sending and
+        reading. A direct message cannot be deleted, and it always has exactly
+        these two members.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipientId]
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    The workspace to open it in. Required unless your credential
+                    carries a workspace scope.
+                  examples: [ws_a1b2c3]
+                recipientId:
+                  type: string
+                  description: |
+                    Who to message. An office ID when `recipientType` is `ai`, a
+                    user ID when it is `human`. From
+                    [List people and employees you can message](/docs/api-reference/humachat/conversations/listChatContacts).
+                    It cannot be your own ID.
+                  examples: [off_4d1c]
+                recipientType:
+                  type: string
+                  enum: [human, ai]
+                  default: human
+                  description: |
+                    What kind of ID `recipientId` is. Always send it. Any value
+                    other than these two is refused with `400`.
+            examples:
+              aiEmployee:
+                summary: An AI employee
+                value:
+                  workspaceId: ws_a1b2c3
+                  recipientId: off_4d1c
+                  recipientType: ai
+              person:
+                summary: A person
+                value:
+                  workspaceId: ws_a1b2c3
+                  recipientId: uid_9e3a
+                  recipientType: human
+      responses:
+        '201':
+          description: |
+            The direct message. `201` is returned whether it was created now or
+            already existed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  groupChat:
+                    allOf:
+                      - $ref: '#/components/schemas/Conversation'
+                      - type: object
+                        properties:
+                          otherMember:
+                            $ref: '#/components/schemas/OtherMember'
+              examples:
+                aiEmployee:
+                  value:
+                    success: true
+                    groupChat:
+                      id: pm_off_4d1c_uid_2b8f
+                      tenantId: tn_7c4a
+                      workspaceId: ws_a1b2c3
+                      type: pm
+                      name: ''
+                      description: ''
+                      createdBy: uid_2b8f
+                      createdAt: '2026-10-22T14:10:00.000Z'
+                      updatedAt: '2026-10-22T14:10:00.000Z'
+                      otherMember:
+                        id: off_4d1c
+                        displayName: Marketing
+        '400':
+          description: |
+            A field is missing or invalid, the recipient is you, the office is
+            not in this workspace, or the caller is not a person.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingWorkspace:
+                  value: { success: false, error: workspaceId is required }
+                missingRecipient:
+                  value: { success: false, error: recipientId is required }
+                badType:
+                  value: { success: false, error: "recipientType must be 'human' or 'ai'" }
+                yourself:
+                  value: { success: false, error: Cannot create a PM with yourself }
+                noOffice:
+                  value: { success: false, error: Office not found in this workspace }
+                notAPerson:
+                  value: { success: false, error: Creator is not a member of this tenant }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: |
+            You lack `groupchat:send`, or the recipient check failed. See the
+            table above for which message means which.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                person:
+                  value: { success: false, error: "This person can't use HumaChat in this workspace." }
+                employee:
+                  value: { success: false, error: "You don't have access to this employee." }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/{groupChatId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupChatId'
+    get:
+      tags: [Conversations]
+      summary: Get a conversation
+      operationId: getConversation
+      description: |
+        One conversation's details.
+
+        **Permission:** `groupchat:read` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        This returns the conversation itself, not its messages. For those, use
+        [List messages](/docs/api-reference/humachat/messages/listMessages). It
+        does not name the other participant of a direct message either: that is
+        `otherMember` in
+        [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations).
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The conversation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  groupChat:
+                    $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/NotAMember'
+        '404':
+          description: No conversation with this ID in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { success: false, error: Group chat not found }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/{groupChatId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/GroupChatId'
+    post:
+      tags: [Messages]
+      summary: Send a message
+      operationId: sendMessage
+      description: |
+        Adds a message to the conversation, sent as you.
+
+        **Permission:** `groupchat:send` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        Get the conversation first. For a new direct message, that is
+        [Open a direct message](/docs/api-reference/humachat/conversations/createDirectMessage).
+        For one you are already in:
+
+        ```bash
+        curl "$HOS_API/group-chats/me?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        **A message is always sent as the caller, so the caller must be a
+        member.** With a signed-in user's session that is you, as `human`. With
+        a connected agent's access token it is the agent, as `agent`. A service
+        account key used by a program is not a member of any conversation and
+        receives `400` *Sender is not a member of this group chat*.
+
+        **Leave out `senderId` and `senderType`.** The sender comes from your
+        credential. A value that names anyone other than you is refused with
+        `403`.
+
+        ## Who it wakes
+
+        A message to an AI employee is what starts its work.
+
+        | Conversation | What starts an AI employee's work |
+        | --- | --- |
+        | Direct message with an AI employee | Every message you send. No mention is needed |
+        | Channel | Only a mention of that employee in `mentions`, or a mention with `type: "all"` |
+
+        A connected agent's mention in a channel wakes only employees it holds
+        `office:use` on, and its `type: "all"` mention wakes no one. The message
+        is posted either way.
+
+        **Writing `@Name` in `content` does nothing.** Only the `mentions` array
+        is read. A mention of a person is a highlight for them, and never pages
+        them.
+
+        ## Getting the reply
+
+        The response is your own message, returned as soon as it is stored. It
+        says nothing about the employee. **The reply arrives later as a new
+        message** in the same conversation and the same chat, with
+        `senderType: "ai"` and the employee's office ID as `senderId`. An
+        employee that was switched off has to start first, and one already
+        working in this chat takes your message after its current work.
+
+        To wait for it, read the conversation again with
+        [List messages](/docs/api-reference/humachat/messages/listMessages),
+        passing the same `threadId`, until a message from the employee is newer
+        than yours. Not every piece of work ends in a reply, so stop after a
+        time limit of your own.
+
+        ```bash
+        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages?workspaceId=ws_a1b2c3&threadId=main&limit=10" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        Sending is not idempotent. Every call adds a message, and in a direct
+        message with an AI employee every call starts more work, so do not retry
+        a send that returned `201`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    The workspace the conversation belongs to. Required unless
+                    your credential carries a workspace scope.
+                  examples: [ws_a1b2c3]
+                content:
+                  type: string
+                  description: The message text. Leading and trailing space is removed. It cannot be empty.
+                  examples: [Can you draft the release note for Friday?]
+                mentions:
+                  type: array
+                  description: |
+                    The members this message is addressed to. In a channel, this
+                    is the only way to start an AI employee's work. Not checked
+                    against the member list, so a mention of someone who is not
+                    in the conversation is stored and reaches nobody.
+                  items:
+                    $ref: '#/components/schemas/Mention'
+                threadId:
+                  type: string
+                  description: |
+                    The chat inside the conversation to send to. Leave it out for
+                    `main`. From
+                    [List chats](/docs/api-reference/humachat/chats/listThreads).
+                    An unknown or archived chat is refused rather than sent to
+                    `main`.
+                  examples: [main]
+                replyToMessageId:
+                  type: string
+                  description: |
+                    Reply to a message. It must be in this conversation and in the
+                    same chat. From the `id` of a message in
+                    [List messages](/docs/api-reference/humachat/messages/listMessages).
+                  examples: [msg_5c2e]
+                mediaUrl:
+                  type: string
+                  description: |
+                    Only for a conversation synced to Telegram or to text
+                    messages: a publicly fetchable URL of a file to deliver with
+                    this message on that channel. It is not stored on the message.
+            examples:
+              directMessage:
+                summary: To an AI employee in a direct message
+                value:
+                  workspaceId: ws_a1b2c3
+                  content: Can you draft the release note for Friday?
+              channelMention:
+                summary: To an AI employee in a channel
+                value:
+                  workspaceId: ws_a1b2c3
+                  content: '@Marketing can you draft the release note for Friday?'
+                  mentions:
+                    - memberId: off_4d1c
+                      displayName: Marketing
+                      type: direct
+      responses:
+        '201':
+          description: |
+            Your message, as stored. `createdAt` is the time the server answered,
+            which can differ slightly from the time stored and returned by
+            [List messages](/docs/api-reference/humachat/messages/listMessages).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  message:
+                    allOf:
+                      - $ref: '#/components/schemas/Message'
+                      - type: object
+                        properties:
+                          mentions:
+                            type: array
+                            description: Echoed when you sent them.
+                            items:
+                              $ref: '#/components/schemas/Mention'
+              examples:
+                sent:
+                  value:
+                    success: true
+                    message:
+                      id: msg_7a1b
+                      senderId: uid_2b8f
+                      senderType: human
+                      senderName: Tyler
+                      content: Can you draft the release note for Friday?
+                      threadId: main
+                      createdAt: '2026-10-22T14:31:02.115Z'
+        '400':
+          description: |
+            A field is missing or invalid, the conversation or chat does not
+            exist, or the caller is not a member.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingWorkspace:
+                  value: { success: false, error: workspaceId is required }
+                empty:
+                  value: { success: false, error: content or attachment is required }
+                noConversation:
+                  value: { success: false, error: Group chat not found }
+                notAMember:
+                  value: { success: false, error: Sender is not a member of this group chat }
+                badThread:
+                  value: { success: false, error: Invalid threadId }
+                noThread:
+                  value: { success: false, error: Thread not found }
+                archivedThread:
+                  value: { success: false, error: Thread is archived. Restore it before sending. }
+                singleThread:
+                  value: { success: false, error: This conversation has a single thread. }
+                noReplyTarget:
+                  value: { success: false, error: The message you replied to was not found }
+                otherChat:
+                  value: { success: false, error: You can only reply to a message in the same chat }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: |
+            The caller lacks `groupchat:send`, is a person who is not in this
+            conversation, or sent a `senderId` or `senderType` that names
+            someone other than the caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notAMember:
+                  value:
+                    success: false
+                    error: Forbidden
+                    message: You are not a member of this conversation
+                notYou:
+                  value: { success: false, error: An agent can only send as itself }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    get:
+      tags: [Messages]
+      summary: List messages
+      operationId: listMessages
+      description: |
+        A page of the conversation, newest first.
+
+        **Permission:** `groupchat:read` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        Get the conversation ID first:
+
+        ```bash
+        curl "$HOS_API/group-chats/me?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        This is how you read an AI employee's reply. After
+        [Send a message](/docs/api-reference/humachat/messages/sendMessage),
+        call it again with the same `threadId` until a message with
+        `senderType: "ai"` is newer than yours. A small `limit` is enough for
+        that, because the newest messages come first.
+
+        ## Paging
+
+        Pass `nextCursor` from one response as `cursor` on the next to get older
+        messages. `nextCursor` is `null` on the last page. **A `cursor` that is
+        not a message in this conversation is ignored**, and you get the first
+        page again rather than an error.
+
+        ## Reading marks the conversation read
+
+        This is a GET that writes. When the page is not empty, it marks the
+        conversation read for the caller up to the newest message returned, and
+        clears the caller's unread notification for it. If you need to know
+        what was unread, look at `myLastReadAt` in
+        [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations)
+        **before** calling this.
+
+        ## Two sharp edges
+
+        **Without `threadId`, every chat in the conversation is mixed into one
+        list.** Pass it when you are waiting for a reply in one chat.
+
+        **A conversation ID that does not exist returns `200` with no
+        messages**, not `404`. Check the ID with
+        [Get a conversation](/docs/api-reference/humachat/conversations/getConversation)
+        if an empty result is unexpected.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: limit
+          in: query
+          required: false
+          description: Messages per page, from 1 to 100. Default 50. Values above 100 are reduced to 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: |
+            The `nextCursor` from the previous page, which is a message ID. Leave
+            it out for the newest page.
+          schema:
+            type: string
+            examples: [msg_3f9d]
+        - name: threadId
+          in: query
+          required: false
+          description: |
+            Only messages in this chat inside the conversation. `main` for the
+            main chat. From
+            [List chats](/docs/api-reference/humachat/chats/listThreads), or the
+            `threadId` on a message you sent. Leave it out for every chat.
+          schema:
+            type: string
+            examples: [main]
+      responses:
+        '200':
+          description: A page of messages, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  nextCursor:
+                    type: [string, 'null']
+                    description: Pass as `cursor` for the next, older page. `null` on the last page.
+              examples:
+                reply:
+                  value:
+                    success: true
+                    messages:
+                      - id: msg_8c2d
+                        senderId: off_4d1c
+                        senderType: ai
+                        senderName: Marketing
+                        content: Draft is up in the shared folder. I kept it under 200 words.
+                        threadId: main
+                        createdAt: '2026-10-22T14:33:40.000Z'
+                      - id: msg_7a1b
+                        senderId: uid_2b8f
+                        senderType: human
+                        senderName: Tyler
+                        content: Can you draft the release note for Friday?
+                        threadId: main
+                        createdAt: '2026-10-22T14:31:02.000Z'
+                    nextCursor: msg_7a1b
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/NotAMember'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/{groupChatId}/threads:
+    parameters:
+      - $ref: '#/components/parameters/GroupChatId'
+    get:
+      tags: [Chats]
+      summary: List chats
+      operationId: listThreads
+      description: |
+        The chats inside a conversation, most recent activity first.
+
+        **Permission:** `groupchat:read` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        A conversation can hold more than one chat. Every message belongs to
+        one, named by its `threadId`. Each chat is separate for an AI employee
+        too: it remembers what was said in that chat and nothing from the
+        others, so a new chat is a fresh start on a new task.
+
+        Every conversation has `main`, which holds everything sent without a
+        `threadId`. It is created the first time anything touches the
+        conversation, so it is always in this list.
+
+        Get the conversation ID first:
+
+        ```bash
+        curl "$HOS_API/group-chats/me?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        `activity` shows which AI employees are working in a chat right now,
+        which is a useful signal while you wait for a reply.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: includeArchived
+          in: query
+          required: false
+          description: '`true` to include archived chats. They are left out by default.'
+          schema:
+            type: string
+            enum: ['true']
+      responses:
+        '200':
+          description: The chats, most recent activity first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  threads:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Thread'
+              examples:
+                twoChats:
+                  value:
+                    success: true
+                    threads:
+                      - id: Hq2LmZ8pXw4rT1vB
+                        name: Q4 pricing
+                        createdBy: uid_2b8f
+                        createdAt: '2026-10-21T10:00:00.000Z'
+                        lastMessageAt: '2026-10-22T14:31:02.000Z'
+                        lastMessagePreview: Can you compare the three options?
+                        lastMessageSenderId: uid_2b8f
+                        archived: false
+                        activity:
+                          off_4d1c:
+                            runId: run_51ab
+                            startedAt: '2026-10-22T14:31:03.000Z'
+                            messageId: msg_9d0e
+                            preview: Can you compare the three options?
+                        queue: {}
+                      - id: main
+                        name: Main
+                        createdBy: system
+                        createdAt: '2026-10-01T09:00:00.000Z'
+                        lastMessageAt: '2026-10-20T16:12:00.000Z'
+                        lastMessagePreview: Thanks, that works.
+                        lastMessageSenderId: uid_2b8f
+                        archived: false
+                        activity: {}
+                        queue: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/NotAMember'
+        '404':
+          description: No conversation with this ID in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { success: false, error: Group chat not found }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Chats]
+      summary: Start a new chat
+      operationId: createThread
+      description: |
+        Starts a new chat inside a conversation: a fresh history, and a fresh
+        memory for every AI employee in it.
+
+        **Permission:** `groupchat:send` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        Get the conversation ID first:
+
+        ```bash
+        curl "$HOS_API/group-chats/me?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        Then send into the new chat by passing its `id` as `threadId` to
+        [Send a message](/docs/api-reference/humachat/messages/sendMessage).
+        Starting a chat sends nothing and wakes nobody.
+
+        The new chat becomes your current chat in this conversation, which is
+        what the app opens for you. Nobody else's view changes.
+
+        A conversation with a customer from the CRM has a single chat, and is
+        refused with `409`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                  description: |
+                    The chat's name. Longer names are cut to 80 characters. Leave
+                    it out and the chat is called `New Chat` until a person sends
+                    the first message in it, which then names it.
+                  examples: [Q4 pricing]
+      responses:
+        '201':
+          description: The new chat.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  thread:
+                    $ref: '#/components/schemas/Thread'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/NotAMember'
+        '404':
+          description: No conversation with this ID in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { success: false, error: Group chat not found }
+        '409':
+          description: This is a conversation with a customer, which has a single chat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                single:
+                  value: { success: false, error: This conversation has a single thread. }
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/{groupChatId}/threads/current:
+    parameters:
+      - $ref: '#/components/parameters/GroupChatId'
+    put:
+      tags: [Chats]
+      summary: Set your current chat
+      operationId: setCurrentThread
+      description: |
+        Makes a chat your current one in this conversation, which is the chat
+        the app opens for you.
+
+        **Permission:** `groupchat:read` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        **This is a view preference and nothing else.** It does not decide where
+        a message goes: a message always goes to the `threadId` it names, or to
+        `main`. It is yours alone, so two people in one channel never move each
+        other.
+
+        Get the chat's ID first:
+
+        ```bash
+        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/threads?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        Then:
+
+        ```bash
+        curl -X PUT "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/threads/current" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "workspaceId": "ws_a1b2c3", "threadId": "Hq2LmZ8pXw4rT1vB" }'
+        ```
+
+        It only works for a member of the conversation. A caller that is not
+        one, such as a service account key, receives `400` *Not a member of this
+        conversation*.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [threadId]
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    The workspace the conversation belongs to. Required unless
+                    your credential carries a workspace scope.
+                  examples: [ws_a1b2c3]
+                threadId:
+                  type: string
+                  description: |
+                    The chat to make current, or `main`. From
+                    [List chats](/docs/api-reference/humachat/chats/listThreads).
+                    An archived chat is refused.
+                  examples: [Hq2LmZ8pXw4rT1vB]
+      responses:
+        '200':
+          description: |
+            Done. `thread` is the chat, except when you chose `main`, where it is
+            left out.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  thread:
+                    $ref: '#/components/schemas/Thread'
+        '400':
+          description: '`workspaceId` or `threadId` is missing or malformed, or the caller is not a member.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value: { success: false, error: workspaceId and threadId are required }
+                badThread:
+                  value: { success: false, error: Invalid threadId }
+                notMember:
+                  value: { success: false, error: Not a member of this conversation }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/NotAMember'
+        '404':
+          description: No chat with this ID in the conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { success: false, error: Thread not found }
+        '409':
+          description: The chat is archived. Restore it in the app first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                archived:
+                  value: { success: false, error: Thread is archived }
+        '500':
+          $ref: '#/components/responses/ServerError'

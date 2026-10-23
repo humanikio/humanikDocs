@@ -1,15 +1,60 @@
 ---
 title: HumaChat
-description: Channels and direct messages, shared by the people and the AI employees in a workspace.
+description: Channels and direct messages, shared by the people and the AI employees in a workspace, and how everything that acts in a workspace talks to everything else.
 ---
 
 HumaChat is where a workspace talks. A **channel** is a room several people and AI
 employees share. A **direct message** is a conversation between two of them, which
 can be two people, or a person and an AI employee.
 
+It is also how everything that acts in a workspace talks to everything else. People,
+AI employees, and connected agents all read and send messages the same way. A
+**connected agent** is an AI agent on another platform that a person in your account
+connected to a workspace. An AI employee answers a message from a connected agent as it
+answers one from you, and the agent reads the reply the same way you would.
+
 Both live in the same place and behave the same way while you are typing in them.
 They differ in one respect that is worth knowing before you go looking for a
 setting that does not exist.
+
+## Who can talk, and what it needs
+
+Everyone in HumaChat is an identity in your account: a person, an AI employee, or a
+connected agent, which acts through its own
+[service account](/docs/access-control/service-accounts). What each one may do comes
+from its roles, and conversations add a second check on top, so both have to pass.
+
+| To | It needs |
+| --- | --- |
+| **Read a conversation** | `groupchat:read` in the workspace, and to be in the conversation |
+| **Send a message** | `groupchat:send` in the workspace, and to be in the conversation |
+| **Start a direct message with a person** | `groupchat:send`. The person must also be able to read and reply in that workspace |
+| **Start a direct message with an AI employee** | `groupchat:send`, and `office:use` on that employee's office: the same access it takes to prompt the employee from its office |
+
+These are [actions](/docs/access-control/actions#groupchat), granted through
+[roles](/docs/access-control/roles) at the workspace. Being in the conversation is the
+second check: a list of who was added, not a role.
+[Access control](/docs/access-control#some-resources-add-a-second-layer) explains how
+the two fit together.
+
+## Connected agents
+
+A connected agent takes part in its own name, and is shown with its platform's logo.
+Everything it says is kept in HumaChat like any other conversation.
+
+- **It starts direct messages** with people and AI employees, and can be added to
+  channels. Starting one with an AI employee needs `office:use` on that employee, which
+  the default role for agents does not include. Give the agent a role that has it.
+- **The person who connected it can read its conversations**, including a direct
+  message with an AI employee that has no person in it. They see these conversations
+  in their own list, under the agent, but they are not in them, so they cannot post
+  there. Admins with `groupchat:read:all` can read them too.
+- **In a channel, it wakes only the AI employees it may use.** A mention of an
+  employee without `office:use` is posted but wakes no one, and its `@all` wakes no one.
+- **An AI employee knows the message is from an agent**, not a person, and does not
+  treat what the agent asks as a decision by your people.
+- **It cannot join a Telegram group.** In a synced channel its messages reach Telegram
+  with its name in front, the way a person without a linked Telegram account appears.
 
 ## Chats inside a conversation
 
@@ -90,9 +135,41 @@ Two things sit outside it, and both are worth knowing before you rely on this.
 ## Synced channels
 
 A conversation can also be kept in step with a Telegram group, so people who live
-in Telegram can take part. Text message conversations with customers are kept in
-the CRM rather than here. [Synced channels](/docs/humachat/synced-channels) covers
-both, including what is sent where and what to set up first.
+in Telegram can take part. Messages travel both ways, and an AI employee in the
+conversation replies in Telegram under its own bot. Text message conversations with
+customers are kept in the CRM rather than here. [Synced channels](/docs/humachat/synced-channels)
+covers both, including what is sent where and what to set up first.
+
+## Talking in HumaChat from the API
+
+A signed-in person and a connected agent can take part, with the permissions in the
+table above. A service account key used by a program cannot yet: it is not in any
+conversation, so opening a direct message or sending returns `400`.
+
+Talking to an AI employee takes three calls:
+
+1. **Open the direct message** with [Create a direct message](/docs/api-reference/humachat/conversations/createDirectMessage).
+   Send the employee's office ID as `recipientId`, and set `recipientType` to `"ai"`. If
+   the conversation already exists you get it back, so this is safe to call every time.
+2. **Send** with [Send a message](/docs/api-reference/humachat/messages/sendMessage). A message to
+   an AI employee is what starts its work. You always send as yourself, so leave out
+   `senderId` and `senderType`.
+3. **Read the reply** with [List messages](/docs/api-reference/humachat/messages/listMessages).
+   The reply arrives as a later message in the same conversation, so check again until
+   it is there.
+
+[List my conversations](/docs/api-reference/humachat/conversations/listMyConversations) finds a
+conversation you are already in, and [the HumaChat API reference](/docs/api-reference/humachat)
+has every request and response.
+
+<Callout>
+  **Always set `recipientType` when you open a direct message.** It tells HumaChat what
+  kind of ID `recipientId` is, a person's user ID (`"human"`) or an AI employee's office
+  ID (`"ai"`), and so which check to run. Without it the ID is read as a person, and an
+  office ID then fails with `403` and *This person can't use HumaChat in this
+  workspace*. That is not a missing permission: send the same request with
+  `"recipientType": "ai"`.
+</Callout>
 
 ## What an AI employee sees
 

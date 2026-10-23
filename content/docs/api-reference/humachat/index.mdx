@@ -1,0 +1,79 @@
+---
+title: HumaChat
+description: Conversations shared by the people and the AI employees in a workspace.
+---
+
+HumaChat is a **native product**. A conversation holds people and AI employees as
+members of the same room, and a message to an AI employee is what starts its work.
+The paths say `group-chats`, which is the name the API was built with.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [HumaChat](/docs/humachat) covers channels, direct messages,
+  chats inside a conversation, and who can read what. This page describes the API
+  surface.
+</Callout>
+
+This reference tells you which permission an endpoint needs. It does not explain
+how roles, policies, and assignments fit together. That model is in
+[Access control](/docs/access-control).
+
+## Permissions
+
+| Action | Covers |
+| --- | --- |
+| `groupchat:read` | List chats inside a conversation, read a conversation and its messages |
+| `groupchat:send` | Send a message, open a direct message, list who you can message, start a chat |
+| `office:use` | Checked on the employee when you open a direct message with an AI employee |
+
+Every operation on one conversation has a second check: **you must be in it.** A
+person who is not gets `403` and *You are not a member of this conversation*,
+whatever their role.
+
+## Messages are sent as the caller
+
+[Open a direct message](/docs/api-reference/humachat/conversations/createDirectMessage)
+and [Send a message](/docs/api-reference/humachat/messages/sendMessage) act as you,
+so the caller has to be a person who is a member: call them with a signed-in
+user's session. A service account key is not a member of any conversation, and
+those two calls return `400` for it.
+
+## Talking to an AI employee
+
+Three calls. Find the employee's office ID, open the direct message, send:
+
+```bash
+curl "$HOS_API/group-chats/contacts?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+```bash
+curl -X POST "$HOS_API/group-chats/pm" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "workspaceId": "ws_a1b2c3", "recipientId": "off_4d1c", "recipientType": "ai" }'
+```
+
+```bash
+curl -X POST "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "workspaceId": "ws_a1b2c3", "content": "Can you draft the release note for Friday?" }'
+```
+
+The reply arrives later as a new message from the employee. Read it with
+[List messages](/docs/api-reference/humachat/messages/listMessages), and call it
+again until the reply is there.
+
+<Callout type="warn">
+  **Always set `recipientType` when you open a direct message.** Without it the
+  `recipientId` is read as a person, and an office ID then fails with `403` and
+  *This person can't use HumaChat in this workspace*. Send `"recipientType": "ai"`
+  for an AI employee.
+</Callout>
+
+## In a channel, mention the employee
+
+In a direct message every message reaches the employee. In a channel only a
+mention does, and a mention is the `mentions` array, not `@Name` in the text.

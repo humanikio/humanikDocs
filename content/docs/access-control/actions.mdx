@@ -60,25 +60,49 @@ granted at the workspace above it to cover every office in it.
 | `cloud:manage` | Create, deploy, configure and rotate services across the account. | `console` |
 
 <Accordions>
-<Accordion title="Endpoints that need `cloud:read` (9)">
+<Accordion title="Endpoints that need `cloud:read` (18)">
+- [Get a cron](/docs/api-reference/cloud/crons/getCloudCron)
+- [Get cron list preferences](/docs/api-reference/cloud/crons/getCloudCronPreferences)
 - [Get a deployment](/docs/api-reference/cloud/deployments/getCloudDeployment)
 - [Get a project](/docs/api-reference/cloud/projects/getCloudProject)
+- [Read a secret field](/docs/api-reference/cloud/secrets/getCloudSecretField)
 - [Get a service](/docs/api-reference/cloud/services/getCloudService)
 - [Get service logs](/docs/api-reference/cloud/services/getCloudServiceLogs)
+- [Get the office on a service](/docs/api-reference/cloud/services/getCloudServiceOffice)
 - [Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions)
+- [List API keys](/docs/api-reference/cloud/api-keys/listCloudApiKeys)
+- [List crons](/docs/api-reference/cloud/crons/listCloudCrons)
 - [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments)
 - [List projects](/docs/api-reference/cloud/projects/listCloudProjects)
+- [List secret fields](/docs/api-reference/cloud/secrets/listCloudSecretFields)
+- [List secrets](/docs/api-reference/cloud/secrets/listCloudSecrets)
 - [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances)
+- [List command jobs](/docs/api-reference/cloud/services/listCloudServiceRunnerJobs)
 - [List services](/docs/api-reference/cloud/services/listCloudServices)
 </Accordion>
-<Accordion title="Endpoints that need `cloud:manage` (9)">
+<Accordion title="Endpoints that need `cloud:manage` (24)">
+- [Add a secret field](/docs/api-reference/cloud/secrets/addCloudSecretField)
 - [Create and deploy a service](/docs/api-reference/cloud/services/createAndDeployCloudService)
+- [Create a cron](/docs/api-reference/cloud/crons/createCloudCron)
 - [Create a project](/docs/api-reference/cloud/projects/createCloudProject)
+- [Create a secret](/docs/api-reference/cloud/secrets/createCloudSecret)
 - [Create a service](/docs/api-reference/cloud/services/createCloudService)
+- [Delete a cron](/docs/api-reference/cloud/crons/deleteCloudCron)
+- [Delete a cron and its office copy](/docs/api-reference/cloud/crons/deleteCloudCronSource)
+- [Delete a secret](/docs/api-reference/cloud/secrets/deleteCloudSecret)
 - [Delete a service](/docs/api-reference/cloud/services/deleteCloudService)
 - [Deploy a service](/docs/api-reference/cloud/deployments/deployCloudService)
+- [Read a secret field](/docs/api-reference/cloud/secrets/getCloudSecretField)
 - [Redeploy a service](/docs/api-reference/cloud/deployments/redeployCloudService)
+- [Revoke an API key](/docs/api-reference/cloud/api-keys/revokeCloudApiKey)
+- [Rotate the key](/docs/api-reference/cloud/api-keys/rotateCloudApiKey)
+- [Turn a cron on or off](/docs/api-reference/cloud/crons/setCloudCronEnabled)
+- [Copy an account-wide secret to a service](/docs/api-reference/cloud/secrets/transferCloudSecret)
+- [Run a cron now](/docs/api-reference/cloud/crons/triggerCloudCron)
+- [Update a cron](/docs/api-reference/cloud/crons/updateCloudCron)
+- [Save cron list preferences](/docs/api-reference/cloud/crons/updateCloudCronPreferences)
 - [Update a project](/docs/api-reference/cloud/projects/updateCloudProject)
+- [Update a secret field](/docs/api-reference/cloud/secrets/updateCloudSecretField)
 - [Update a service](/docs/api-reference/cloud/services/updateCloudService)
 - [Update service settings](/docs/api-reference/cloud/services/updateCloudServiceUserConfig)
 </Accordion>
@@ -178,7 +202,8 @@ granted at the workspace above it to cover every office in it.
 - [List allocated websites](/docs/api-reference/offices/allocations/listOfficeWebsites)
 - [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
 </Accordion>
-<Accordion title="Endpoints that need `office:use` (3)">
+<Accordion title="Endpoints that need `office:use` (4)">
+- [Open a direct message](/docs/api-reference/humachat/conversations/createDirectMessage)
 - [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine)
 - [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine)
 - [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine)
@@ -249,6 +274,21 @@ granted at the workspace above it to cover every office in it.
 | `groupchat:create-pm` | Open a one to one message with a named person, without full chat administration. This is what lets an AI employee start a direct message with someone rather than only reply in one. | `workspace` |
 | `groupchat:manage` | Create, rename and delete conversations, and change who is in them. | `workspace` |
 | `groupchat:read:all` | Read any conversation in the workspace, including ones you are not in. Membership is checked first; this is what lets an administrator through when it fails, and every access it grants is logged. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `groupchat:read` (4)">
+- [Get a conversation](/docs/api-reference/humachat/conversations/getConversation)
+- [List messages](/docs/api-reference/humachat/messages/listMessages)
+- [List chats](/docs/api-reference/humachat/chats/listThreads)
+- [Set your current chat](/docs/api-reference/humachat/chats/setCurrentThread)
+</Accordion>
+<Accordion title="Endpoints that need `groupchat:send` (4)">
+- [Open a direct message](/docs/api-reference/humachat/conversations/createDirectMessage)
+- [Start a new chat](/docs/api-reference/humachat/chats/createThread)
+- [List people and employees you can message](/docs/api-reference/humachat/conversations/listChatContacts)
+- [Send a message](/docs/api-reference/humachat/messages/sendMessage)
+</Accordion>
+</Accordions>
 
 ## Phone
 
@@ -398,31 +438,42 @@ granted at the workspace above it to cover every office in it.
 | `secrets:write` | Add, change and remove credentials injected at startup. | `office` |
 
 <Accordions>
-<Accordion title="Endpoints that need `secrets:list` (6)">
+<Accordion title="Endpoints that need `secrets:list` (10)">
+- [List what uses an account secret](/docs/api-reference/cloud/account-secrets/listAccountSecretConsumers)
+- [List account secret fields](/docs/api-reference/cloud/account-secrets/listAccountSecretFields)
+- [List account secrets](/docs/api-reference/cloud/account-secrets/listAccountSecrets)
 - [List fields](/docs/api-reference/browsers/environment-secrets/listBrowserSecretFields)
 - [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets)
 - [List field names](/docs/api-reference/offices/environment-secrets/listOfficeSecretFields)
 - [List secret groups](/docs/api-reference/offices/environment-secrets/listOfficeSecrets)
+- [Read an account secret field](/docs/api-reference/cloud/account-secrets/readAccountSecretField)
 - [Read a field](/docs/api-reference/browsers/environment-secrets/readBrowserSecretField)
 - [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
 </Accordion>
-<Accordion title="Endpoints that need `secrets:read` (6)">
+<Accordion title="Endpoints that need `secrets:read` (10)">
+- [List what uses an account secret](/docs/api-reference/cloud/account-secrets/listAccountSecretConsumers)
+- [List account secret fields](/docs/api-reference/cloud/account-secrets/listAccountSecretFields)
+- [List account secrets](/docs/api-reference/cloud/account-secrets/listAccountSecrets)
 - [List fields](/docs/api-reference/browsers/environment-secrets/listBrowserSecretFields)
 - [List secrets](/docs/api-reference/browsers/environment-secrets/listBrowserSecrets)
 - [List field names](/docs/api-reference/offices/environment-secrets/listOfficeSecretFields)
 - [List secret groups](/docs/api-reference/offices/environment-secrets/listOfficeSecrets)
+- [Read an account secret field](/docs/api-reference/cloud/account-secrets/readAccountSecretField)
 - [Read a field](/docs/api-reference/browsers/environment-secrets/readBrowserSecretField)
 - [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
 </Accordion>
-<Accordion title="Endpoints that need `secrets:write` (10)">
+<Accordion title="Endpoints that need `secrets:write` (13)">
+- [Add an account secret field](/docs/api-reference/cloud/account-secrets/addAccountSecretField)
 - [Add a field](/docs/api-reference/browsers/environment-secrets/addBrowserSecretField)
 - [Add a field](/docs/api-reference/offices/environment-secrets/addOfficeSecretField)
+- [Create an account secret](/docs/api-reference/cloud/account-secrets/createAccountSecret)
 - [Create a secret](/docs/api-reference/browsers/environment-secrets/createBrowserSecret)
 - [Create a secret group](/docs/api-reference/offices/environment-secrets/createOfficeSecret)
 - [Delete a secret](/docs/api-reference/browsers/environment-secrets/deleteBrowserSecret)
 - [Delete a field](/docs/api-reference/browsers/environment-secrets/deleteBrowserSecretField)
 - [Delete a secret group](/docs/api-reference/offices/environment-secrets/deleteOfficeSecret)
 - [Delete a field](/docs/api-reference/offices/environment-secrets/deleteOfficeSecretField)
+- [Update an account secret field](/docs/api-reference/cloud/account-secrets/updateAccountSecretField)
 - [Update a field](/docs/api-reference/browsers/environment-secrets/updateBrowserSecretField)
 - [Update a field value](/docs/api-reference/offices/environment-secrets/updateOfficeSecretField)
 </Accordion>
@@ -588,18 +639,23 @@ granted at the workspace above it to cover every office in it.
 | `billing:manage` | Configure automatic top-ups and account billing, and manage budgets at every scope. | `console` |
 
 <Accordions>
-<Accordion title="Endpoints that need `billing:read` (14)">
+<Accordion title="Endpoints that need `billing:read` (19)">
 - [Check before spending](/docs/api-reference/billing/credit/checkBalance)
 - [Get the balance](/docs/api-reference/billing/credit/getBalance)
 - [Get a budget](/docs/api-reference/billing/budgets/getBudget)
 - [Get daily spend for a budget](/docs/api-reference/billing/budgets/getBudgetSeries)
+- [Get compute charges by service](/docs/api-reference/billing/compute/getComputeByService)
+- [Get a compute charge series](/docs/api-reference/billing/compute/getComputeChargeSeries)
 - [Get a compute invoice](/docs/api-reference/billing/compute/getComputeInvoice)
 - [Get a service's settings](/docs/api-reference/billing/compute/getComputeServiceConfig)
-- [Get compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
+- [Get usage for one service](/docs/api-reference/billing/compute/getComputeServiceUsage)
+- [Get estimated compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
 - [Get a usage series](/docs/api-reference/billing/usage/getUsageSeries)
 - [Get a usage summary](/docs/api-reference/billing/usage/getUsageSummary)
 - [List refused work](/docs/api-reference/billing/budgets/listBudgetEvents)
 - [List budgets](/docs/api-reference/billing/budgets/listBudgets)
+- [List compute bills](/docs/api-reference/billing/compute/listComputeBills)
+- [List compute charges](/docs/api-reference/billing/compute/listComputeCharges)
 - [List compute invoices](/docs/api-reference/billing/compute/listComputeInvoices)
 - [List credit invoices](/docs/api-reference/billing/usage/listInvoices)
 - [List model usage](/docs/api-reference/billing/usage/listUsage)
@@ -821,8 +877,6 @@ Usually that means they gate a console-only surface. See
 - `settings:read`
 - `settings:manage`
 - `users:manage`
-- `groupchat:read`
-- `groupchat:send`
 - `groupchat:create-pm`
 - `groupchat:manage`
 - `groupchat:read:all`
