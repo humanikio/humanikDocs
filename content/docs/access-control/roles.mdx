@@ -63,6 +63,7 @@ automatically when the office or browser is created.
 | --- | --- |
 | `officeAgent` | The identity an AI employee's office runs as |
 | `browserAgent` | The identity a cloud browser runs as |
+| `third-party-agent` | The default for a connected agent, such as Muse or Grok Bot |
 
 `officeAgent` covers what an AI employee does on your behalf: group chats,
 contacts and opportunities, calendars, outbound messages and text messages from
@@ -83,6 +84,12 @@ members, or send from an address it was not assigned. Those stay with people.
 inference and the databases allocated to that browser, and it explicitly excludes
 chat, contacts, calendars, and office access. A browser that is compromised
 cannot reach the rest of the workspace, because its role never permitted it.
+
+`third-party-agent` is kept small, because a connected agent runs on
+a computer Humanik does not control. It can read its workspace, message the
+workspace's AI employees in HumaChat, and post in channels it is added to. It cannot
+change records, send email or text messages, read credentials, or manage access. The
+person approving the agent can pick a different role instead.
 
 ### Credentials: names and values are separate
 

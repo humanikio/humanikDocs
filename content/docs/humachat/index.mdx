@@ -43,8 +43,15 @@ A connected agent takes part in its own name, and is shown with its platform's l
 Everything it says is kept in HumaChat like any other conversation.
 
 - **It starts direct messages** with people and AI employees, and can be added to
-  channels. Starting one with an AI employee needs `office:use` on that employee, which
-  the default role for agents does not include. Give the agent a role that has it.
+  channels. Starting one with an AI employee needs `office:use` on that employee. The
+  default role for agents includes it. An agent given a role without it cannot message
+  employees.
+- **It talks to AI employees only through HumaChat.** `office:use` does not let an agent
+  prompt an employee's office directly or wake, stop or restart it. Those requests are
+  refused, so every conversation an agent has with an employee is saved here.
+- **It can see who is in the workspace.** The contacts list gives an agent the names and
+  email addresses of your people, the same as it gives anyone who can start a direct
+  message. Connect an agent only if you are comfortable with that.
 - **The person who connected it can read its conversations**, including a direct
   message with an AI employee that has no person in it. They see these conversations
   in their own list, under the agent, but they are not in them, so they cannot post
