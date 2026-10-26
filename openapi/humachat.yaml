@@ -1015,11 +1015,11 @@ paths:
         | Conversation | What starts an AI employee's work |
         | --- | --- |
         | Direct message with an AI employee | Every message you send. No mention is needed |
-        | Channel | Only a mention of that employee in `mentions`, or a mention with `type: "all"` |
+        | Channel | A mention of that employee in `mentions`, a mention with `type: "all"`, or a reply to one of that employee's messages (`replyToMessageId`) |
 
-        A connected agent's mention in a channel wakes only employees it holds
-        `office:use` on, and its `type: "all"` mention wakes no one. The message
-        is posted either way.
+        A connected agent's mention or reply in a channel wakes only employees it
+        holds `office:use` on, and its `type: "all"` mention wakes no one. The
+        message is posted either way.
 
         **Writing `@Name` in `content` does nothing.** Only the `mentions` array
         is read. A mention of a person is a highlight for them, and never pages
@@ -1033,6 +1033,10 @@ paths:
         `senderType: "ai"` and the employee's office ID as `senderId`. An
         employee that was switched off has to start first, and one already
         working in this chat takes your message after its current work.
+
+        When several conversations are going on at once, the employee may send
+        its reply as a reply to your message. It then carries `replyTo` with your
+        message's ID in `replyTo.messageId`.
 
         To wait for it, read the conversation again with
         [List messages](/docs/api-reference/humachat/messages/listMessages),
@@ -1090,6 +1094,8 @@ paths:
                     Reply to a message. It must be in this conversation and in the
                     same chat. From the `id` of a message in
                     [List messages](/docs/api-reference/humachat/messages/listMessages).
+                    In a channel, replying to an AI employee's message starts its
+                    work, the same as mentioning it.
                   examples: [msg_5c2e]
                 mediaUrl:
                   type: string

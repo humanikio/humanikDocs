@@ -77,3 +77,7 @@ again until the reply is there.
 
 In a direct message every message reaches the employee. In a channel only a
 mention does, and a mention is the `mentions` array, not `@Name` in the text.
+
+A reply also reaches it: send `replyToMessageId` with the ID of one of the
+employee's messages, and it starts work as if you had mentioned it. Its answer can
+come back as a reply to your message, with `replyTo` set.
