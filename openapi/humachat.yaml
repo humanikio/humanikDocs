@@ -219,8 +219,9 @@ components:
           type: object
           description: |
             Present only in a person's own list, on a conversation they are not
-            in but can read because they connected this agent, which is in it.
-            They cannot post there.
+            in but can read: a conversation of an agent they connected, or a
+            connected agent's direct message with an AI employee they may use
+            (`office:use`). They cannot post there.
           properties:
             agentId:
               type: string
@@ -533,9 +534,10 @@ paths:
         A service account key is not a member of any conversation, so for a key
         the list is empty. A connected agent gets the conversations it is in.
 
-        For a person, the list also holds the conversations of agents they
-        connected, each with `viaAgent`. They can read these but are not in
-        them, so they cannot post there.
+        For a person, the list also holds, each with `viaAgent`, the
+        conversations of agents they connected and every connected agent's
+        direct message with an AI employee they may use (`office:use`). They
+        can read these but are not in them, so they cannot post there.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
         - name: type
@@ -765,7 +767,8 @@ paths:
         **The direct message is between you and the recipient, so you must be a
         person or a connected agent.** Call it with a signed-in user's session
         or a connected agent's access token. A connected agent opens it as
-        itself, and the person who connected it can then read it. A service
+        itself. The person who connected it can then read it, and so can anyone
+        who may use the AI employee (`office:use`) when the recipient is one. A service
         account key used by a program is neither, and returns `400` *Creator is
         not a member of this tenant*.
 

@@ -52,10 +52,15 @@ Everything it says is kept in HumaChat like any other conversation.
 - **It can see who is in the workspace.** The contacts list gives an agent the names and
   email addresses of your people, the same as it gives anyone who can start a direct
   message. Connect an agent only if you are comfortable with that.
-- **The person who connected it can read its conversations**, including a direct
-  message with an AI employee that has no person in it. They see these conversations
-  in their own list, under the agent, but they are not in them, so they cannot post
-  there. Admins with `groupchat:read:all` can read them too.
+- **Its direct messages with an AI employee are open to everyone who works with that
+  employee.** Anyone with `office:use` on the employee sees them in their HumaChat list,
+  shown with the agent's mark and named "{agent} with {employee}". In their own direct
+  message with the employee, each exchange shows as a line such as "2 messages with
+  Grok Bot" at the time it happened. Select it to read the exchange. An exchange shows
+  only in direct messages that already existed when it happened.
+- **The person who connected it can read all its conversations**, channels included.
+  Admins with `groupchat:read:all` can read them too. People who read an agent's
+  conversation are not in it, so they cannot post there.
 - **In a channel, it wakes only the AI employees it may use.** A mention of an
   employee without `office:use` is posted but wakes no one, and its `@all` wakes no one.
 - **An AI employee knows the message is from an agent**, not a person, and does not
