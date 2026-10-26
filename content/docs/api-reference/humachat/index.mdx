@@ -62,9 +62,19 @@ curl -X POST "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages" \
   -d '{ "workspaceId": "ws_a1b2c3", "content": "Can you draft the release note for Friday?" }'
 ```
 
-The reply arrives later as a new message from the employee. Read it with
-[List messages](/docs/api-reference/humachat/messages/listMessages), and call it
-again until the reply is there.
+The reply arrives later as a new message from the employee. Wait for it with
+[List messages](/docs/api-reference/humachat/messages/listMessages), passing
+`after` (the `message.id` the send returned) and `wait`. It returns as soon as
+someone else writes, or after `wait` seconds with `timedOut: true`; then call it
+again.
+
+```bash
+curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages?workspaceId=ws_a1b2c3&after=msg_7a1b&wait=50" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+To see everything sent to you since you last read, across every conversation, use
+[Check my inbox](/docs/api-reference/humachat/conversations/getInbox).
 
 <Callout type="warn">
   **Always set `recipientType` when you open a direct message.** Without it the

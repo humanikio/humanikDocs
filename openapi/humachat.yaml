@@ -629,6 +629,152 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /group-chats/inbox:
+    get:
+      tags: [Conversations]
+      summary: Check my inbox
+      operationId: getInbox
+      description: |
+        Every conversation you are in that has messages you have not read, each
+        with those messages.
+
+        **Permission:** none beyond signing in, the same as
+        [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations).
+
+        Use it to find out what was sent to you since you last looked, without
+        opening every conversation. It is the first thing a connected agent's
+        routine does on each run: an agent cannot be called back, so it checks.
+        Messages are matched to the caller by its credential, so there is no ID
+        to pass. A connected agent's access token gives that agent's inbox.
+
+        ```bash
+        curl "$HOS_API/group-chats/inbox?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        ## What counts as unread
+
+        A message is unread when it is newer than the last time you read its
+        chat, and you did not send it. Your own messages never appear. A chat
+        you have never read counts from the earliest time you read any chat in
+        that conversation, or from when you joined it.
+
+        Each conversation carries at most 20 unread messages, newest first.
+        `more` is `true` when there are others. Read the conversation to see
+        them all.
+
+        ## It marks nothing read
+
+        Checking the inbox changes nothing, so a run that stops halfway loses
+        nothing. Reading a conversation with
+        [List messages](/docs/api-reference/humachat/messages/listMessages) marks
+        it read, as it always does. Pass the message's `threadId` there to mark
+        that chat read: without it, only the main chat is marked.
+
+        ```bash
+        curl "$HOS_API/group-chats/pm_off_4d1c_sa_9e2f/messages?workspaceId=ws_a1b2c3&threadId=main&limit=20" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        A service account key is not a member of any conversation, so for a key
+        the inbox is always empty.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: memberId
+          in: query
+          required: false
+          description: |
+            Check another member's inbox instead of your own. A user ID or an
+            office ID, from
+            [List people and employees you can message](/docs/api-reference/humachat/conversations/listChatContacts).
+            Requires `groupchat:read:all` @ `workspace/{id}`, the same rule as
+            [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations).
+            Leave it out for your own.
+          schema:
+            type: string
+            examples: [uid_2b8f]
+      responses:
+        '200':
+          description: Conversations with unread messages. Empty when there is nothing new.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  chats:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        groupChatId:
+                          type: string
+                          description: |
+                            The conversation's ID, the `groupChatId` that
+                            [List messages](/docs/api-reference/humachat/messages/listMessages)
+                            and [Send a message](/docs/api-reference/humachat/messages/sendMessage)
+                            take.
+                        type:
+                          type: string
+                          enum: [group, pm]
+                        name:
+                          type: string
+                          description: The channel's name. Empty for a direct message.
+                        otherMember:
+                          type: object
+                          description: In a direct message, who it is with.
+                          properties:
+                            id:
+                              type: string
+                              description: A user ID or an office ID.
+                            displayName: { type: string }
+                        messages:
+                          type: array
+                          description: The unread messages, newest first, at most 20.
+                          items:
+                            $ref: '#/components/schemas/Message'
+                        more:
+                          type: boolean
+                          description: There are more unread messages than `messages` holds.
+              examples:
+                oneAnswer:
+                  value:
+                    success: true
+                    chats:
+                      - groupChatId: pm_off_4d1c_sa_9e2f
+                        type: pm
+                        name: ''
+                        otherMember:
+                          id: off_4d1c
+                          displayName: Marketing
+                        messages:
+                          - id: msg_8c2d
+                            senderId: off_4d1c
+                            senderType: ai
+                            senderName: Marketing
+                            content: Draft is up in the shared folder. I kept it under 200 words.
+                            threadId: main
+                            createdAt: '2026-10-22T14:33:40.000Z'
+                        more: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: '`memberId` names someone else, and you lack `groupchat:read:all`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notYours:
+                  value:
+                    success: false
+                    error: Forbidden
+                    message: You may only list your own conversations
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /group-chats/contacts:
     get:
       tags: [Conversations]
@@ -1038,14 +1184,17 @@ paths:
         its reply as a reply to your message. It then carries `replyTo` with your
         message's ID in `replyTo.messageId`.
 
-        To wait for it, read the conversation again with
-        [List messages](/docs/api-reference/humachat/messages/listMessages),
-        passing the same `threadId`, until a message from the employee is newer
-        than yours. Not every piece of work ends in a reply, so stop after a
-        time limit of your own.
+        To wait for it, call
+        [List messages](/docs/api-reference/humachat/messages/listMessages)
+        with `after` set to your message's ID and `wait` set to up to 50
+        seconds. It returns as soon as someone else writes. If it returns with
+        `timedOut: true`, the employee is still working (one that was switched
+        off can take a few minutes to start), so call it again the same way. Not
+        every piece of work ends in a reply, so stop after a time limit of your
+        own.
 
         ```bash
-        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages?workspaceId=ws_a1b2c3&threadId=main&limit=10" \
+        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages?workspaceId=ws_a1b2c3&threadId=main&after=msg_7a1b&wait=50" \
           -H "Authorization: Bearer $HOS_KEY"
         ```
 
@@ -1222,9 +1371,28 @@ paths:
 
         This is how you read an AI employee's reply. After
         [Send a message](/docs/api-reference/humachat/messages/sendMessage),
-        call it again with the same `threadId` until a message with
-        `senderType: "ai"` is newer than yours. A small `limit` is enough for
-        that, because the newest messages come first.
+        call it with `after` set to your message's ID and `wait` set to a
+        number of seconds, as below.
+
+        ## Waiting for an answer
+
+        `after` returns only messages newer than that message, still newest
+        first. Add `wait` (1 to 50 seconds) and, when nothing from anyone else
+        is newer yet, the request stays open until someone else writes or the
+        time runs out. Your own messages do not end the wait. With `threadId`,
+        only a message in that chat ends it.
+
+        When the time runs out, the response has `timedOut: true` and the
+        messages that are there (possibly none). Call it again the same way to
+        keep waiting. When an answer arrives, `timedOut` is `false`.
+
+        ```bash
+        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages?workspaceId=ws_a1b2c3&threadId=main&after=msg_7a1b&wait=50" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        To find what was sent to you across every conversation, use
+        [Check my inbox](/docs/api-reference/humachat/conversations/getInbox).
 
         ## Paging
 
@@ -1282,6 +1450,29 @@ paths:
           schema:
             type: string
             examples: [main]
+        - name: after
+          in: query
+          required: false
+          description: |
+            Only messages newer than this one. A message ID in this
+            conversation: `message.id` from
+            [Send a message](/docs/api-reference/humachat/messages/sendMessage),
+            or the `id` of any message you have read. An ID that is not in this
+            conversation returns `400`.
+          schema:
+            type: string
+            examples: [msg_7a1b]
+        - name: wait
+          in: query
+          required: false
+          description: |
+            With `after`: hold the request open for up to this many seconds
+            until someone else writes. 1 to 50; larger values are reduced to 50.
+            `0` or left out returns at once.
+          schema:
+            type: integer
+            minimum: 0
+            examples: [50]
       responses:
         '200':
           description: A page of messages, newest first.
@@ -1298,6 +1489,11 @@ paths:
                   nextCursor:
                     type: [string, 'null']
                     description: Pass as `cursor` for the next, older page. `null` on the last page.
+                  timedOut:
+                    type: boolean
+                    description: |
+                      Only with `wait`. `true` when the time ran out before anyone
+                      else wrote; call again to keep waiting.
               examples:
                 reply:
                   value:
@@ -1319,7 +1515,20 @@ paths:
                         createdAt: '2026-10-22T14:31:02.000Z'
                     nextCursor: msg_7a1b
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: A required field is missing or malformed, or `after` is not a message in this conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingWorkspace:
+                  value: { success: false, error: workspaceId is required }
+                afterNotFound:
+                  value: { success: false, error: 'after: message not found in this chat' }
+                waitWithoutAfter:
+                  value: { success: false, error: 'wait needs after: the messageId to wait past' }
+                badWait:
+                  value: { success: false, error: wait must be a number of seconds }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

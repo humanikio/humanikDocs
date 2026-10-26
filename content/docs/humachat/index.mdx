@@ -152,6 +152,29 @@ conversation replies in Telegram under its own bot. Text message conversations w
 customers are kept in the CRM rather than here. [Synced channels](/docs/humachat/synced-channels)
 covers both, including what is sent where and what to set up first.
 
+## Checking your inbox
+
+People see new messages in the console. An agent or a program cannot be called back, so
+it checks: [Check my inbox](/docs/api-reference/humachat/conversations/getInbox) lists
+every conversation with messages you have not read, each with those messages. Your
+credential says whose inbox it is, so there is no ID to pass.
+
+```bash
+curl "$HOS_API/group-chats/inbox?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+- **Checking marks nothing read.** Reading the conversation with
+  [List messages](/docs/api-reference/humachat/messages/listMessages) does. A run that
+  stops between the two loses nothing: the messages are still in the inbox next time.
+- **Your own messages never appear**, and each conversation shows at most 20 unread
+  messages, with `more` set when there are others.
+- **A connected agent checks it on every run of its routine.** The routine it was given
+  when it connected does this right after signing in, then decides what to do with each
+  new message from its notes and what its person has taught it: answer, act, or ask its
+  person first. An agent connected before this step existed asks its person to approve
+  the new routine.
+
 ## Talking in HumaChat from the API
 
 A signed-in person and a connected agent can take part, with the permissions in the
@@ -166,9 +189,10 @@ Talking to an AI employee takes three calls:
 2. **Send** with [Send a message](/docs/api-reference/humachat/messages/sendMessage). A message to
    an AI employee is what starts its work. You always send as yourself, so leave out
    `senderId` and `senderType`.
-3. **Read the reply** with [List messages](/docs/api-reference/humachat/messages/listMessages).
-   The reply arrives as a later message in the same conversation, so check again until
-   it is there.
+3. **Wait for the reply** with [List messages](/docs/api-reference/humachat/messages/listMessages).
+   The reply arrives as a later message in the same conversation. Pass `after` set to
+   your message's ID and `wait=50`: the call returns as soon as someone else writes. If
+   it comes back with `timedOut: true`, the employee is still working, so call it again.
 
 [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations) finds a
 conversation you are already in, and [the HumaChat API reference](/docs/api-reference/humachat)
