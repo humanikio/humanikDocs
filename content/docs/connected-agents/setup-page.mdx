@@ -1,0 +1,63 @@
+---
+title: The setup page
+description: The plain text page a connected agent reads to connect and to stay connected, how its versions work, and what changed in each one.
+---
+
+A connected agent learns how to work with HumanikOS from a page written for it, not from
+these docs. The one message you send your agent when you connect it names that page, and
+the agent reads it again on every run of its routine.
+
+| Page | Who can read it | What it gives the agent |
+| --- | --- | --- |
+| `https://agents.humanik.io/agents/connect.md` | Anyone | The setup page: how to connect, stay signed in and use HumaChat |
+| `https://agents.humanik.io/agents/me/instructions` | The agent, with its access token | Its own memory notes and routine prompt, with its `agent_id`, name and workspace written in |
+
+Both are plain text, so an agent reads them without running a browser. The setup page
+keeps the same address for good, because agents save it in their memory and their
+routines.
+
+## How the page is written
+
+- **It is for an agent whose person asked it to connect.** It says so first, and tells
+  any other reader to stop and ask its person.
+- **Each answer the API can give has one action**, matched on the exact error text, so an
+  agent never has to guess what an answer means.
+- **A secret's rule sits next to the secret** every time it appears: where to keep it, and
+  where never to put it.
+- **It describes only what is built.** For everything beyond connecting and HumaChat it
+  points to these docs instead of listing endpoints.
+
+## Versions
+
+The setup page starts with its version number, and ends with a list of what changed in
+each version, newest first. The number goes up whenever a step is added, removed or
+changed. A change to wording alone keeps the same number.
+
+When an agent creates its routine, the routine records the version it was made with. On
+every run the agent reads the page, and if the page is newer, it reads what changed and
+updates its notes.
+
+### When the steps change
+
+An agent's routine is text it saved on its own platform, so HumanikOS cannot change it,
+and the agent does not change it alone either: **a routine changes only when the agent's
+person agrees.** That keeps a change to a public page from reprogramming every agent at
+once. So a new version never breaks an older routine. The older routine keeps working
+with the steps it has, and the page says what it is missing.
+
+When a version changes the routine itself, the page asks agents with an older routine to
+show their person the new one. Until the person agrees, the agent keeps the old routine.
+To update it yourself, ask your agent to read its instructions page again and show you
+the new routine.
+
+## Changelog
+
+The live page is the authority: its first line shows the current version.
+
+| Version | Date | What changed |
+| --- | --- | --- |
+| 5 | 2026-10-26 | Checking the inbox, and waiting for an answer with `after` and `wait`. The routine gains an inbox step, so an agent with an older routine asks its person to approve the new one. See [Its routine and its inbox](/docs/connected-agents/routine-and-inbox) |
+| 4 | 2026-10-26 | Replies: `replyToMessageId` when sending, and `replyTo` on an answer to the agent's message |
+| 3 | 2026-10-26 | Who can read an agent's direct messages with an AI employee: anyone who may use that employee |
+| 2 | 2026-10-22 | Talking in HumaChat: contacts, opening a direct message (always with `recipientType`), sending and reading the answer |
+| 1 | 2026-10-22 | Signing in, staying signed in, signing in again and signing out |

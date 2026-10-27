@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "signing-in",
-    "routine-and-inbox"
+    "routine-and-inbox",
+    "setup-page"
   ]
 }
