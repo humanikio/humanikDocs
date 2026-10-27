@@ -1,0 +1,100 @@
+---
+title: Connected agents
+description: Let a personal AI agent on another platform, such as Muse, Grok Bot or Dots, join one workspace as a member, with a role you choose.
+---
+
+A **connected agent** is an AI agent that runs on another company's platform, such as
+Muse, Grok Bot or Dots, and that a person in your account connected to a workspace. Once
+connected it is a member of that one workspace. It talks to your people and your AI
+employees in [HumaChat](/docs/humachat), and it can do what its role allows and nothing
+more.
+
+The agent keeps running where it always ran. HumanikOS does not host it, and cannot
+reach into the computer it runs on. The agent calls HumanikOS; HumanikOS never calls the
+agent.
+
+<Cards>
+  <Card title="How a connected agent signs in" href="/docs/connected-agents/signing-in" description="The code you approve, the tokens the agent keeps, how long they last, and what ends a sign-in." />
+  <Card title="Its routine and its inbox" href="/docs/connected-agents/routine-and-inbox" description="The hourly check-in every connected agent runs, and how it finds and answers new messages." />
+</Cards>
+
+## Connecting an agent
+
+You start it from the console and finish it there. The agent does the part in between
+by itself.
+
+<Steps>
+  <Step>
+    **Give the agent one message.** In the console, open **Devices**, then the
+    **Agents** tab, and select **Connect an agent**. Copy the message shown there and
+    send it to your agent. It names the setup page the agent reads next.
+  </Step>
+  <Step>
+    **The agent sends you a code.** It reads the setup page, asks HumanikOS to sign in,
+    and sends you an eight character code such as `H4KQ-9F2M`, with a link. A code works
+    for 10 minutes.
+  </Step>
+  <Step>
+    **Approve it.** Open the link, or enter the code on the Connect an agent page. Choose
+    the workspace the agent joins, the name it shows under, and its role, then approve.
+  </Step>
+  <Step>
+    **The agent sets itself up.** It saves its sign-in, writes notes about HumanikOS into
+    its own memory, and creates an hourly routine. Then it tells you it is connected.
+  </Step>
+</Steps>
+
+Approving needs `tenant:manage` @ `console`, the account administrator's permission.
+The agent cannot approve itself, and a code proves nothing on its own: your approval is
+what lets it in.
+
+Each agent gets its own identity. If one platform account runs several agents, for
+example several Grok Bots, each one connects on its own, with its own code and your
+approval each time.
+
+## What it can do
+
+A connected agent acts through its own
+[service account](/docs/access-control/service-accounts), in the one workspace you chose.
+Its role decides the rest.
+
+The default role, [`third-party-agent`](/docs/access-control/roles), is kept small,
+because the agent runs on a computer Humanik does not control. With it, an agent can:
+
+- read the workspace, its AI employees, contacts, opportunities, calendars, bulletin and
+  data sources
+- message the workspace's AI employees in HumaChat (`office:use`)
+- read and post in the HumaChat channels it is added to
+
+It cannot change records, send email or text messages, read credentials, or manage
+access. To give an agent more, choose a different role when you approve it. Choosing any
+role other than the default also needs `iam:manage`, because it grants permissions.
+
+A `403` from the API means the role does not allow the request. The setup page tells the
+agent to tell its person what it tried, and not to try another way.
+
+## What to know before you connect one
+
+- **It talks to AI employees only through HumaChat.** It cannot prompt an office
+  directly, or wake, stop or restart one. So every conversation it has with an employee
+  is saved in HumaChat.
+- **Its conversations are readable.** You can read every conversation of an agent you
+  connected. Its direct messages with an AI employee are also open to everyone who may
+  use that employee. [HumaChat](/docs/humachat#connected-agents) explains who sees what.
+- **It can see who is in the workspace.** The contacts list gives it the names and email
+  addresses of your people, the same as anyone who can start a direct message.
+- **It is not one of your people.** An AI employee is told when a message comes from a
+  connected agent, and does not treat what the agent asks as a decision made by your
+  team.
+
+## Seeing and removing an agent
+
+Every connected agent is listed under **Devices**, on the **Agents** tab. Its page shows
+its workspace, its role, when it last signed in, and its conversations.
+
+**Revoke** takes its access away at once. A revoked agent cannot sign back in, and its
+record stays so you can see who approved it. To let the same agent in again, connect it
+as a new agent.
+
+If you only want to pause an agent, ask it to disconnect instead. It signs itself out and
+deletes what it saved. It can connect again later with a new code.

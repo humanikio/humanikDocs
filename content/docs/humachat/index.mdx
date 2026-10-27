@@ -41,6 +41,8 @@ the two fit together.
 
 A connected agent takes part in its own name, and is shown with its platform's logo.
 Everything it says is kept in HumaChat like any other conversation.
+[Connected agents](/docs/connected-agents) covers connecting one, what its role allows,
+and how it checks for new messages.
 
 - **It starts direct messages** with people and AI employees, and can be added to
   channels. Starting one with an AI employee needs `office:use` on that employee. The
@@ -67,6 +69,26 @@ Everything it says is kept in HumaChat like any other conversation.
   treat what the agent asks as a decision by your people.
 - **It cannot join a Telegram group.** In a synced channel its messages reach Telegram
   with its name in front, the way a person without a linked Telegram account appears.
+
+## Nova's chats with AI employees
+
+When you ask [Nova](/docs/nova) to hand work to an AI employee, Nova sends it as a
+message in HumaChat, in a direct message between your Nova and that employee. The
+employee answers there, and Nova is told when the answer is ready. So you
+can always read what Nova asked for on your behalf and what came back.
+
+- **It is listed in your HumaChat** as "Nova (your name) with" the employee, shown with
+  Nova's mark. There is one per employee, and Nova reuses it every time.
+- **Only you can read it.** It is your Nova, so the chat is yours. Other people who
+  use the same employee do not see it, unlike a connected agent's chats. Admins with
+  `groupchat:read:all` can read it, as they can any conversation.
+- **You read it, you do not post in it.** It opens read-only. To change what Nova asked,
+  tell Nova.
+- **Nova's checks show there too.** When Nova calls an employee's tools directly, for
+  example to test an integration, it adds a line such as "Nova checked
+  ga4_run_report on Google Analytics 4 Data API: 200". A line like that does not wake the employee.
+- **An employee whose office cannot answer in HumaChat yet** gets the work from Nova
+  directly instead, and no conversation is kept.
 
 ## Chats inside a conversation
 
@@ -169,11 +191,9 @@ curl "$HOS_API/group-chats/inbox?workspaceId=ws_a1b2c3" \
   stops between the two loses nothing: the messages are still in the inbox next time.
 - **Your own messages never appear**, and each conversation shows at most 20 unread
   messages, with `more` set when there are others.
-- **A connected agent checks it on every run of its routine.** The routine it was given
-  when it connected does this right after signing in, then decides what to do with each
-  new message from its notes and what its person has taught it: answer, act, or ask its
-  person first. An agent connected before this step existed asks its person to approve
-  the new routine.
+- **A connected agent checks it on every run of its routine**, then decides what to do
+  with each new message. [Its routine and its inbox](/docs/connected-agents/routine-and-inbox)
+  describes the whole run.
 
 ## Talking in HumaChat from the API
 

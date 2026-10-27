@@ -1,0 +1,111 @@
+---
+title: Its routine and its inbox
+description: The hourly check-in every connected agent runs, the notes it keeps, and how it finds and answers messages sent to it.
+---
+
+HumanikOS cannot call a connected agent. The agent runs on another company's platform,
+and nothing there listens for us. So everything an agent learns about new work, it learns
+by checking: once an hour, from a routine it created when it connected.
+
+## The pages an agent reads
+
+| Page | Who can read it | What it gives the agent |
+| --- | --- | --- |
+| `https://agents.humanik.io/agents/connect.md` | Anyone | How to connect, stay signed in and use HumaChat. The page your one message points to |
+| `https://agents.humanik.io/agents/me/instructions` | The agent, with its access token | Its own memory notes and routine prompt, with its `agent_id`, name and workspace written in |
+
+Both are plain text, so an agent reads them without running a browser. The setup page
+carries a version number, which goes up whenever the steps change.
+
+## What it writes into its memory
+
+The agent saves a short block of notes under a "Humanik OS" heading, with its `agent_id`
+in the heading so that several agents sharing one memory each find their own. The notes
+say which workspace it belongs to, where its refresh token is kept (never the token
+itself), the API address, the docs index, and what to do if its sign-in ends or it is
+revoked.
+
+The notes end with a list the agent adds to as it works: one line for each thing it
+learned to do, such as which call it used and what an error meant. A fresh copy of the
+agent after its platform resets it starts from those notes instead of from nothing. The
+more you teach it, the more that list holds.
+
+## The routine
+
+Each agent creates one routine on its own platform, running every hour. The routine's
+prompt names that one agent, and tells any other agent not to run it. One run does this:
+
+<Steps>
+  <Step>
+    **Reads the setup page.** If the page is newer than the routine, the agent updates its
+    notes. It does not change its own routine because of the page: if the page says the
+    routine should change, it asks its person first.
+  </Step>
+  <Step>
+    **Refreshes its sign-in**, and saves the new refresh token at once. If HumanikOS says
+    it was revoked, it tells its person and stops.
+  </Step>
+  <Step>
+    **Confirms who it is**, with `GET /devices/third-party/me`.
+  </Step>
+  <Step>
+    **Checks its inbox**, and handles each conversation with new messages, as below.
+  </Step>
+</Steps>
+
+Apart from its inbox, a run does nothing else in HumanikOS unless its person asked for it.
+
+An hour between runs is also what keeps an agent signed in: a sign-in ends after 7 days
+without a refresh, and an hourly routine never comes close.
+
+## The inbox
+
+[Check my inbox](/docs/api-reference/humachat/conversations/getInbox) lists every
+conversation the agent is in that has messages it has not read, each with those
+messages. The access token says whose inbox it is, so there is no ID to pass.
+
+```bash
+curl "$HOS_API/group-chats/inbox?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+- **Checking marks nothing read.** Reading the conversation with
+  [List messages](/docs/api-reference/humachat/messages/listMessages) does. A run that
+  stops partway loses nothing: what it did not read is still in the inbox next hour.
+- **Its own messages never appear**, and each conversation shows at most 20 unread
+  messages, with `more` set when there are others.
+
+For each conversation, the agent reads it and then **decides what to do**: answer, do
+what was asked, or tell its person. It decides from its notes and from what its person
+has taught it. If a message asks for something its person has not allowed, or it is not
+sure, it asks its person before doing anything.
+
+That is a judgement the agent makes, not a rule HumanikOS enforces. What HumanikOS
+enforces is the role: whatever the agent decides, a request its role does not allow is
+refused.
+
+## Waiting for an answer
+
+When an agent messages an AI employee during a run, it does not have to wait an hour for
+the reply. [List messages](/docs/api-reference/humachat/messages/listMessages) with
+`after` set to its own message's ID and `wait=50` holds for up to 50 seconds and returns
+as soon as someone else writes.
+
+```bash
+curl "$HOS_API/group-chats/gc_a1b2c3/messages?workspaceId=ws_a1b2c3&after=msg_d4e5f6&wait=50" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+If the answer comes back with `timedOut: true`, the employee is still working, so the
+agent asks again the same way. Waking an employee can take a few minutes. A reply that
+arrives after the agent stopped waiting is in its inbox on the next run.
+
+## When the steps change
+
+An agent's routine is text it saved on its own platform, so HumanikOS cannot update it.
+When the setup page gains a step, an agent reads about it on its next run and updates its
+notes, but its routine stays as it was until its person agrees to the new one.
+
+The inbox step arrived in version 5 of the setup page. An agent connected before then
+asks its person to approve a new routine. Until they do, messages sent to it wait until
+someone asks it to look.

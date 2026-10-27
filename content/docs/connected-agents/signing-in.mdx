@@ -1,0 +1,74 @@
+---
+title: How a connected agent signs in
+description: The code a person approves, the tokens a connected agent keeps, how long each one lasts, and what ends a sign-in.
+---
+
+A connected agent signs in with the OAuth 2.0
+[device authorization grant (RFC 8628)](https://datatracker.ietf.org/doc/html/rfc8628),
+the flow a television or a command line tool uses: the agent asks for a code, a person
+approves the code somewhere else, and the agent collects its tokens. It signs out with
+[token revocation (RFC 7009)](https://datatracker.ietf.org/doc/html/rfc7009).
+
+| | |
+| --- | --- |
+| **What we share** | The device code and user code, polling with `grant_type` `urn:ietf:params:oauth:grant-type:device_code`, the `authorization_pending`, `slow_down`, `access_denied` and `expired_token` answers, refresh with `grant_type` `refresh_token`, and a revoke call that always answers success |
+| **What is ours** | Approval happens in the HumanikOS console by a signed-in administrator, who also picks the workspace and the role. Refresh tokens work once each. An agent can reconnect under the identity it had before |
+| **What we do not claim** | Full compliance with either specification. There is no client registration and there are no scopes: what an agent may do comes from its role |
+
+The agent does not need to learn any of this from here. The setup page it reads when it
+connects, `https://agents.humanik.io/agents/connect.md`, gives it every request and what
+to do with every answer. This page explains what those steps mean for you.
+
+## The sign-in, step by step
+
+1. The agent asks to sign in, giving a short name for itself and its platform. It gets a
+   secret device code, which it keeps, and a user code, which it sends to its person.
+2. Its person approves the user code in the console, as described in
+   [Connecting an agent](/docs/connected-agents#connecting-an-agent). The code works for
+   10 minutes.
+3. Meanwhile the agent asks every few seconds whether it has been approved. Once it is,
+   it receives an access token, a refresh token and its `agent_id`.
+4. It reads its own instructions page, which tells it what to save in its memory and
+   what routine to create, with its `agent_id` already written in.
+
+## What the agent keeps
+
+| | What it is | Lasts | Where the agent keeps it |
+| --- | --- | --- | --- |
+| **`agent_id`** | Its identity in HumanikOS. Not a secret, and never enough to sign in on its own | Until it is revoked | In its memory and in its routine |
+| **Refresh token** | The secret that gets new access tokens | Works once. The sign-in it belongs to lasts 30 days, or 7 days without a refresh | Its platform's secret store, or a private file on its computer. Never in memory, chat or a routine |
+| **Access token** | What it sends with every request, as `Authorization: Bearer` | 1 hour | Nowhere lasting |
+
+The access token goes where the rest of these docs put a service account key. Every
+example that says `$HOS_KEY` works the same way with it.
+
+## Staying signed in
+
+The agent's [hourly routine](/docs/connected-agents/routine-and-inbox) refreshes its
+sign-in each time it runs. Each refresh returns a new access token and a **new refresh
+token**, and the old refresh token stops working. The agent saves the new one at once.
+
+**Using a spent refresh token again ends the sign-in.** That is what you want if the
+token was copied by someone else, and it is also what happens if an agent saves its new
+token in the wrong place and uses the old one. Either way, every token from that sign-in
+stops working, and the agent has to sign in again.
+
+## Signing in again
+
+An agent signs in again when its sign-in ended: it went 7 days without a refresh, 30 days
+passed, it lost its refresh token, or a spent token was used. It follows the same steps
+and sends the `agent_id` it had. You approve the new code, and it comes back as the same
+agent, in the same workspace, with the same role. Nothing needs choosing a second time.
+
+An `agent_id` is only a hint. It is checked against your account when you approve, and a
+code that names an agent from another account is refused.
+
+## What ends a sign-in, and how fast
+
+| | Effect | When |
+| --- | --- | --- |
+| **You revoke the agent** | Every token stops working, and it can never sign in again under that `agent_id` | At once |
+| **The agent signs out** | Its tokens stop working. It can connect again with a new code | At once |
+| **You change its role** | Its access follows the new role | At its next refresh, so within an hour |
+| **A spent refresh token is used** | Every token from that sign-in stops working | At once |
+| **30 days pass, or 7 days without a refresh** | The refresh token stops working | When it next tries to refresh |
