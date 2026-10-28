@@ -27,20 +27,20 @@ granted at the workspace above it to cover every office in it.
 | `tenant:manage` | Administer the account: stored credentials, workspace assignment, the shared template library. The highest grant on the platform, and no built-in role carries it. | `console` |
 
 <Accordions>
-<Accordion title="Endpoints that need `tenant:read` (2)">
-- [Get an integration template](/docs/api-reference/offices/tenant-libraries/getGlobalIntegration)
+<Accordion title="Endpoints that need `tenant:read` (4)">
+- [Get a plugin template](/docs/api-reference/offices/tenant-libraries/getGlobalIntegration)
 - [Get a website](/docs/api-reference/offices/tenant-libraries/getTenantWebsite)
-</Accordion>
-<Accordion title="Endpoints that need `tenant:manage` (10)">
-- [Add a template secret reference](/docs/api-reference/offices/tenant-libraries/addGlobalIntegrationSecretRef)
-- [Create an integration template](/docs/api-reference/offices/tenant-libraries/createGlobalIntegration)
-- [Delete an integration template](/docs/api-reference/offices/tenant-libraries/deleteGlobalIntegration)
-- [Delete a website](/docs/api-reference/offices/tenant-libraries/deleteTenantWebsite)
-- [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations)
+- [List plugin templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations)
 - [List template versions](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrationVersions)
+</Accordion>
+<Accordion title="Endpoints that need `tenant:manage` (8)">
+- [Add a template secret reference](/docs/api-reference/offices/tenant-libraries/addGlobalIntegrationSecretRef)
+- [Create a plugin template](/docs/api-reference/offices/tenant-libraries/createGlobalIntegration)
+- [Delete a plugin template](/docs/api-reference/offices/tenant-libraries/deleteGlobalIntegration)
+- [Delete a website](/docs/api-reference/offices/tenant-libraries/deleteTenantWebsite)
 - [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites)
-- [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
-- [Update an integration template](/docs/api-reference/offices/tenant-libraries/updateGlobalIntegration)
+- [Promote a plugin to the plugin library](/docs/api-reference/offices/plugins/promoteOfficeIntegration)
+- [Update a plugin template](/docs/api-reference/offices/tenant-libraries/updateGlobalIntegration)
 - [Update a website](/docs/api-reference/offices/tenant-libraries/updateTenantWebsite)
 </Accordion>
 </Accordions>
@@ -179,21 +179,21 @@ granted at the workspace above it to cover every office in it.
 
 <Accordions>
 <Accordion title="Endpoints that need `office:read` (22)">
-- [Mark integration failures as reviewed](/docs/api-reference/offices/integrations/dismissOfficeIntegrationFailures)
+- [Mark plugin failures as reviewed](/docs/api-reference/offices/plugins/dismissOfficeIntegrationFailures)
 - [Get an office](/docs/api-reference/offices/offices/getOffice)
 - [Get an allocated app](/docs/api-reference/offices/allocations/getOfficeApp)
 - [Get office cloud config](/docs/api-reference/offices/offices/getOfficeCloudConfig)
 - [Get the office's identity](/docs/api-reference/offices/identity/getOfficeIam)
-- [Get an integration](/docs/api-reference/offices/integrations/getOfficeIntegration)
+- [Get a plugin](/docs/api-reference/offices/plugins/getOfficeIntegration)
 - [Get an allocated namespace](/docs/api-reference/offices/allocations/getOfficeNamespace)
 - [Get a protocol](/docs/api-reference/offices/protocols/getOfficeProtocol)
 - [Get a skill](/docs/api-reference/offices/skills/getOfficeSkill)
 - [List office API keys](/docs/api-reference/offices/identity/listOfficeApiKeys)
 - [List allocated apps](/docs/api-reference/offices/allocations/listOfficeApps)
 - [List allocated browsers](/docs/api-reference/offices/allocations/listOfficeBrowsers)
-- [List inherited tenant secrets](/docs/api-reference/offices/integrations/listOfficeInheritedTenantSecrets)
-- [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations)
-- [List secret references](/docs/api-reference/offices/integrations/listOfficeIntegrationSecretRefs)
+- [List inherited tenant secrets](/docs/api-reference/offices/plugins/listOfficeInheritedTenantSecrets)
+- [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations)
+- [List secret references](/docs/api-reference/offices/plugins/listOfficeIntegrationSecretRefs)
 - [List allocated namespaces](/docs/api-reference/offices/allocations/listOfficeNamespaces)
 - [List protocols](/docs/api-reference/offices/protocols/listOfficeProtocols)
 - [Find offices using an app](/docs/api-reference/offices/allocations/listOfficesByApp)
@@ -202,20 +202,22 @@ granted at the workspace above it to cover every office in it.
 - [List allocated websites](/docs/api-reference/offices/allocations/listOfficeWebsites)
 - [Read a field value](/docs/api-reference/offices/environment-secrets/readOfficeSecretField)
 </Accordion>
-<Accordion title="Endpoints that need `office:use` (4)">
+<Accordion title="Endpoints that need `office:use` (6)">
 - [Open a direct message](/docs/api-reference/humachat/conversations/createDirectMessage)
+- [List my conversations](/docs/api-reference/humachat/conversations/listMyConversations)
 - [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine)
+- [Send a message](/docs/api-reference/humachat/messages/sendMessage)
 - [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine)
 - [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine)
 </Accordion>
 <Accordion title="Endpoints that need `office:manage` (34)">
-- [Add a secret reference](/docs/api-reference/offices/integrations/addOfficeIntegrationSecretRef)
+- [Add a secret reference](/docs/api-reference/offices/plugins/addOfficeIntegrationSecretRef)
 - [Allocate an app](/docs/api-reference/offices/allocations/allocateOfficeApp)
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
 - [Allocate a website](/docs/api-reference/offices/allocations/allocateOfficeWebsite)
-- [Allocate a website with its integrations](/docs/api-reference/offices/allocations/allocateOfficeWebsiteWithIntegrations)
-- [Create an integration](/docs/api-reference/offices/integrations/createOfficeIntegration)
-- [Create an integration from a template](/docs/api-reference/offices/integrations/createOfficeIntegrationFromTemplate)
+- [Allocate a website with its plugins](/docs/api-reference/offices/allocations/allocateOfficeWebsiteWithIntegrations)
+- [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration)
+- [Create a plugin from a template](/docs/api-reference/offices/plugins/createOfficeIntegrationFromTemplate)
 - [Create a protocol](/docs/api-reference/offices/protocols/createOfficeProtocol)
 - [Create a skill](/docs/api-reference/offices/skills/createOfficeSkill)
 - [Cycle the office API key](/docs/api-reference/offices/identity/cycleOfficeApiKey)
@@ -224,22 +226,22 @@ granted at the workspace above it to cover every office in it.
 - [Deallocate a website](/docs/api-reference/offices/allocations/deallocateOfficeWebsite)
 - [Delete an office](/docs/api-reference/offices/offices/deleteOffice)
 - [Delete the office API key](/docs/api-reference/offices/identity/deleteOfficeApiKey)
-- [Delete an integration](/docs/api-reference/offices/integrations/deleteOfficeIntegration)
+- [Delete a plugin](/docs/api-reference/offices/plugins/deleteOfficeIntegration)
 - [Delete a protocol](/docs/api-reference/offices/protocols/deleteOfficeProtocol)
 - [Delete a skill](/docs/api-reference/offices/skills/deleteOfficeSkill)
-- [Mark integration failures as reviewed](/docs/api-reference/offices/integrations/dismissOfficeIntegrationFailures)
+- [Mark plugin failures as reviewed](/docs/api-reference/offices/plugins/dismissOfficeIntegrationFailures)
 - [Get an office's model provider](/docs/api-reference/offices/model-provider/getOfficeModelProvider)
-- [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
+- [Promote a plugin to the plugin library](/docs/api-reference/offices/plugins/promoteOfficeIntegration)
 - [Provision a missing office API key](/docs/api-reference/offices/identity/provisionOfficeApiKey)
 - [Regenerate a skill body](/docs/api-reference/offices/skills/regenerateOfficeSkill)
-- [Remove a secret reference](/docs/api-reference/offices/integrations/removeOfficeIntegrationSecretRef)
-- [Report an integration call](/docs/api-reference/offices/integrations/reportOfficeIntegrationExecution)
+- [Remove a secret reference](/docs/api-reference/offices/plugins/removeOfficeIntegrationSecretRef)
+- [Report a plugin call](/docs/api-reference/offices/plugins/reportOfficeIntegrationExecution)
 - [Revoke the office API key](/docs/api-reference/offices/identity/revokeOfficeApiKey)
-- [Sync an integration from its template](/docs/api-reference/offices/integrations/syncOfficeIntegrationFromTemplate)
-- [Sync the integration's skill](/docs/api-reference/offices/integrations/syncOfficeIntegrationSkill)
+- [Sync a plugin from its template](/docs/api-reference/offices/plugins/syncOfficeIntegrationFromTemplate)
+- [Sync the plugin's skill](/docs/api-reference/offices/plugins/syncOfficeIntegrationSkill)
 - [Update an office](/docs/api-reference/offices/offices/updateOffice)
 - [Update machine configuration](/docs/api-reference/offices/machine/updateOfficeComputeConfig)
-- [Update an integration](/docs/api-reference/offices/integrations/updateOfficeIntegration)
+- [Update a plugin](/docs/api-reference/offices/plugins/updateOfficeIntegration)
 - [Set an office's model provider](/docs/api-reference/offices/model-provider/updateOfficeModelProvider)
 - [Update a protocol](/docs/api-reference/offices/protocols/updateOfficeProtocol)
 - [Update a skill](/docs/api-reference/offices/skills/updateOfficeSkill)
@@ -487,7 +489,7 @@ granted at the workspace above it to cover every office in it.
 
 <Accordions>
 <Accordion title="Endpoints that need `integration:publish` (1)">
-- [Promote an integration to the tenant library](/docs/api-reference/offices/integrations/promoteOfficeIntegration)
+- [Promote a plugin to the plugin library](/docs/api-reference/offices/plugins/promoteOfficeIntegration)
 </Accordion>
 </Accordions>
 

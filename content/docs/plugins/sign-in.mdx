@@ -1,0 +1,137 @@
+---
+title: How a plugin signs in
+description: The ten authentication types, what each one sends, and the tokens the office makes and renews itself.
+---
+
+Every plugin names one **authentication type**: the way the office proves who it is when it
+calls your software. The type is a protocol, not a provider. There is no "Stripe type" or
+"Google type". Stripe uses `bearer`, a Google service account uses `jwt_bearer`, and the
+provider's own values (its token address, its scopes) are part of the plugin's settings.
+
+The office does all of this. The employee never builds an authentication header, never sees a
+key, and never sees a token.
+
+## The types
+
+| Type | Use it when the API | The office sends |
+| --- | --- | --- |
+| `none` | Needs no credential | Nothing |
+| `bearer` | Takes a fixed key as a bearer token | `Authorization: Bearer <key>` |
+| `api_key` | Takes a key in a header of its own name, or in the query string | `<headerName>: <key>`, or `?<queryParam>=<key>` |
+| `basic` | Uses a user name and password | `Authorization: Basic ...`, built from one field holding `user:password` |
+| `oauth2` | Gives you a fixed access token that does not expire | `Authorization: Bearer <token>`. Nothing renews it |
+| `multi_header` | Needs several headers at once, such as an app ID and a key | One header per entry, up to 5 |
+| `hmac` | Signs each request with a shared secret, in the HumanikOS format | A signature over the timestamp, method, path, query and body, with the timestamp |
+| `oauth2_client_credentials` | Issues tokens for a client ID and secret | Gets a token from the API's token address, then `Authorization: Bearer <token>` |
+| `jwt_bearer` | Trades a JWT signed with your private key for a token: Google service accounts, Salesforce JWT flow, Box JWT apps | Signs a JWT, trades it for a token, then `Authorization: Bearer <token>` |
+| `signed_jwt` | Accepts a JWT you sign yourself as the bearer token, with no exchange | Signs a short lived JWT and sends it as the bearer token |
+
+Some other words are accepted and stored as the matching type: `bearer_token`, `basic_auth`,
+`multiple_headers`, `client_credentials`, `self_signed_jwt`, `webhook_secret` (stored as
+`api_key`) and `google_service_account` (stored as `jwt_bearer`). The word `jwt` on its own is
+refused, because it could mean `jwt_bearer` or `signed_jwt`, and a wrong guess between them
+fails at the first call.
+
+<Callout type="warn">
+  **A wrong type is not caught when you save.** A plugin with the wrong authentication type
+  saves cleanly and then fails every call, usually with a `401`. Check the plugin with one real
+  call after you set it up. See [Checking a plugin](/docs/plugins/checking).
+</Callout>
+
+## Fields are names, not values
+
+Every setting that ends in `Field` names a field in the plugin's secret group. It is never the
+value itself. For a Google service account, `issuerField: "CLIENT_EMAIL"` tells the office which
+field of the secret holds the service account's email. The email itself stays in the vault.
+
+Field names are matched without regard to letter case, so `client_email` and `CLIENT_EMAIL` find
+the same field.
+
+## Tokens the office makes and renews
+
+For `oauth2_client_credentials`, `jwt_bearer` and `signed_jwt`, the office makes the access token
+itself, at the moment of a call.
+
+- **It is kept in memory only.** A token is never stored and never shown to the employee.
+- **It is reused until 60 seconds before it expires**, then a new one is made.
+- **A `401` gets one retry with a fresh token.** If the API refuses the fresh token too, the
+  error goes back to the employee as it came.
+- **Changing the token settings never reuses an old token.**
+- **The token address must be `https`.** The office checks this again before it sends a
+  credential to it.
+
+<Callout>
+  **Nova shows you the token address before it saves.** When the token address is on a different
+  site from the API, for example a separate sign-in service, Nova shows you that host and asks
+  you to confirm it is the provider's own, because that is where your credential is sent.
+</Callout>
+
+## A Google service account, as an example
+
+A Google service account key comes as a JSON file. Do not store the file. Store the two values a
+call needs as separate fields of one secret group: the service account's email, and its private
+key. Nova asks for them that way, as two fields of a secure form. The private key can be pasted
+as it appears in the file, with or without its line breaks.
+
+```json
+{
+  "name": "Google Analytics 4",
+  "baseUrl": "https://analyticsdata.googleapis.com",
+  "authType": "jwt_bearer",
+  "token": {
+    "tokenUrl": "https://oauth2.googleapis.com/token",
+    "issuerField": "CLIENT_EMAIL",
+    "privateKeyField": "PRIVATE_KEY",
+    "audience": "https://oauth2.googleapis.com/token",
+    "scopes": ["https://www.googleapis.com/auth/analytics.readonly"],
+    "scopeIn": "claim",
+    "omitSubject": true
+  },
+  "credentials": {
+    "CLIENT_EMAIL": "reports@acme-analytics.iam.gserviceaccount.com",
+    "PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----\n"
+  },
+  "config": { "PROPERTY_ID": "312847561" }
+}
+```
+
+The property ID is not a secret, so it goes in `config`, and the report tools take it as a
+default. See [Settings and parameter defaults](/docs/plugins/settings).
+
+| `jwt_bearer` setting | Means |
+| --- | --- |
+| `tokenUrl` | Where the signed JWT is traded for a token |
+| `issuerField` · `privateKeyField` | The fields holding the issuer and the private key |
+| `subjectField` | A field naming the user to act as. Leave it out to act as the issuer |
+| `omitSubject` | `true` to send no subject at all, which a Google service account acting as itself expects |
+| `audience` | Who the JWT is for. Without it, the token address's site is used |
+| `scopes` · `scopeIn` | The scopes to ask for, and whether they go in the JWT (`claim`) or in the request (`form`) |
+| `keyIdField` · `algorithm` | A key ID, and `RS256` (the default) or `ES256` |
+| `extraClaims` | Up to 10 more claims, as text. A value can name a secret field as `${field.NAME}`. The standard claims cannot be replaced |
+
+## What is not supported yet
+
+Some APIs need a kind of sign-in no type covers. Nova says so and stops, rather than saving a
+plugin that cannot work:
+
+- Signing in as a person through the provider's own sign-in page (user OAuth)
+- AWS request signing and OAuth 1.0a
+- APIs that need a login session or a client certificate
+- Plugins that are MCP servers. See [Plugins and MCP](/docs/plugins/mcp#coming-soon-mcp-servers-as-plugins)
+
+If the software also has a plain web API that one of the types above covers, Nova offers that
+instead.
+
+## Where to go next
+
+<Cards>
+  <Card title="Creating a plugin" href="/docs/plugins/creating">
+    Let Nova research the type, or declare it yourself
+  </Card>
+  <Card title="Settings and parameter defaults" href="/docs/plugins/settings">
+    Where the values that are not secret go
+  </Card>
+  <Card title="Checking a plugin" href="/docs/plugins/checking">
+    Prove the type is right with one real call
+  </Card>
+</Cards>

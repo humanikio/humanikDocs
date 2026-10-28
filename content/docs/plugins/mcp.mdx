@@ -1,0 +1,101 @@
+---
+title: Plugins and MCP
+description: How an office serves its tools over MCP, where MCP is used and where it is not, and what is coming.
+---
+
+An AI employee's tools reach it over the [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP), the open standard for giving an agent a list of tools it can call. This page says where
+HumanikOS uses MCP, where it does not, and what is not built yet.
+
+| | |
+| --- | --- |
+| **What we share** | Tools are listed with a name, a description and a JSON Schema for their arguments, and called by name. Results are text, and pictures where a tool returns one |
+| **What is ours** | One tool list per office, made from the tools HumanikOS ships and your plugin endpoints. Every call runs in the office, with the office's credentials |
+| **What we do not claim** | There is no MCP endpoint you can connect to from outside an office, and plugins cannot be MCP servers yet |
+
+## One tool list per office
+
+Every office has one list of tools, and every agent that works for the office reads the same
+list.
+
+| Kind of tool | Where it comes from |
+| --- | --- |
+| Tools HumanikOS ships | Every office has them: contacts and conversations, calendars, files, browsers, schedules, and reading its own skills |
+| Your plugin endpoints | Each endpoint a plugin declares and enables becomes its own named tool, with the parameters you described. See [Creating a plugin](/docs/plugins/creating) |
+| `hos_plugin_request` | One general tool that calls a connected plugin by its name and a path. It covers endpoints nobody declared |
+
+If a plugin endpoint has the same name as a tool HumanikOS ships, the shipped tool is kept and
+the plugin's endpoint is left out of the list. Give your endpoints names that start with the
+plugin, for example `acme_get_invoice`.
+
+<Callout>
+  **A new endpoint appears after the office restarts.** The list is built when the office
+  starts. Declaring or enabling an endpoint changes the plugin straight away, and the
+  employee sees the new tool after the next restart.
+</Callout>
+
+## Inside the office
+
+The office's own agent reads the tool list from an MCP server that runs inside the office. The
+tools keep their plain names, such as `crm_list_contacts`, so skills and run records read the
+same whichever way the agent reached them.
+
+That server only accepts connections from inside the office. Nothing outside it, including you,
+can connect to it. You change what is on the list by changing your plugins, not by configuring
+the server.
+
+## On a machine you own
+
+When an employee's turn runs on [a device you enrolled](/docs/devices), the humanikd daemon
+starts a small MCP server on your machine for that turn and bridges the office's tools to it.
+The agent on your machine sees each one as `mcp__hos__` followed by the tool's name, for
+example `mcp__hos__acme_get_invoice`.
+
+Each call still runs in the office, with the plugin's credential. Your machine sends the tool's
+name and arguments, and receives only the result. No key is copied to it. The full path is in
+[How a tool call travels](/docs/devices/tool-calls).
+
+## Connected agents do not use MCP
+
+A [connected agent](/docs/connected-agents) is an agent you run elsewhere and sign in to
+HumanikOS. It does not call office tools, over MCP or any other way. It uses the HumanikOS
+HTTP API with its own token, and it works with AI employees by sending them messages in
+[HumaChat](/docs/humachat). The employee then uses its own tools.
+
+## How long a tool call may take
+
+| Call | Limit |
+| --- | --- |
+| A plugin endpoint, or `hos_plugin_request` | About 30 seconds for the request to your software |
+| A tool HumanikOS ships, called inside the office | Up to 5 minutes |
+| A tool HumanikOS ships, called from a machine you own | Up to 2 minutes |
+
+A call that runs past its limit fails with an error the agent can read, and the turn goes on.
+Inside the office, a long tool may still finish after the agent has been told it ran out of
+time, so the error tells the agent to check the result before running the tool again.
+
+## Coming soon: MCP servers as plugins
+
+Today a plugin connects a web API: a base URL, a way to sign in, and a list of endpoints. A
+plugin that is itself an MCP server, where you give the address of a server that already lists
+its own tools, is not available yet.
+
+<Callout type="warn">
+  **Nova will tell you this is not supported yet.** If you ask Nova to add an MCP server as a
+  plugin, it says so and stops, rather than building something that would not work. If the
+  software also has a web API, Nova can connect that instead.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card title="Plugins and secrets" href="/docs/plugins">
+    What a plugin is, and where its credentials live
+  </Card>
+  <Card title="How a tool call travels" href="/docs/devices/tool-calls">
+    The bridge on your machine, step by step
+  </Card>
+  <Card title="Connected agents" href="/docs/connected-agents">
+    Agents you run elsewhere, and how they work with AI employees
+  </Card>
+</Cards>

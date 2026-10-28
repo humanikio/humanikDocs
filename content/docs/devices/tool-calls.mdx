@@ -4,7 +4,7 @@ description: How an office sandbox's tools are bridged to an agent on your machi
 ---
 
 An agent running on your machine can use the same tools as the office it works for:
-its contacts, calendars, files and browsers, and every endpoint your integrations add.
+its contacts, calendars, files and browsers, and every endpoint your plugins add.
 It never holds the credentials those tools use. This page explains how that works,
 which services are involved, and what crosses the connection between your machine and
 HumanikOS.
@@ -27,7 +27,7 @@ hardware.
 ## The bridge
 
 Every office has an **office sandbox**: a machine HumanikOS runs for that office. It holds
-the office's tools, its integrations and the credentials they use.
+the office's tools, its plugins and the credentials they use.
 
 The tools form one **tool catalog**. The office's own agent uses that catalog inside the
 sandbox. When an employee's turn runs on your machine instead, the catalog is **bridged**
@@ -42,10 +42,10 @@ in the sandbox.
 | Kind of tool | Where it comes from |
 | --- | --- |
 | Tools HumanikOS ships | Every office has them: contacts and conversations, calendars, files and namespaces, browsers, schedules, image generation, and reading its own skills |
-| Your integration endpoints | Each endpoint an integration declares and enables becomes its own named tool, with the parameters you described. See [Creating an integration](/docs/integrations/creating) |
+| Your plugin endpoints | Each endpoint a plugin declares and enables becomes its own named tool, with the parameters you described. See [Creating a plugin](/docs/plugins/creating) |
 
-Every office also has one general tool, `hos_integration_request`, which calls a connected
-integration by its name and a path. It covers endpoints nobody declared, so prefer the
+Every office also has one general tool, `hos_plugin_request`, which calls a connected
+plugin by its name and a path. It covers endpoints nobody declared, so prefer the
 named tools when they exist.
 
 On your machine the agent sees each office tool as `mcp__hos__` followed by the tool's
@@ -90,10 +90,12 @@ the sandbox under the office's own permissions. See
 ## Limits today
 
 **The tool list arrives with every turn.** Nothing is stored on your machine between
-turns. An integration you add appears after the office restarts.
+turns. A plugin endpoint you add appears after the office restarts.
 
-**One tool call is limited to about 30 seconds.** A tool that takes longer fails with an
-error the agent can read, and the turn continues.
+**A tool call has a time limit.** A plugin endpoint gets about 30 seconds for the request to
+your software. A tool HumanikOS ships gets up to 2 minutes when called from your machine. A call
+that takes longer fails with an error the agent can read, and the turn continues. See
+[How long a tool call may take](/docs/plugins/mcp#how-long-a-tool-call-may-take).
 
 **Pictures reach your machine when the tool returns one.** A picture attached to a chat
 message, for example, arrives as an image the agent can see, along with the tool's text.
@@ -105,7 +107,7 @@ interruption mid turn loses the rest of it, as described in
 
 ## Building on it
 
-If you build an integration, you do not need to do anything for machines. Declare and
+If you build a plugin, you do not need to do anything for machines. Declare and
 enable its endpoints, restart the office, and agents running on enrolled machines can call
 them through the bridge, with the credential staying in the office.
 
@@ -126,8 +128,8 @@ whichever agent does the work.
     description="The connection, the queue and the turn channel."
   />
   <Card
-    title="Creating an integration"
-    href="/docs/integrations/creating"
+    title="Creating a plugin"
+    href="/docs/plugins/creating"
     description="Declaring the endpoints that become tools."
   />
 </Cards>

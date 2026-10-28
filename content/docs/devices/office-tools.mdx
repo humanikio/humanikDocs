@@ -43,25 +43,25 @@ Every office starts with a working set, without you configuring anything: its
 [files and namespaces](/docs/namespaces), the
 [browsers](/docs/api-reference/browsers) it has been given, its own schedules,
 image generation, and the ability to read its own
-[skills](/docs/skills-and-protocols) and integrations.
+[skills](/docs/skills-and-protocols) and plugins.
 
 These are compiled into the office. There is nothing to enable and nothing that
 can drift.
 
 ### The ones you connect
 
-Everything else comes from an [integration](/docs/integrations). Each endpoint
+Everything else comes from an [plugin](/docs/plugins). Each endpoint
 you declare and enable becomes a tool the employee can call by name, with its own
 parameter schema, and the credential stays where you put it. See
-[Integration skills](/docs/integrations/skills) for how the employee is taught to
-use one, and [Creating an integration](/docs/integrations/creating) for declaring
+[Plugin skills](/docs/plugins/skills) for how the employee is taught to
+use one, and [Creating a plugin](/docs/plugins/creating) for declaring
 the endpoints.
 
 <Callout>
-  **An integration cannot take over a tool that ships.** Names are resolved
+  **A plugin cannot take over a tool that ships.** Names are resolved
   against the built in set first, and only a miss falls through to your
-  integrations, so an integration reusing a shipped name is ignored rather than
-  shadowing it. Two integrations declaring the same name keep the first and warn
+  plugins, so a plugin reusing a shipped name is ignored rather than
+  shadowing it. Two plugins declaring the same name keep the first and warn
   about the second.
 </Callout>
 
@@ -87,12 +87,13 @@ payout lookup happens in the office, and there is no round trip through a person
 in between.
 
 **The office's tools are offered on every turn.** Your machine receives the list
-with each message and keeps nothing between them. An integration you add appears
+with each message and keeps nothing between them. A plugin you add appears
 on the next message after the office restarts, with nothing to change on your
 machine. Tools that belong to the office's own agent framework, such as its shell,
 run only inside the office and cannot be used from your machine.
 
-**One tool call is capped at about 30 seconds.** A tool that takes longer fails
+**A tool call has a time limit.** A plugin endpoint gets about 30 seconds, and a tool
+HumanikOS ships gets up to 2 minutes from your machine. A tool that takes longer fails
 with an error the agent can read, rather than leaving it blocked for the rest of
 the turn.
 
@@ -133,7 +134,7 @@ machine still never sees them.
 
 ## A worked example
 
-Say you have a Stripe integration on the office and the employee is running on
+Say you have a Stripe plugin on the office and the employee is running on
 your laptop:
 
 > *"Reconcile yesterday's payouts against the ledger in `~/finance/2026-08.csv`
@@ -187,7 +188,7 @@ placeholder in a path is refused rather than sent literally.
 <Steps>
 
 <Step>
-**Connect what the office needs.** Create the [integrations](/docs/integrations)
+**Connect what the office needs.** Create the [plugins](/docs/plugins)
 on the office, declare each endpoint you want callable with every parameter given
 a location, and point them at a secret group. A tenant vault group is the right
 home for anything shared across employees.
@@ -238,8 +239,8 @@ humanikd status     # what this machine is advertising right now
 not widen what the office may do, and narrowing it does not restrict the office.
 The ceiling exists to protect your computer, not to bound the employee.
 
-**The office's permissions govern the office, and only the office.** An
-integration reaching an API is doing so with what that office was granted. It has
+**The office's permissions govern the office, and only the office.** A
+plugin reaching an API is doing so with what that office was granted. It has
 no route back onto your machine.
 
 **Nothing upstream can name your tools.** The job never carries a tool list, a
@@ -252,7 +253,7 @@ your disk or in the office.
 
 ## When a tool is not there
 
-Almost always the integration, not the device.
+Almost always the plugin, not the device.
 
 <Steps>
 
@@ -263,7 +264,7 @@ looks like a broken tool rather than a missing field.
 </Step>
 
 <Step>
-**Check the integration has a base address and a credential.** One with neither
+**Check the plugin has a base address and a credential.** One with neither
 registers no tools at all. That is a valid thing to have, and the employee is
 told plainly that it has no callable endpoints rather than being invited to
 invent names.
@@ -292,8 +293,8 @@ since the last start is not loaded.
     description="Your own computer as an employee the whole team can send work to."
   />
   <Card
-    title="Integrations and secrets"
-    href="/docs/integrations"
+    title="Plugins and secrets"
+    href="/docs/plugins"
     description="Connecting software, and where its credentials live."
   />
   <Card

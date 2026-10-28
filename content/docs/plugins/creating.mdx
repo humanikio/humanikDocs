@@ -1,0 +1,255 @@
+---
+title: Creating a plugin
+description: Describe the software you use and Nova connects it, or declare the plugin yourself in one call.
+---
+
+[Plugins and secrets](/docs/plugins) covers what a plugin is: a connection, its tools, its
+settings, and a skill, with the credential kept in a vault.
+
+This page is about getting one made. For most software the answer is that you describe it in
+plain language and Nova does the rest.
+
+**Say what you use.** Nova checks your plugin library first. If nothing there fits, it works out
+what the software is, reads its documentation, works out how it signs in, collects the credential
+without it entering the conversation, saves the plugin, declares its endpoints as tools, and makes
+one real call to check it works.
+
+Nothing about that requires you to have the API documentation open, and nothing about it is
+console only. The same thing runs from a prompt sent to the API, which is how a plugin gets made
+while you are provisioning offices from your own code.
+
+## The short answer
+
+| | Ask Nova in the console | Drive Nova from the API | Declare it yourself |
+| --- | --- | --- | --- |
+| **You provide** | The name of the software, and a credential | The same, as a prompt | Base address, sign-in type, every endpoint |
+| **Interface** | A conversation | [`POST /ai/run`](/docs/api-reference/nova/running-nova/runNovaCycle) | [`POST /offices/{officeId}/integrations`](/docs/api-reference/offices/plugins/createOfficeIntegration) |
+| **Takes** | A few minutes | A few minutes | One call |
+| **Endpoints** | Declared by Nova from the documentation, then one is tested | The same | Exactly what you declared |
+| **Best when** | You want it connected without reading the docs | You are provisioning offices programmatically | You have the API docs open |
+
+<Callout>
+  **Nova is not console only.** The second column is the same workflow as the first, started
+  with an API call instead of a message box. Nova acts as the caller who sent the prompt, under
+  that caller's roles, so it can create nothing you could not have created yourself. See
+  [When Nova acts for you](/docs/access-control/acting-for-you).
+</Callout>
+
+## Having Nova build it
+
+### What to say
+
+Plain language is enough:
+
+```
+Connect Stripe to this office.
+
+Set up a plugin for SendGrid so this employee can send email.
+
+Connect Google Analytics with our service account. The property ID is 312847561.
+
+I want to connect our internal billing API at https://billing.acme.internal.
+```
+
+| | In your plugin library | A recognised service | Your own API |
+| --- | --- | --- | --- |
+| **Nova does** | Offers the template, then adds it to the office | Looks up the API and proposes the setup | Reads the specification you give it, or asks for the base address, sign-in type and credential field names |
+| **You do** | Confirm | Confirm, then supply the credential | Paste the specification if you have one, confirm, then supply the credential |
+
+<Callout>
+  **Paste the specification if you have one.** An OpenAPI document, an API reference, or written
+  endpoint documentation, straight into the conversation. Nova passes what you paste to its
+  research as it is, and it outranks both its own knowledge and anything it finds by searching.
+
+  This matters most for software the research is worst at: anything internal, first party, or
+  newly built, where there is nothing public to look up.
+</Callout>
+
+<Callout>
+  **Nova will not invent a sign-in type.** When it cannot find documentation for an API, it says
+  so rather than choosing something plausible, and asks you. A wrong type is not caught at setup:
+  it produces a plugin that saves cleanly and then fails every call with a `401`. Tell Nova what
+  the API uses, or paste the specification. The types are listed in
+  [How a plugin signs in](/docs/plugins/sign-in).
+</Callout>
+
+<Callout type="warn">
+  **A request that signs itself needs the specification.** Nova only chooses `hmac` when a
+  specification you supplied describes it. It never infers a signing scheme, because one guessed
+  wrong fails every call with an error that does not say why.
+</Callout>
+
+### It stops twice, on purpose
+
+<Steps>
+
+<Step>
+**Confirm the setup.** Nova summarises what it is about to create: the service, the base address,
+the sign-in type, and, for a type that gets a token, the address the credential is sent to.
+Nothing is written until you accept.
+</Step>
+
+<Step>
+**Supply the credential.** Nova sends you a secure form with the exact fields the service needs.
+The values go straight into the vault. They never pass through the conversation.
+</Step>
+
+</Steps>
+
+<Callout type="warn">
+  **Nova will never ask you to paste a key into the chat.** If anything appears to, that is worth
+  reporting. A key file, such as a Google service account's JSON file, is collected as separate
+  fields, the email and the private key, never as the file.
+</Callout>
+
+After the second step Nova saves the plugin and links the credential. Values that are not
+secret, such as a property or account ID, go into the plugin's
+[settings](/docs/plugins/settings), and the tools that need them take them as defaults.
+
+<Callout>
+  **Saving confirms the credential is really there.** Every secret group named when the plugin
+  is saved is looked up in the vault first. If one is missing, the plugin is not created and the
+  error says which name failed.
+</Callout>
+
+### Then Nova declares the endpoints and checks one
+
+Nova declares the endpoints it found as named tools, each with its parameters. Then it makes one
+real call through the office, leaving out every parameter that has a default, which is the call
+an employee will make. It tells you what came back and which values the office filled in. See
+[Checking a plugin](/docs/plugins/checking).
+
+Last, Nova reviews the whole setup before it tells you the plugin is ready, and then offers to
+restart the office so the employee picks it up.
+
+### Proving the skill is a separate ask
+
+The plugin's skill, the document the employee reads, is first written from the documentation and
+marked `generated`. Ask Nova to verify it:
+
+```
+Verify the Stripe skill against the real API.
+```
+
+Nova reads the documentation for the exact contract, makes a real call, and checks the response
+contains what the contract promised. It publishes only if the call confirms it, and the skill
+becomes `verified` and locked, so a routine rewrite cannot replace it.
+
+Each step appears in the chat as it runs. Started from `/ai/run`, the same trace is written to
+the chat the response names, so a program can read back exactly what was tried.
+
+<Callout>
+  **Your credential is never shown, to you or to the employee, in that trace.** The value is used
+  in the office at the moment the call goes out, and any copy of it in the response is masked
+  before the trace is shown.
+</Callout>
+
+**Verification fits reads, not writes.** Confirming a "create invoice" endpoint would mean
+creating an invoice. So a plugin can end up part proven: its reads confirmed, its writes
+documented but untested.
+
+## Declaring it yourself
+
+Create the plugin with its credential, its settings and its endpoints in one call:
+
+```bash
+curl -X POST "$HOS_API/offices/off_9c1e7d/integrations?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Billing",
+    "baseUrl": "https://api.acme.com",
+    "authType": "bearer",
+    "credentials": { "API_KEY": "YOUR_ACME_API_KEY" },
+    "config": { "ACCOUNT_ID": "acct_1Nv0FGQ9RKHgCVdK" },
+    "tools": [
+      {
+        "toolName": "acme_get_invoice",
+        "description": "Fetch one invoice by id",
+        "method": "GET",
+        "path": "/v1/accounts/{accountId}/invoices/{invoiceId}",
+        "parameters": {
+          "accountId": { "type": "string", "in": "path", "required": true, "default": "${config.ACCOUNT_ID}" },
+          "invoiceId": { "type": "string", "in": "path", "required": true, "description": "The invoice id" }
+        }
+      }
+    ]
+  }'
+```
+
+`credentials` is required unless `authType` is `none`. The values go into the office vault as a
+secret group named after the plugin, and the plugin is linked to it, so one call sets up the
+connection, the credential, the settings and the endpoints together. The employee can call
+`acme_get_invoice` by name, with only an invoice ID, after the office restarts.
+
+For a sign-in type with more than one field, such as a token the office gets for you, see
+[How a plugin signs in](/docs/plugins/sign-in) for the settings each type takes. To point a
+plugin at a credential that already exists instead, use
+[`POST /offices/{officeId}/integrations/{integrationId}/secret-refs`](/docs/api-reference/offices/plugins/addOfficeIntegrationSecretRef).
+
+Changing the plugin later is a
+[`PATCH`](/docs/api-reference/offices/plugins/updateOfficeIntegration): its name, base address,
+sign-in, settings and tools. The skill is rewritten from the updated record, and the employee
+picks the change up after the office restarts.
+
+<Callout type="warn">
+  **`tools` replaces the whole list. It does not merge.** Send the full set you want, because a
+  merge would leave no way to remove one. Leave the field out to keep the existing tools.
+  `config` is the other way round: it merges, and `null` removes a key.
+</Callout>
+
+<Callout type="warn">
+  **Every parameter needs an `in`.** It says where the value goes: `path`, `query`, `header`, or
+  `body`. A parameter without one is refused with a `400` naming the field. Only `type`, `in`,
+  `required`, `description` and `default` are kept on a parameter; other keys, such as `enum`,
+  are dropped when it is saved.
+</Callout>
+
+### Endpoints are the part that matters
+
+A plugin with no endpoints declared still works. It holds a credential and a host, and the
+employee reaches it with `hos_plugin_request`, supplying a path itself. See
+[Plugin skills](/docs/plugins/skills#the-two-ways-an-employee-calls-a-plugin).
+
+But nothing has told the employee what paths exist, and no defaults apply. Its skill is written
+from the plugin record, so with no endpoints to describe, the best it can offer is a guess at what
+an API of that kind usually looks like, marked as unconfirmed.
+
+Declaring endpoints is what turns that into named tools with documented arguments. It is the
+single highest value thing you can put in a plugin.
+
+### Your endpoints on an employee's machine
+
+An employee can run on a machine you enrol instead of in the cloud. Its tools come with it: each
+declared and enabled endpoint is bridged to a small MCP server on that machine, so the agent
+there can call it by name. The call still runs in the office with the plugin's credential, and
+the machine only receives the result. There is nothing extra to set up. See
+[Plugins and MCP](/docs/plugins/mcp).
+
+## After it exists
+
+Every route ends in the same place. The plugin syncs to a **skill**, the document the employee
+reads to know how to use the software. See [Plugin skills](/docs/plugins/skills), and
+[Skills and protocols](/docs/skills-and-protocols) for how skills reach an employee.
+
+The rest of the surface is documented under
+[Plugins in the office reference](/docs/api-reference/offices/plugins/listOfficeIntegrations):
+reading and changing one, managing its secret links, and the
+[plugin library](/docs/plugins#the-plugin-library-define-once-use-everywhere).
+
+## Where to go next
+
+<Cards>
+  <Card title="How a plugin signs in" href="/docs/plugins/sign-in">
+    The ten sign-in types and the settings each takes
+  </Card>
+  <Card title="Settings and parameter defaults" href="/docs/plugins/settings">
+    IDs the office fills in for the employee
+  </Card>
+  <Card title="Checking a plugin" href="/docs/plugins/checking">
+    One real call through the office
+  </Card>
+  <Card title="Plugins reference" href="/docs/api-reference/offices/plugins/listOfficeIntegrations">
+    Every operation on a plugin, its parameters and its errors
+  </Card>
+</Cards>

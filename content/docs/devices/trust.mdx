@@ -39,11 +39,11 @@ not the code.
 
 ## Three things that stay put
 
-**Your keys stay in the office.** The integrations you connect — your Stripe key, your CRM
-token, an internal API credential — are written into a vault the office reads at boot. They
+**Your keys stay in the office.** The credentials your plugins use, such as your Stripe key,
+your CRM token or an internal API credential, are written into a vault the office reads. They
 become tools the employee calls, but the values are never sent to your machine, never written
 there, and not readable from it. This machine receives responses, not keys. See
-[Integrations and secrets](/docs/integrations).
+[Plugins and secrets](/docs/plugins).
 
 **Your ceiling bounds your machine, and nothing widens it.** The ceiling lives in a config file
 on your hardware, written by you. HumanikOS never sends a tool list, a working directory or a
@@ -59,9 +59,9 @@ a compromised machine.
 
 <Callout>
   **One catalog is the reason a device is not a lesser employee.** An agent on your laptop
-  reaches the same software as one in the cloud, because both read the same catalog. Build an
-  integration once, enable its endpoints, and every agent — in the office or on an enrolled
-  machine — can call them, with the credential staying in the office.
+  reaches the same software as one in the cloud, because both read the same catalog. Build a
+  plugin once, enable its endpoints, and every agent, in the office or on an enrolled
+  machine, can call them, with the credential staying in the office.
 </Callout>
 
 ## The three boundaries, held by three parties
@@ -94,8 +94,8 @@ treatment is [Three limits, and none can widen another](/docs/devices#three-limi
     description="A worked example of a turn split between your machine and the office."
   />
   <Card
-    title="Integrations and secrets"
-    href="/docs/integrations"
+    title="Plugins and secrets"
+    href="/docs/plugins"
     description="Connecting software an employee can use, and where its credentials live."
   />
   <Card

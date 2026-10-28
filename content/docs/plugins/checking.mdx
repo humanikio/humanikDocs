@@ -1,0 +1,91 @@
+---
+title: Checking a plugin
+description: Have Nova make one real call through the office, and read exactly what it sent and what came back.
+---
+
+A plugin that saves cleanly can still be wrong: the wrong authentication type, a path the API
+does not have, a setting that was never filled in. The way to know is one real call.
+
+**Ask Nova to check it.** Nova makes the call through the office, the same way the employee
+would, and tells you what happened.
+
+```
+Check the Google Analytics plugin. Run ga4_run_report for sessions by channel over the
+last 7 days, and leave the property ID out.
+```
+
+## A check changes nothing
+
+When you ask Nova to check, test or audit a plugin, or to find out why a call failed, it only
+reads and makes test calls. It does not change the plugin, its tools, its settings or its
+secrets in that turn. If it finds something to fix, it tells you what and asks before doing it.
+
+## What a check shows
+
+| | Means |
+| --- | --- |
+| **Reached** | Whether the office answered. A check runs in the office, so the office must be running. If it is asleep, ask Nova to wake it first |
+| **Status** | The status code your software returned |
+| **Result** | The start of the response, so you can see it is the data you expected |
+| **Sign-in used** | The authentication type and where the credential was placed, without the credential |
+| **Filled** | Every parameter the office filled in from a default, and where from: `config.PROPERTY_ID`, or `literal` for a fixed value |
+
+The call goes out exactly as an employee's call would: the office signs in, fills in the
+defaults and attaches the credential. Neither you nor Nova sees the key.
+
+<Callout>
+  **A check that runs while the office is still starting can fail with "the office did not
+  answer".** Wait until the office is running and check again. A failed attempt changes
+  nothing.
+</Callout>
+
+## The check is written into your chat with the employee
+
+Every check also leaves one line in [your Nova chat with that
+employee](/docs/humachat#novas-chats-with-ai-employees), so the record outlasts the
+conversation:
+
+```
+Nova checked ga4_run_report on Google Analytics 4 Data API: 200. Defaults: propertyId from config.PROPERTY_ID.
+```
+
+A failed call adds "(failed)" after the status. A check that never reached the office says
+"office not reached" and why. The line does not wake the employee.
+
+## Calls that change something
+
+A check sends a real request. For a read that is harmless. For a call that creates, changes or
+deletes something, the check really does it: confirming a "create invoice" endpoint creates an
+invoice. So a check of anything other than a `GET` has to be marked as meant to change
+something, and it is refused otherwise. Ask for a check like that only when you mean it.
+
+So a plugin can end up part checked: its reads confirmed, its writes declared but never sent.
+
+## A check proves the plugin, not the running employee
+
+A check reads the plugin as it is saved now. The employee uses the plugin as it was when its
+office last started. So a check can pass on a change the employee does not have yet.
+
+After changing a plugin, [restart the office](/docs/plugins#changes-reach-the-employee-when-the-office-restarts),
+then ask the employee itself to use the tool if you want to see it working end to end.
+
+## From a check to a verified skill
+
+A check that passes is also what earns a plugin's skill the `verified` stamp. When Nova checks a
+declared endpoint against the live API and then publishes the skill in the same turn, the skill
+is stamped `verified` and locked against routine rewrites. The stamp cannot be set any other way.
+See [Plugin skills](/docs/plugins/skills#where-the-body-came-from-matters).
+
+## Where to go next
+
+<Cards>
+  <Card title="Settings and parameter defaults" href="/docs/plugins/settings">
+    What "filled" is telling you
+  </Card>
+  <Card title="Plugin skills" href="/docs/plugins/skills">
+    The verified stamp, and what it protects
+  </Card>
+  <Card title="How a plugin signs in" href="/docs/plugins/sign-in">
+    When the status is a 401
+  </Card>
+</Cards>

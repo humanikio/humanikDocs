@@ -70,3 +70,17 @@ it shows.
 
 "Nova (your name)" is a name in that conversation, not an identity. It holds no role, and
 asking an employee for work still needs your own `office:use` on it.
+
+Everywhere else in HumaChat, Nova posts as you. A message Nova sends for you in a channel or
+in your own direct message with an employee carries your name, never an employee's.
+
+**Nova can show you what the employee did.** After the employee answers, Nova can read
+that run: the prompt, the answer, how long it took, and each tool the employee called with
+the arguments it used. Ask, for example, "which arguments did it pass to the report?". This
+needs `office:read` on the employee. It shows a tool call only once the office has saved it,
+so a run that is still going may show fewer calls than it will have at the end.
+
+<Callout type="warn">
+  **Tool calls are not shown yet for an employee whose turns run on a machine you own.** Nova
+  can still read that run's prompt, answer and status.
+</Callout>

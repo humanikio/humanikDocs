@@ -44,7 +44,7 @@ assembled for it.
 
 | What the agent gets | Where it comes from |
 | --- | --- |
-| Integration credentials | The vault, resolved at boot and injected under the names each skill declares |
+| Plugin credentials | The vault, resolved at boot and injected under the names each skill declares |
 | Data access | The namespaces allocated to this office, and nothing else |
 | Its identity | Its own service account, minted when the office was created |
 | Skills | Written to disk in the shape its framework reads |
@@ -67,7 +67,7 @@ its error traces.
 
 <Callout type="warn">
   **This is a precise claim, not a broad one.** Managed connector tokens and the
-  model key never reach the agent. Credentials for integrations you create
+  model key never reach the agent. Credentials for plugins you create
   directly are injected as environment variables, so the agent does hold those.
   Both facts matter and we state them separately rather than rounding the pair
   up into "it has no credentials".
@@ -109,13 +109,13 @@ inherits everything else.
 This is the half that matters commercially, and it is the reason the
 architecture is worth anything to you rather than only to us.
 
-An integration is stored as **data**: a host, an authentication scheme, a
+A plugin is stored as **data**: a host, an authentication scheme, a
 reference to a credential, and a list of endpoints. The instructions an employee
 reads are **compiled from that record** into whatever format its framework
 expects.
 
 ```
-   integration record  ──compiled──▶  instructions the framework reads
+   plugin record  ──compiled──▶  instructions the framework reads
    (host, auth, secret                (one shape today, a different
     reference, endpoints)              shape for a different runtime)
 ```
@@ -124,8 +124,8 @@ So what you connected is not wired to one runtime. Change the framework and the
 connection still resolves, because the connection was never expressed in the old
 framework's language.
 
-See [Creating an integration](/docs/integrations/creating) for how a connection
-is made, and [Skills](/docs/integrations/skills) for the document that gets
+See [Creating a plugin](/docs/plugins/creating) for how a connection
+is made, and [Skills](/docs/plugins/skills) for the document that gets
 compiled.
 
 ## What runs today
@@ -193,8 +193,8 @@ machines. It coordinates offices rather than living in one. See
     description="Sleeping, waking, resizing, and what a restart actually does."
   />
   <Card
-    title="Integrations and secrets"
-    href="/docs/integrations"
+    title="Plugins and secrets"
+    href="/docs/plugins"
     description="What gets compiled, and where the credentials live."
   />
   <Card

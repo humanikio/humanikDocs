@@ -85,8 +85,11 @@ can always read what Nova asked for on your behalf and what came back.
 - **You read it, you do not post in it.** It opens read-only. To change what Nova asked,
   tell Nova.
 - **Nova's checks show there too.** When Nova calls an employee's tools directly, for
-  example to test an integration, it adds a line such as "Nova checked
-  ga4_run_report on Google Analytics 4 Data API: 200". A line like that does not wake the employee.
+  example to [check a plugin](/docs/plugins/checking), it adds a line such as "Nova checked
+  ga4_run_report on Google Analytics 4 Data API: 200. Defaults: propertyId from
+  config.PROPERTY_ID." A failed check says "(failed)" after the status, and a check that never
+  reached the office says "office not reached" and why. A line like that does not wake the
+  employee.
 - **An employee whose office cannot answer in HumaChat yet** gets the work from Nova
   directly instead, and no conversation is kept.
 

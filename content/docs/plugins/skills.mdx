@@ -1,19 +1,19 @@
 ---
-title: Skills
-description: The document generated from an integration, and what makes it worth trusting.
+title: Plugin skills
+description: The document generated from a plugin, and what makes it worth trusting.
 ---
 
 Connecting software gives an employee two separate things.
 
-The **integration** is the connection: a host, an authentication scheme, and a
+The **plugin** is the connection: a host, an authentication scheme, and a
 reference to a credential. It is what the office uses to actually make a call.
 
 The **skill** is a Markdown document describing that software, generated from the
-integration record. It is what the employee reads to know the connection exists
+plugin record. It is what the employee reads to know the connection exists
 and what to do with it.
 
 <Callout>
-  **This page is about skills that come from an integration.** For what a skill
+  **This page is about skills that come from a plugin.** For what a skill
   is in general, how it reaches the employee, and how it differs from a protocol,
   see [Skills and protocols](/docs/skills-and-protocols).
 </Callout>
@@ -25,13 +25,13 @@ Two steps, both automatic.
 <Steps>
 
 <Step>
-**Sync.** The integration is linked to a skill document. The link is a stable
-back reference, so the same integration always updates the same skill rather than
+**Sync.** The plugin is linked to a skill document. The link is a stable
+back reference, so the same plugin always updates the same skill rather than
 creating a second one.
 </Step>
 
 <Step>
-**Compile.** A model reads the integration record and writes the body: what the
+**Compile.** A model reads the plugin record and writes the body: what the
 software is, what each declared endpoint does, and what arguments it takes. It is
 also shown the version it is replacing, so a rewrite builds on what is already
 there instead of starting from nothing.
@@ -40,8 +40,8 @@ there instead of starting from nothing.
 </Steps>
 
 The record is the input. Everything the document says about your software is
-derived from what the integration declares, which is why
-[declaring endpoints](/docs/integrations/creating#endpoints-are-the-part-that-matters)
+derived from what the plugin declares, which is why
+[declaring endpoints](/docs/plugins/creating#endpoints-are-the-part-that-matters)
 is the highest value thing you can do to a connection.
 
 ## What a regeneration keeps
@@ -51,9 +51,9 @@ what the body was worth.
 
 | Previous `contentSource` | What the rewrite does with it |
 | --- | --- |
-| `manual` | Preserves it. Wording, examples and ordering stay, and only what the integration contradicts is changed |
+| `manual` | Preserves it. Wording, examples and ordering stay, and only what the plugin contradicts is changed |
 | `verified` | Reproduces every endpoint, parameter and response shape exactly. Prose and ordering may improve, paths may not change |
-| `generated` | Reuses the structure, and re-derives the claims from the integration record |
+| `generated` | Reuses the structure, and re-derives the claims from the plugin record |
 
 The `generated` rule is the strictest on purpose. An endpoint in an unconfirmed
 document was written by a previous run of the same process, so treating it as
@@ -61,13 +61,13 @@ evidence would let one guess become permanent by repetition.
 
 <Callout type="warn">
   **A rewrite that would know less than the document it replaces is refused.**
-  When an integration declares no endpoints, there is little for a rewrite to
+  When a plugin declares no endpoints, there is little for a rewrite to
   re-derive claims from, and the result can be a thinner document than the one it
   replaces. That is not an improvement: skills have no version history, so a
   section lost this way cannot be recovered. A rewrite that drops whole sections
   is retried with the missing headings named, and if it still comes back short,
-  the existing skill is kept and the compile reports why. The usual cause is an
-  integration with no declared endpoints.
+  the existing skill is kept and the compile reports why. The usual cause is a
+  plugin with no declared endpoints.
 </Callout>
 
 ## A generated skill contains no credentials and no commands
@@ -79,7 +79,7 @@ office attaches the key and signs the request, so a document telling the employe
 how to build an auth header would be describing work it does not do.
 
 **There are no shell commands.** No `curl`, no `fetch`, no scripts. An employee
-calls an integration as a tool, and an employee running on
+calls a plugin as a tool, and an employee running on
 [a machine you own](/docs/devices) has no shell in the office at all. A document
 full of commands works in one place and fails in the other.
 
@@ -90,24 +90,24 @@ full of commands works in one place and fails in the other.
   current shape.
 </Callout>
 
-## The two ways an employee calls an integration
+## The two ways an employee calls a plugin
 
-### A named tool, when the integration declares one
+### A named tool, when the plugin declares one
 
-Every enabled endpoint on an integration becomes a tool the employee can call by
+Every enabled endpoint on a plugin becomes a tool the employee can call by
 name. The tool carries its own parameter schema, so the employee is working from
 a documented contract rather than a guess.
 
 **Prefer this wherever you can.** It is the difference between an employee that
 knows an endpoint takes `invoiceId` in the path and one that is inferring it.
 
-### `hos_integration_request`, for everything else
+### `hos_plugin_request`, for everything else
 
-An integration with no endpoints declared is still fully callable. The employee
-names the integration and supplies a path, and the office does the rest:
+A plugin with no endpoints declared is still fully callable. The employee
+names the plugin and supplies a path, and the office does the rest:
 
 ```
-hos_integration_request({
+hos_plugin_request({
   integration: "Acme Billing",
   method: "GET",
   path: "/v1/invoices/inv_7Kd2mQ",
@@ -118,6 +118,10 @@ hos_integration_request({
 The office resolves the host, attaches the credential, signs the request and
 sends it. The key never enters the conversation.
 
+The argument that names the plugin is still called `integration`, the older word. It takes
+the plugin's name or its ID. No [parameter defaults](/docs/plugins/settings) apply here,
+because this tool has no declared parameters to fill.
+
 <Callout>
   **The host is not a parameter.** An employee can only reach software you already
   connected. It cannot be talked into sending your credential somewhere else,
@@ -127,12 +131,12 @@ sends it. The key never enters the conversation.
 
 Two properties worth knowing:
 
-**Query parameters go in `query`, not inside `path`.** For an integration that
+**Query parameters go in `query`, not inside `path`.** For a plugin that
 signs its requests, the query string is part of what gets signed, so a parameter
 smuggled into the path is not covered by the signature.
 
 **A name that is not connected is an error, not a guess.** If the employee asks
-for an integration this office does not have, the error lists the ones it does.
+for a plugin this office does not have, the error lists the ones it does.
 
 This works identically on a machine you own. The call is made by the office, so
 no credential is copied to the device. See
@@ -149,7 +153,7 @@ the origin:
 | `manual` | Written or edited by a person | Yes |
 | `verified` | Proven against the live API | Yes |
 
-When an integration syncs, it skips skills whose body is `manual` or `verified`.
+When a plugin syncs, it skips skills whose body is `manual` or `verified`.
 A routine sync cannot discard a proven procedure or a human edit.
 
 <Callout type="warn">
@@ -169,7 +173,7 @@ A routine sync cannot discard a proven procedure or a human edit.
 </Callout>
 
 Only one route produces `verified`, and it is worth asking for. See
-[Proving it works is a separate ask](/docs/integrations/creating#proving-it-works-is-a-separate-ask).
+[Proving the skill is a separate ask](/docs/plugins/creating#proving-the-skill-is-a-separate-ask).
 
 <Callout>
   **`verified` cannot be claimed, only earned.** There is no parameter that sets
@@ -181,7 +185,7 @@ Only one route produces `verified`, and it is worth asking for. See
 
 ## Changing the credential does not rewrite the document
 
-An integration points at one or more secret groups, and each group supplies the
+A plugin points at one or more secret groups, and each group supplies the
 environment variables the office injects when it makes a call. Linking or
 unlinking a group changes those variables straight away.
 
@@ -216,31 +220,31 @@ They fail differently, and the difference tells you where to look.
 | Symptom | Where the problem is |
 | --- | --- |
 | The employee calls an endpoint that does not exist | The skill. Its body describes something the API does not have |
-| The employee calls the right endpoint and gets a `401` | The connection. Either the stored credential is rejected, or the authentication type on the integration does not match what the API expects |
-| A red warning on the integration, saying a call failed | Neither, yet. The console recorded a real failure. Open the logs it links to and the response says which |
+| The employee calls the right endpoint and gets a `401` | The connection. Either the stored credential is rejected, or the authentication type on the plugin does not match what the API expects |
+| A red warning on the plugin, saying a call failed | Neither, yet. The console recorded a real failure. Open the logs it links to and the response says which |
 | The employee does not try at all | The skill. Its description did not match the task |
-| The employee reports the integration is not connected | The connection. It is not attached to this office |
+| The employee reports the plugin is not connected | The connection. It is not attached to this office |
 
 Editing a skill to describe an endpoint does not make that endpoint reachable,
 and deleting a skill does not revoke a credential.
 
 ## When a call fails, the console says so
 
-Employees call integrations on their own, often while nobody is looking. So a
+Employees call plugins on their own, often while nobody is looking. So a
 failed call is recorded rather than lost.
 
-Every call an employee makes is logged against the integration it used. A call
+Every call an employee makes is logged against the plugin it used. A call
 that returns an error, times out, or never reaches the host also marks the
-integration, and the console shows a warning on it with the response that came
+plugin, and the console shows a warning on it with the response that came
 back. **Anyone who can read the office is notified**, and the notification opens
-that office's logs already filtered to the integration.
+that office's logs already filtered to the plugin.
 
 The warning stays until someone marks it reviewed. Marking it reviewed records
-that a person looked; it does not claim the integration is fixed, and **the next
+that a person looked; it does not claim the plugin is fixed, and **the next
 failure raises it again on its own**.
 
 <Callout>
-  **A busy integration failing repeatedly will notify repeatedly today.** There
+  **A busy plugin failing repeatedly will notify repeatedly today.** There
   is no cooldown yet. If that becomes noisy, tell us.
 </Callout>
 
@@ -253,14 +257,14 @@ failure raises it again on its own**.
     description="What a skill is in general, and the rule that is not a skill at all."
   />
   <Card
-    title="Creating an integration"
-    href="/docs/integrations/creating"
+    title="Creating a plugin"
+    href="/docs/plugins/creating"
     description="Declaring endpoints yourself, or having Nova research and prove them."
   />
   <Card
-    title="Integrations and secrets"
-    href="/docs/integrations"
-    description="Where credentials live, and why an integration only points at one."
+    title="Plugins and secrets"
+    href="/docs/plugins"
+    description="Where credentials live, and why a plugin only points at one."
   />
   <Card
     title="Skills API"

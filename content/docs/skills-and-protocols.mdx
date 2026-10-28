@@ -85,7 +85,7 @@ Skills come from three places, recorded on each one as `source`:
 
 | `source` | Means |
 | --- | --- |
-| `integration` | Generated from an integration you connected |
+| `integration` | Generated from a plugin you connected |
 | `custom` | You wrote it |
 | `system` | The platform provides it |
 
@@ -94,12 +94,12 @@ Skills come from three places, recorded on each one as `source`:
 A skill is a document. It carries no credential, no host, and no ability to call
 anything on its own.
 
-What an employee can actually reach comes from an **integration**: a host, an
+What an employee can actually reach comes from an **plugin**: a host, an
 authentication scheme, and a reference to a credential in a vault. Connecting one
 generates a skill from it, so the two arrive together and are easy to treat as
 one thing.
 
-| | Skill | Integration |
+| | Skill | Plugin |
 | --- | --- | --- |
 | Is | A document | A connection |
 | Holds | Instructions | A host, an auth scheme, a credential reference |
@@ -109,9 +109,9 @@ one thing.
 Editing a skill to describe an endpoint does not make that endpoint reachable,
 and deleting a skill does not revoke a credential.
 
-Skills generated from an integration have rules of their own: how the body is
+Skills generated from a plugin have rules of their own: how the body is
 written, what it may not contain, and what a lock or a verification stamp means.
-Those live in [Integration skills](/docs/integrations/skills).
+Those live in [Plugin skills](/docs/plugins/skills).
 
 ### Skills are attached per office
 
@@ -177,13 +177,13 @@ overstates what an employee may do produces a `403`, not a breach.
 
 <Cards>
   <Card
-    title="Integration skills"
-    href="/docs/integrations/skills"
+    title="Plugin skills"
+    href="/docs/plugins/skills"
     description="The document generated from a connection, and what its stamps mean."
   />
   <Card
-    title="Integrations and secrets"
-    href="/docs/integrations"
+    title="Plugins and secrets"
+    href="/docs/plugins"
     description="Connecting software, and where credentials live."
   />
   <Card

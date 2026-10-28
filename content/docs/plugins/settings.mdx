@@ -1,0 +1,120 @@
+---
+title: Settings and parameter defaults
+description: Keep values that are not secret on the plugin, and let the office fill them in for the employee.
+---
+
+Many APIs need a value on every call that is not a secret: the analytics property, the account,
+the workspace, the region. If that value lives nowhere, the employee has to find it each time,
+and an employee that guesses an ID calls the wrong account without knowing.
+
+A plugin solves this with two features that work together.
+
+| | What it is |
+| --- | --- |
+| **Settings** (`config`) | Named values stored on the plugin, in plain text |
+| **Parameter defaults** | A value a tool parameter takes when the employee leaves it out, written as a fixed value or as `${config.KEY}` |
+
+Put the value in a setting, point the parameter's default at it, and the employee can leave the
+parameter out. The office fills it in on every call.
+
+## A worked example
+
+A report tool takes the property in its path:
+
+```json
+{
+  "config": { "PROPERTY_ID": "312847561" },
+  "tools": [
+    {
+      "toolName": "ga4_run_report",
+      "description": "Run a report on the property",
+      "method": "POST",
+      "path": "/v1beta/properties/{propertyId}:runReport",
+      "parameters": {
+        "propertyId": {
+          "type": "string",
+          "in": "path",
+          "required": true,
+          "default": "${config.PROPERTY_ID}",
+          "description": "The property to report on"
+        }
+      }
+    }
+  ]
+}
+```
+
+The employee calls `ga4_run_report` with only the report it wants, and the office sends the
+request to `/v1beta/properties/312847561:runReport`. When the property changes, you change one
+setting. No tool, skill or prompt needs rewriting.
+
+<Callout>
+  **The employee is told, not left to guess.** A parameter with a default is shown to the
+  employee as optional, with a note that the office fills it in. It can still pass its own
+  value, for example to report on a second property, and its value always wins.
+</Callout>
+
+## The rules for settings
+
+- **A setting is not secret.** Anyone who can read the office can read its plugins' settings.
+  Never put a key, a password or a token in one. A value that looks like a credential is saved
+  with a warning, so read the warnings a save returns.
+- **A credential field cannot be a setting.** If the plugin's authentication reads a field, that
+  field stays in the vault, and a setting with the same name is refused.
+- **Names** start with a letter and use letters, digits and `_`, up to 64 characters.
+- **Values** are text, a number or `true`/`false`, stored as text, up to 500 characters. An
+  empty value is refused.
+- **Up to 20 settings** on one plugin.
+- **Changing settings merges.** Send only the keys you are changing. Send `null` for a key to
+  remove it.
+
+## The rules for defaults
+
+- **A default is a fixed value, or exactly `${config.KEY}`.** Nothing else is filled in. A
+  default can never read a secret: `${env.*}` or anything like it is refused when you save.
+- **A default must point at a setting that exists.** Removing a setting that a default still
+  reads is refused, so remove or change the default first.
+- **The employee's own value wins.** A default is used only when the employee leaves the
+  parameter out or sends it empty.
+- **Types are kept.** A setting is stored as text, and the office turns it back into a number or
+  `true`/`false` when the parameter is declared that way.
+- **Defaults apply to declared tools only.** `hos_plugin_request` has no parameters of its own,
+  so nothing is filled in there. One more reason to declare endpoints.
+
+If a required parameter has a default but its setting is missing when a call is made, the call
+fails with an error telling the employee the value should come from the plugin's settings, and
+to ask you rather than look it up somewhere else.
+
+## Changing settings
+
+| Route | How |
+| --- | --- |
+| **Ask Nova** | "Set the property ID on the analytics plugin to 312847561, and make it the default for every report tool." Nova can set a default on every tool that takes the parameter at once |
+| **The API** | `config` on [create](/docs/api-reference/offices/plugins/createOfficeIntegration) and on [`PATCH`](/docs/api-reference/offices/plugins/updateOfficeIntegration). `default` on each tool parameter |
+
+A change reaches a running employee at the next restart, like any other plugin change. See
+[Changes reach the employee when the office restarts](/docs/plugins#changes-reach-the-employee-when-the-office-restarts).
+
+A plugin added from the [plugin library](/docs/plugins#the-plugin-library-define-once-use-everywhere)
+keeps its own settings. Syncing it with its template adds settings the office does not have yet
+and does not overwrite the office's values.
+
+## Checking what was filled in
+
+When you or Nova [check a plugin](/docs/plugins/checking), the result lists every parameter the
+office filled in and where the value came from, for example `propertyId` from
+`config.PROPERTY_ID`. So you can see that the default was used, not only that the call worked.
+
+## Where to go next
+
+<Cards>
+  <Card title="Checking a plugin" href="/docs/plugins/checking">
+    One real call, and what the office filled in
+  </Card>
+  <Card title="How a plugin signs in" href="/docs/plugins/sign-in">
+    The credential side, which stays in the vault
+  </Card>
+  <Card title="Creating a plugin" href="/docs/plugins/creating">
+    Declaring tools and their parameters
+  </Card>
+</Cards>

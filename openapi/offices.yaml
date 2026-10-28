@@ -23,14 +23,18 @@ security:
 tags:
   - name: Offices
     description: Create, read, update, and delete an office.
-  - name: Integrations
+  - name: Plugins
     description: |
-      The software an employee can use, and the secrets behind it. An integration
-      is a host, an auth scheme and a credential reference. Each endpoint it
-      declares becomes a tool the employee calls by name; one that declares none
-      is still reachable through `hos_integration_request`. The office attaches
-      the credential, so no key enters the conversation. See
-      [Integrations and secrets](/docs/integrations).
+      The software an employee can use, and the secrets behind it. A plugin is
+      a host, an auth type, a credential reference and optional non-secret
+      settings. Each endpoint it declares becomes a tool the employee calls by
+      name. A plugin that declares none is still reachable through
+      `hos_plugin_request`. The office attaches the credential, so no key enters
+      the conversation. See [Plugins](/docs/plugins).
+
+      Plugins used to be called integrations. The API paths, operation IDs and
+      field names still use the older word (`/integrations`, `integrationId`,
+      `integration` in responses). That is the contract and it is not changing.
   - name: Skills
     description: |
       What an employee can do. Skills follow the open
@@ -38,8 +42,8 @@ tags:
       `SKILL.md` with YAML frontmatter, and a markdown body. See
       [Skills and protocols](/docs/skills-and-protocols) for what we share with
       the specification and what is ours, and
-      [Integration skills](/docs/integrations/skills) for the ones generated from
-      a connection.
+      [Plugin skills](/docs/plugins/skills) for the ones generated from a
+      plugin.
   - name: Protocols
     description: |
       What an employee must always do. Where a skill is a capability it reaches
@@ -50,7 +54,12 @@ tags:
   - name: Identity
     description: The office's service account, its keys, and what it may do.
   - name: Tenant libraries
-    description: Shared integration templates and website assets that offices draw from.
+    description: |
+      The plugin library (shared plugin templates) and website assets that
+      offices draw from.
+
+      These operations take a signed-in user's token only. A service account
+      key is refused with a 403.
   - name: Machine
     description: Size, idle timeout, running instances, and logs.
   - name: Model provider
@@ -156,14 +165,21 @@ components:
       description: |
         One argument on a declared endpoint. The key in the `parameters` map is
         the parameter's name.
+
+        Only `type`, `required`, `description`, `in` and `default` are stored.
+        Any other key, for example `enum`, is dropped at save without an error.
       properties:
         type:
           type: string
-          description: JSON type of the value, for example `string` or `integer`.
+          description: |
+            JSON type of the value, for example `string` or `integer`. A
+            default read from config is text; for `number`, `integer` and
+            `boolean` parameters the office converts it back to that type.
           examples: [string]
         required:
           type: boolean
           default: false
+          description: Stored as true only when you send exactly `true`.
         description:
           type: string
           description: What the value is. The employee reads this to fill it in.
@@ -175,22 +191,43 @@ components:
             it is rejected with a 400, because a parameter that reached storage
             without one would be dropped when the request was built: the call
             would go out missing that value and nothing would report it.
+        default:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+          description: |
+            Used when the employee leaves the parameter out (or sends `null` or
+            an empty string). It never replaces a value the employee sends.
+
+            Either a literal (`"json"`, `100`, `true`) or exactly
+            `"${config.KEY}"`, which reads `KEY` from the plugin's `config`. The
+            key must be set when you save. Any other text containing `${` is
+            rejected with a 400: a default can end up in a URL or a log, so a
+            secret can never be one. See [Settings](/docs/plugins/settings).
+
+            Defaults apply to declared endpoints only. Calls through
+            `hos_plugin_request` take no defaults.
+          examples: ['${config.PROPERTY_ID}']
       required: [type, in]
 
     IntegrationTool:
       type: object
       description: |
         A declared endpoint. Each one becomes a tool the employee can call by
-        name, carrying its own parameter schema. An integration with none is
-        still reachable through `hos_integration_request`, but the employee is
-        working from paths nobody confirmed. See
-        [Integration skills](/docs/integrations/skills).
+        name, carrying its own parameter schema. A plugin with none is still
+        reachable through `hos_plugin_request`, but the employee is working
+        from paths nobody confirmed. See [Plugin skills](/docs/plugins/skills).
+
+        Keys other than the ones listed here are dropped at save.
       properties:
         toolName:
           type: string
           description: |
-            What the employee calls. Unique within the integration: a duplicate
-            is rejected rather than shadowing its twin.
+            What the employee calls. Unique within the plugin: a duplicate is
+            rejected with a 400. Uniqueness across the office is not checked
+            at save. If two plugins on one office declare the same name, the
+            office loads the first one it reads and skips the other.
           examples: [acme_get_invoice]
         description:
           type: string
@@ -201,11 +238,13 @@ components:
         method:
           type: string
           enum: [GET, POST, PUT, PATCH, DELETE]
+          description: Accepted in any letter case and stored in upper case.
         path:
           type: string
           description: |
-            A path, not a URL. The host comes from `baseUrl`. Placeholders in
-            braces are filled from parameters declared `in: path`.
+            A path, not a URL. Must start with `/`. The host comes from
+            `baseUrl`. Placeholders in braces are filled from parameters
+            declared `in: path`.
           examples: ['/v1/invoices/{invoiceId}']
         parameters:
           type: object
@@ -216,12 +255,216 @@ components:
           type: boolean
           default: true
           description: |
-            Defaults to true. Only an enabled endpoint becomes a callable tool,
-            and `enabledToolCount` on the integration counts these.
+            True unless you send exactly `false`. Only an enabled endpoint
+            becomes a callable tool, and `enabledToolCount` on the plugin
+            counts these.
       required: [toolName, description, method, path]
+
+    PluginTokenSettings:
+      type: object
+      description: |
+        How the office makes an access token, for the three token auth types.
+        The office makes the token when a call needs it, keeps it in memory
+        only, and renews it before it expires. The employee never sees it.
+
+        Every `*Field` value is the **name** of a field in the plugin's linked
+        secret group, never the value itself. On create, each named field must
+        be one of the `credentials` keys.
+
+        | Field | `oauth2_client_credentials` | `jwt_bearer` | `signed_jwt` |
+        | --- | --- | --- | --- |
+        | `tokenUrl` | **Required**, https | **Required**, https | Not used |
+        | `clientIdField`, `clientSecretField` | **Required** | Not used | Not used |
+        | `clientAuth` | `body` (default) or `basic` | Not used | Not used |
+        | `issuerField`, `privateKeyField` | Not used | **Required** | **Required** |
+        | `subjectField`, `keyIdField` | Not used | Optional | Optional |
+        | `omitSubject` | Not used | Optional | Not used |
+        | `audience` | Not used | Optional | **Required** |
+        | `algorithm` | Not used | `RS256` (default) or `ES256` | **Required**, `RS256` or `ES256` |
+        | `scopes` | Optional | Optional | Not used |
+        | `scopeIn` | Not used | `form` (default) or `claim` | Not used |
+        | `extraClaims` | Not used | Optional | Not used |
+        | `ttlSeconds` | Not used | Not used | Optional, 60 to 3600, default 300 |
+
+        <br />
+
+        If the token URL is on a different site from `baseUrl`, the credential
+        is sent to that other site to get a token. Check that the token URL
+        belongs to the provider before you save it.
+      properties:
+        type:
+          type: string
+          enum: [oauth2_client_credentials, jwt_bearer, signed_jwt]
+          description: Matches the plugin's auth type. Filled in for you at save.
+        tokenUrl:
+          type: string
+          description: The provider's token endpoint. Must be an https URL.
+          examples: [https://oauth2.googleapis.com/token]
+        clientIdField:
+          type: string
+          description: The secret field holding the client ID.
+        clientSecretField:
+          type: string
+          description: The secret field holding the client secret.
+        clientAuth:
+          type: string
+          enum: [body, basic]
+          default: body
+          description: |
+            How the client ID and secret reach the token endpoint: in the form
+            body, or in an `Authorization: Basic` header.
+        issuerField:
+          type: string
+          description: The secret field holding the JWT `iss`, for example a service account's client email.
+          examples: [CLIENT_EMAIL]
+        privateKeyField:
+          type: string
+          description: |
+            The secret field holding the PEM private key. The key may be stored
+            with real line breaks, with literal `\n` escapes as copied out of a
+            JSON key file, or with none.
+          examples: [PRIVATE_KEY]
+        subjectField:
+          type: string
+          description: The secret field holding the JWT `sub`, for example a user name.
+        omitSubject:
+          type: boolean
+          description: |
+            `jwt_bearer` with no `subjectField` only. `true` sends no `sub`
+            claim. Otherwise `sub` is set to the issuer.
+        keyIdField:
+          type: string
+          description: The secret field holding the key ID, sent as the JWT `kid`.
+        audience:
+          type: string
+          description: |
+            The JWT `aud`. For `jwt_bearer` it defaults to the origin of
+            `tokenUrl`. Some providers want the full token URL.
+        algorithm:
+          type: string
+          enum: [RS256, ES256]
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Joined with spaces when sent.
+        scopeIn:
+          type: string
+          enum: [form, claim]
+          default: form
+          description: |
+            Where scopes go: the token request form, or the JWT `scope` claim.
+            `claim` with no `scopes` is rejected.
+        extraClaims:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            More JWT claims, at most 10. Each value is text of 512 characters or
+            fewer, and may contain `${field.NAME}` to read a secret field. No
+            other `${` is accepted. These claims cannot be set here: `iss`,
+            `sub`, `aud`, `exp`, `iat`, `nbf`, `jti`, `scope`.
+        ttlSeconds:
+          type: integer
+          minimum: 60
+          maximum: 3600
+          default: 300
+          description: Lifetime of each signed JWT. Some APIs refuse long ones.
+
+    CredentialHeader:
+      type: object
+      description: One header of a `multi_header` plugin.
+      properties:
+        name:
+          type: string
+          description: The header, exactly as the API names it.
+          examples: [X-Algolia-API-Key]
+        field:
+          type: string
+          description: The secret field whose value goes in this header.
+          examples: [API_KEY]
+        prefix:
+          type: string
+          description: |
+            Text placed before the value, for example `Token `. Default none.
+            Required when `name` is `Authorization`.
+      required: [name, field]
+
+    PluginAuth:
+      type: object
+      description: |
+        How the plugin sends its credential, as stored. Which settings are kept
+        depends on `type`: settings a type does not use are dropped at save.
+        Older records can carry more fields here; ignore them.
+      properties:
+        type:
+          type: string
+          enum: [bearer, api_key, basic, oauth2, hmac, none, multi_header, oauth2_client_credentials, jwt_bearer, signed_jwt]
+        headerName:
+          type: string
+          description: '`api_key` only, when the key goes in a header.'
+        queryParam:
+          type: string
+          description: '`api_key` only, when the key goes in the query string.'
+        placement:
+          type: object
+          description: |
+            Where the credential goes on the wire, worked out at save. Absent
+            for `basic`, `hmac`, `none` and `multi_header`.
+          properties:
+            in:
+              type: string
+              enum: [header, query]
+            name:
+              type: string
+              examples: [Authorization]
+            prefix:
+              type: string
+              examples: ['Bearer ']
+        credentialField:
+          type: string
+          description: The secret field sent as the credential, for the single credential types.
+        token:
+          $ref: '#/components/schemas/PluginTokenSettings'
+        credentialHeaders:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialHeader'
+      required: [type]
+
+    PluginConfig:
+      type: object
+      description: |
+        Non-secret settings, such as an account ID, a property ID or a region.
+        Stored as plain text and shown to anyone who can see the plugin. Tool
+        parameters read them through a `${config.KEY}` default. Never put a
+        key, token or password here: those go in the vault. See
+        [Settings](/docs/plugins/settings).
+
+        - Keys start with a letter and contain only letters, digits and `_`,
+          up to 64 characters.
+        - Values may be sent as text, a number or a boolean. They are stored as
+          trimmed text, at most 500 characters. An empty value is rejected.
+        - At most 20 keys.
+        - A key cannot be the name of a secret field the auth reads (for
+          example the `credentialField`, a token field or a header field). That
+          value is a credential and stays in the vault.
+        - A value that looks like a credential is saved, and the response
+          carries a warning about it in `warnings`.
+      additionalProperties:
+        type: string
+      examples:
+        - PROPERTY_ID: '530410942'
 
     Integration:
       type: object
+      description: |
+        A plugin, as returned by the read and write operations. The object is
+        still named `integration` in responses.
+
+        No credential value is ever returned. Which secret groups the plugin
+        uses is read with
+        [List secret references](/docs/api-reference/offices/plugins/listOfficeIntegrationSecretRefs).
       properties:
         id:
           type: string
@@ -229,15 +472,28 @@ components:
         name:
           type: string
           examples: [Stripe]
-        baseUrl:
+        platform:
           type: string
-          examples: [https://api.stripe.com]
-        authType:
+          description: The name in lower case with everything but letters and digits removed.
+          examples: [stripe]
+        category:
           type: string
-          enum: [none, api_key, bearer, basic]
-          description: |
-            How the integration authenticates. Anything other than `none`
-            requires `credentials` on create.
+          description: Open text used to group plugins, for example `website`.
+        status:
+          type: string
+          enum: [active, inactive, needs_reauth, error]
+          description: Set by the platform, not by you. Only `active` plugins are loaded by the office.
+        connection:
+          type: object
+          properties:
+            baseUrl:
+              type: string
+              examples: [https://api.stripe.com]
+            auth:
+              $ref: '#/components/schemas/PluginAuth'
+          required: [baseUrl, auth]
+        config:
+          $ref: '#/components/schemas/PluginConfig'
         tools:
           type: array
           description: The declared endpoints, each a callable tool.
@@ -246,25 +502,100 @@ components:
         enabledToolCount:
           type: integer
           description: 'How many of `tools` have `enabled` set true.'
+        spec:
+          type: object
+          description: |
+            Where the plugin's description came from. On a plugin created over
+            this API, `content` holds the `docsUrl` and `specUrl` you sent.
+          properties:
+            source:
+              type: string
+              enum: [url, upload, ai_generated]
+            format:
+              type: string
+              enum: [openapi_3, openapi_2, custom]
+            content:
+              type: object
+        websiteId:
+          type: string
+          description: |
+            The website this plugin is the API of, if any. From
+            [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites).
+        websiteMetadata:
+          type: object
+          description: Details for a plugin in the `website` category, carried from its template.
+        skillName:
+          type: string
+          description: The skill generated from this plugin, once one exists.
+        sourceTemplateId:
+          type: string
+          description: |
+            The template this plugin was copied from. Absent for a plugin made
+            on the office. From
+            [List plugin templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).
+        sourceTemplateVersion:
+          type: integer
+          description: The template version last copied or synced.
+        isCustomized:
+          type: boolean
+          description: True once the office edits a copied plugin. A sync then needs `force`.
         lastFailureAt:
           type: integer
           description: |
-            Epoch milliseconds of the most recent failed call an employee made
-            through this integration. Absent until one fails.
+            When the plugin's last failed call happened, in milliseconds since 1970. Absent if no
+            call has failed. The plugin needs attention while this is later than
+            `failuresDismissedAt`.
         lastFailureSummary:
           type: string
-          description: 'What came back, e.g. `GET /v1/invoices returned 401`.'
-          examples: ['GET /analytics/query/catalog returned 401']
+          description: What the last failed call returned, or its method, path and status.
         failuresDismissedAt:
           type: integer
           description: |
-            Epoch milliseconds of the last time someone marked the failures
-            reviewed. **Show a warning while `lastFailureAt` is greater than
-            this.** There is no boolean, deliberately: one cleared here would
-            suppress every later failure and leave a broken integration looking
-            healthy. Comparing the two means the next failure raises the warning
-            again on its own.
-      required: [id, name, baseUrl, authType]
+            When someone last marked the failures reviewed, in milliseconds since 1970. See
+            [Mark plugin failures as reviewed](/docs/api-reference/offices/plugins/dismissOfficeIntegrationFailures).
+        latestTemplateVersion:
+          type: integer
+          description: The template's current version. Only with `withTemplateStatus=true`.
+        sourceTemplateName:
+          type: string
+          description: The template's name. Only with `withTemplateStatus=true`.
+        secretRefs:
+          type: array
+          deprecated: true
+          description: |
+            An older field, usually empty. Read the linked groups from
+            [List secret references](/docs/api-reference/offices/plugins/listOfficeIntegrationSecretRefs).
+          items:
+            type: object
+        createdBy:
+          type: string
+          description: The user ID of whoever created the plugin.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, connection, tools]
+
+    PluginWriteResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        integration:
+          $ref: '#/components/schemas/Integration'
+        warnings:
+          type: array
+          description: |
+            Saved, but worth showing the user. Today this reports a `config`
+            value that looks like a credential. Absent when there is nothing
+            to report.
+          items:
+            type: string
+          examples:
+            - ['config.API_TOKEN looks like a credential. Config is shown to anyone who can see the plugin; put secrets in the vault.']
 
     Skill:
       type: object
@@ -287,8 +618,8 @@ components:
           type: string
           enum: [integration, custom, system]
           description: |
-            Where the skill came from. `integration` is generated from an
-            integration, `custom` is yours, `system` is platform provided.
+            Where the skill came from. `integration` is generated from a
+            plugin, `custom` is yours, `system` is platform provided.
         sourceRef:
           type: string
         content:
@@ -299,7 +630,7 @@ components:
           default: generated
           description: |
             Records where the body came from. `manual` and `verified` are locked
-            against automatic overwrite by integration sync. They are NOT locked
+            against automatic overwrite by plugin sync. They are NOT locked
             against an explicit regenerate call.
         requiresEnv:
           type: array
@@ -845,27 +1176,35 @@ paths:
     parameters:
       - $ref: '#/components/parameters/OfficeId'
     get:
-      tags: [Integrations]
-      summary: List integrations
+      tags: [Plugins]
+      summary: List plugins
       operationId: listOfficeIntegrations
       description: |
-        Lists every integration on the office. Requires `office:read`.
+        Lists every plugin on the office, oldest first. Requires `office:read`.
+        No pagination.
 
-        Rows are augmented with template status where an integration came from
-        the tenant library, so an instantiated template can be told apart from a
-        locally created one. No pagination.
+        Pass `withTemplateStatus=true` to add the template's current version
+        and name to each plugin that was copied from the
+        [plugin library](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations),
+        so a copy that is behind its template can be told apart in one call.
 
         The response also carries `gatewayRestartNeeded`, which reports whether
-        integration changes are waiting on a restart. Integration tools and
-        credentials are loaded when the office boots, so a new integration, a
-        changed endpoint or a rotated secret does not reach a running employee
-        until it restarts. Apply them with
+        plugin changes are waiting on a restart. The office loads its plugins
+        when it starts, so a new plugin, or a changed endpoint, auth setting or
+        config value, does not reach a running employee until the office
+        restarts. Apply them with
         [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine).
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+        - name: withTemplateStatus
+          in: query
+          required: false
+          description: Send `true` to add `latestTemplateVersion` and `sourceTemplateName` to copied plugins.
+          schema:
+            type: boolean
       responses:
         '200':
-          description: The office's integrations.
+          description: The office's plugins.
           content:
             application/json:
               schema:
@@ -888,6 +1227,17 @@ paths:
                     description: The changes waiting on a restart.
                     items:
                       type: object
+                      properties:
+                        id:
+                          type: [string, 'null']
+                          description: The plugin ID.
+                        name:
+                          type: string
+                        platform:
+                          type: string
+                        action:
+                          type: string
+                          enum: [created, updated, deleted]
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -897,44 +1247,97 @@ paths:
           $ref: '#/components/responses/ServerError'
 
     post:
-      tags: [Integrations]
-      summary: Create an integration
+      tags: [Plugins]
+      summary: Create a plugin
       operationId: createOfficeIntegration
       description: |
-        Creates an integration manually. Requires `office:manage`.
+        Creates a plugin on the office. Requires `office:manage`. See
+        [Creating a plugin](/docs/plugins/creating) for the walkthrough.
 
-        ## Two shapes, decided by `authType`
+        ## What to send, decided by `authType`
 
-        | | `authType: "none"` | `api_key` · `bearer` · `basic` |
-        | --- | --- | --- |
-        | `credentials` | Not used | **Required** |
-        | Vault write | None | A secret group is created |
-        | Fails if the office has no vault | No | Yes, with a 500 |
+        `authType` is required and has no default. Every `*Field` and `field`
+        value names a key in `credentials`, never a value.
 
-        When `authType` is anything other than `none`, the credential values are
-        written into the office vault as a secret group and the integration is
-        linked to that group by reference. Credentials are stored, not echoed:
-        no read endpoint returns a secret value.
+        | `authType` | Also send | `credentials` holds | On the wire |
+        | --- | --- | --- | --- |
+        | `none` | Nothing | Not used | Nothing |
+        | `bearer` | `credentialField` if `credentials` has several keys | The token | `Authorization: Bearer <value>` |
+        | `api_key` | `headerName` **or** `queryParam`, not both. `credentialField` if several keys | The key | `<headerName>: <value>`, or `?<queryParam>=<value>` |
+        | `basic` | `credentialField` if several keys | One field holding `user:password`, or a value already in `Basic ...` form | `Authorization: Basic <base64>` |
+        | `oauth2` | `credentialField` if several keys | A fixed access token. Nothing renews it | `Authorization: Bearer <value>` |
+        | `hmac` | `credentialField` if several keys | The shared signing secret | `x-hmac-signature` and `x-hmac-timestamp` headers |
+        | `multi_header` | `credentialHeaders`, 1 to 5 entries | One field per header | One header per entry: `<name>: <prefix><value>` |
+        | `oauth2_client_credentials` | `token` | The client ID and client secret | `Authorization: Bearer <token>`, from the token URL |
+        | `jwt_bearer` | `token` | The issuer and the private key, and any optional fields `token` names | `Authorization: Bearer <token>`, from the token URL |
+        | `signed_jwt` | `token` | The issuer and the private key, and any optional fields `token` names | `Authorization: Bearer <signed JWT>`, with no exchange |
+
+        <br />
+
+        For the three token types, `token` carries the settings described in
+        the `token` field below. The office makes the token, renews it before it
+        expires, and asks again once if the API answers 401. `hmac` signs with
+        HMAC-SHA256 over the timestamp, method, path with query string and body,
+        in the format HumanikOS services use. AWS Signature Version 4 and OAuth
+        1.0a are not supported. See [Sign-in types](/docs/plugins/sign-in) for
+        each type in full.
+
+        Some other spellings are accepted and stored as the type they stand
+        for: `bearer_token` (bearer), `webhook_secret` (api_key), `basic_auth`
+        (basic), `multiple_headers` (multi_header), `client_credentials`
+        (oauth2_client_credentials), `google_service_account` (jwt_bearer) and
+        `self_signed_jwt` (signed_jwt). Letter case does not matter. `jwt` on
+        its own is rejected, because it could mean either JWT type.
+
+        ## Credentials
+
+        `credentials` is required unless `authType` is `none`. The values are
+        written into the office vault as a secret group, and the plugin is
+        linked to that group, so it can use the credential with no second call.
+        The group is named from the plugin's `name` in upper case, with every
+        run of other characters turned into one `_` and none left at either
+        end: `Google Analytics` becomes `GOOGLE_ANALYTICS`. Credentials are stored, not echoed: no read
+        endpoint returns a secret value.
+
+        - With one key, that key is the credential.
+        - With several keys, `bearer`, `api_key` and `oauth2` must name the one
+          to send in `credentialField`. For `basic` and `hmac`, send one key or
+          name it the same way.
+        - For `multi_header` and the token types, every field they name must be
+          a key in `credentials`.
+
+        For a JSON key file (a Google service account, for example), send each
+        value the plugin reads as its own key, such as `CLIENT_EMAIL` and
+        `PRIVATE_KEY`, never the whole file as one value.
+
+        ## Settings and parameter defaults
+
+        `config` holds non-secret settings such as an account or property ID.
+        A declared parameter can read one with `"default": "${config.KEY}"`, so
+        the employee can leave it out and the value is changed in one place.
+        See [Settings](/docs/plugins/settings).
 
         ## Declaring endpoints
 
         `tools` is optional and is the highest value thing in the body. Each
         entry becomes a tool the employee calls by name, carrying its own
-        parameter schema. Leave it out and the integration still works: the
-        employee reaches the host through `hos_integration_request`, supplying a
-        path itself, which means working from paths nobody confirmed.
+        parameter schema. Leave it out and the plugin still works: the employee
+        reaches the host through `hos_plugin_request`, supplying a path itself,
+        which means working from paths nobody confirmed.
 
         **Every parameter needs an `in`.** It says where the value goes on the
         wire. A parameter without one is rejected with a 400 rather than stored,
         because a stored one would be dropped when the request was built and
         nothing would report it.
 
-        Declared endpoints are validated before any vault work, so a bad entry
-        cannot leave a half-made integration behind. On success the integration's
-        skill is regenerated automatically, so a declared endpoint reaches the
-        employee's document without a second call.
+        The auth block and the declared endpoints are checked before any vault
+        work, so a bad entry cannot leave a half-made plugin behind. On success
+        the plugin's skill is generated in the background, so a declared
+        endpoint reaches the employee's document without a second call. The new
+        plugin reaches a running employee after the office
+        [restarts](/docs/api-reference/offices/machine/restartOfficeMachine).
 
-        ### An authenticated integration
+        ### A bearer token
 
         ```bash
         curl -X POST "$HOS_API/offices/off_9c1e7d/integrations?workspaceId=ws_a1b2c3" \
@@ -945,6 +1348,60 @@ paths:
             "baseUrl": "https://api.stripe.com",
             "authType": "bearer",
             "credentials": { "API_KEY": "sk_live_..." }
+          }'
+        ```
+
+        ### A key in a named header, with a second stored field
+
+        ```bash
+        curl -X POST "$HOS_API/offices/off_9c1e7d/integrations?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "Acme",
+            "baseUrl": "https://api.acme.example",
+            "authType": "api_key",
+            "headerName": "X-API-Key",
+            "credentialField": "API_KEY",
+            "credentials": { "API_KEY": "ak_...", "APP_ID": "1234" }
+          }'
+        ```
+
+        ### A Google service account, with a setting and a default
+
+        ```bash
+        curl -X POST "$HOS_API/offices/off_9c1e7d/integrations?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "Google Analytics",
+            "baseUrl": "https://analyticsdata.googleapis.com",
+            "authType": "jwt_bearer",
+            "token": {
+              "tokenUrl": "https://oauth2.googleapis.com/token",
+              "issuerField": "CLIENT_EMAIL",
+              "privateKeyField": "PRIVATE_KEY",
+              "audience": "https://oauth2.googleapis.com/token",
+              "scopes": ["https://www.googleapis.com/auth/analytics.readonly"],
+              "scopeIn": "claim",
+              "omitSubject": true
+            },
+            "credentials": {
+              "CLIENT_EMAIL": "agent@project.iam.gserviceaccount.com",
+              "PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\n..."
+            },
+            "config": { "PROPERTY_ID": "530410942" },
+            "tools": [{
+              "toolName": "ga4_run_report",
+              "description": "Run a report on the property",
+              "method": "POST",
+              "path": "/v1beta/properties/{propertyId}:runReport",
+              "parameters": {
+                "propertyId": { "type": "string", "in": "path", "required": true, "default": "${config.PROPERTY_ID}" },
+                "dimensions": { "type": "array", "in": "body" },
+                "metrics": { "type": "array", "in": "body" }
+              }
+            }]
           }'
         ```
 
@@ -971,6 +1428,7 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Also sets `platform` and the name of the secret group.
                   examples: [Stripe]
                 baseUrl:
                   type: string
@@ -978,20 +1436,48 @@ paths:
                   examples: [https://api.stripe.com]
                 authType:
                   type: string
-                  enum: [none, api_key, bearer, basic]
+                  enum: [bearer, api_key, basic, oauth2, hmac, none, multi_header, oauth2_client_credentials, jwt_bearer, signed_jwt]
+                  description: How the plugin sends its credential. See the table above.
+                headerName:
+                  type: string
+                  description: |
+                    `api_key` only: the header the key goes in, exactly as the
+                    API names it. `Authorization` is rejected: use `bearer`.
+                  examples: [X-API-Key]
+                queryParam:
+                  type: string
+                  description: '`api_key` only: the query parameter the key goes in.'
+                  examples: [key]
+                credentialField:
+                  type: string
+                  description: |
+                    The `credentials` key sent as the credential, for `bearer`,
+                    `api_key`, `basic`, `oauth2` and `hmac`. Required when
+                    `credentials` has several keys (see above).
+                  examples: [API_KEY]
+                credentialHeaders:
+                  type: array
+                  description: '`multi_header` only. 1 to 5 entries, each header named once.'
+                  items:
+                    $ref: '#/components/schemas/CredentialHeader'
+                token:
+                  $ref: '#/components/schemas/PluginTokenSettings'
                 credentials:
                   type: object
                   additionalProperties:
                     type: string
                   description: |
-                    Key value pairs. **Required unless `authType` is `none`.**
+                    Key value pairs written to the office vault. **Required
+                    unless `authType` is `none`.**
                   examples:
                     - API_KEY: sk_live_...
+                config:
+                  $ref: '#/components/schemas/PluginConfig'
                 docsUrl:
                   type: string
                   description: |
                     Link to the software's documentation. Used when generating
-                    the integration's skill.
+                    the plugin's skill.
                 specUrl:
                   type: string
                   description: |
@@ -1021,22 +1507,18 @@ paths:
               required: [name, baseUrl, authType]
       responses:
         '201':
-          description: The integration was created.
+          description: The plugin was created.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    const: true
-                  integration:
-                    $ref: '#/components/schemas/Integration'
+                $ref: '#/components/schemas/PluginWriteResult'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           description: |
-            A required field is missing, `baseUrl` is malformed, or credentials
-            were omitted while `authType` declares authentication.
+            A required field is missing, `baseUrl` is malformed, the auth
+            settings are incomplete or unknown, the credentials do not match
+            the auth settings, or `config`, a parameter default or a declared
+            endpoint is invalid. Nothing is written.
           content:
             application/json:
               schema:
@@ -1050,17 +1532,50 @@ paths:
                   value:
                     success: false
                     error: 'baseUrl must start with http:// or https://'
+                unknownAuthType:
+                  value:
+                    success: false
+                    error: 'auth type "jwt" is not one of bearer, api_key, basic, oauth2, hmac, none, multi_header, oauth2_client_credentials, jwt_bearer, signed_jwt. Ask which scheme the API uses.'
+                apiKeyPlacement:
+                  value:
+                    success: false
+                    error: 'api_key needs headerName (e.g. "X-API-Key") or queryParam (e.g. "key"). If the API wants "Authorization: Bearer <key>", use type bearer instead.'
                 missingCredentials:
                   value:
                     success: false
                     error: credentials are required when authType is not "none"
+                whichField:
+                  value:
+                    success: false
+                    error: 'credentials has 2 fields; set credentialField to the one sent as the credential (API_KEY, APP_ID)'
+                fieldNotInCredentials:
+                  value:
+                    success: false
+                    error: 'privateKeyField "PRIVATE_KEY" not among the credentials keys (CLIENT_EMAIL)'
+                configHoldsSecret:
+                  value:
+                    success: false
+                    error: 'config.API_KEY: the auth reads API_KEY as a credential, so it stays in the vault, not in config'
+                defaultNotConfig:
+                  value:
+                    success: false
+                    error: 'ga4_run_report.parameters.propertyId.default "${env.PROPERTY_ID}": a default may only reference config, as exactly "${config.KEY}". Secrets never become defaults.'
+                defaultKeyMissing:
+                  value:
+                    success: false
+                    error: 'ga4_run_report.parameters.propertyId.default reads config.PROPERTY_ID, which is not set. Set config.PROPERTY_ID first.'
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
           description: |
-            The vault write failed and **the integration was not created**. An
-            office whose vault was never provisioned fails here every time until
-            that is repaired.
+            A vault step failed. In the first three cases **the plugin was not
+            created**. An office whose vault was never set up fails here every
+            time until that is repaired.
+
+            In the last case the plugin **was** created, and the body carries it
+            as `integration`, but the secret group could not be linked. Link it
+            with [Add a secret reference](/docs/api-reference/offices/plugins/addOfficeIntegrationSecretRef),
+            using the group name in the message.
           content:
             application/json:
               schema:
@@ -1074,6 +1589,14 @@ paths:
                   value:
                     success: false
                     error: Failed to create secret group in vault
+                noField:
+                  value:
+                    success: false
+                    error: 'Failed to store credential: API_KEY'
+                notLinked:
+                  value:
+                    success: false
+                    error: 'Created the integration but could not link secret group "STRIPE": <reason>. Link it with POST .../secret-refs.'
 
   /offices/{officeId}/skills:
     parameters:
@@ -1091,7 +1614,7 @@ paths:
         [Restart an office](/docs/api-reference/offices/machine/restartOfficeMachine).
 
         Read `contentSource` on each row before editing one. `manual` and
-        `verified` bodies are locked against automatic overwrite by integration
+        `verified` bodies are locked against automatic overwrite by plugin
         sync, and a `verified` body is a procedure that was proven against the
         live API.
       parameters:
@@ -1279,7 +1802,7 @@ paths:
 
         **Sending `content` without `contentSource` stamps the skill `manual`.**
         Editing a body is treated as human authorship, which locks it against
-        automatic overwrite by integration sync. Pass `contentSource` explicitly
+        automatic overwrite by plugin sync. Pass `contentSource` explicitly
         to opt out.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
@@ -1347,9 +1870,9 @@ paths:
         Removes the skill from the office. Requires `office:manage`.
 
         Deleting a skill removes instructions, not access. A skill generated from
-        an integration will be written again by the next sync, and deleting it
-        never revokes a credential: remove the integration or its secret
-        reference for that.
+        a plugin will be written again by the next sync, and deleting it never
+        revokes a credential: remove the plugin or its secret reference for
+        that.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -1391,16 +1914,16 @@ paths:
       summary: Regenerate a skill body
       operationId: regenerateOfficeSkill
       description: |
-        Re-runs generation of the skill body for an integration sourced skill.
+        Re-runs generation of the skill body for a plugin sourced skill.
         Requires `office:manage`.
 
-        For a skill sourced from an integration this runs the full setup
+        For a skill sourced from a plugin this runs the full setup
         sequence, not a bare generation, and the response reports each step it
         ran along with an audit of the stored record afterwards. The audit reads
-        the saved integration back rather than trusting what the steps reported,
+        the saved plugin back rather than trusting what the steps reported,
         so a run can succeed and still return findings. That combination is
-        normal and useful: it means the skill was rewritten and the integration
-        is still misconfigured.
+        normal and useful: it means the skill was rewritten and the plugin is
+        still misconfigured.
 
         Skills sourced from a protocol, or written by hand, take the generator
         directly and return only `contentLength` and `tokenUsage`.
@@ -1418,7 +1941,7 @@ paths:
         recovered. When a generation drops whole sections it is retried with the
         missing headings named, and if it still comes back short the existing
         body is kept and the call returns `400` explaining why. The usual cause
-        is an integration that declares no endpoints, leaving the generation
+        is a plugin that declares no endpoints, leaving the generation
         nothing to re-derive its claims from.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
@@ -1436,7 +1959,7 @@ paths:
                   description: |
                     How much of the sequence to run.
 
-                    `recompile` rewrites the body from the integration record and
+                    `recompile` rewrites the body from the plugin record and
                     audits the result. It makes no calls to your API.
 
                     `full` also sends real read only requests to your API to
@@ -1450,7 +1973,7 @@ paths:
                     where a rewrite would discard the edit.
 
                     Verification needs at least one declared read endpoint with no
-                    path parameter. An integration declaring none reports that and
+                    path parameter. A plugin declaring none reports that and
                     stays unverified.
       responses:
         '200':
@@ -1491,7 +2014,7 @@ paths:
                   findings:
                     type: array
                     description: |
-                      Read back from the saved integration after the run. Present
+                      Read back from the saved plugin after the run. Present
                       even on success, because the steps report what happened and
                       the findings report what is true afterwards.
                     items:
@@ -1843,7 +2366,7 @@ paths:
         Allocates a website from the tenant library to this office. Requires
         `office:manage`.
 
-        This allocates the site alone. To bring its integrations along in the
+        This allocates the site alone. To bring its plugins along in the
         same call, use `POST /offices/{officeId}/website-allocations` instead,
         which is usually what you want since a site is often useless without
         them.
@@ -1883,10 +2406,10 @@ paths:
       - $ref: '#/components/parameters/OfficeId'
     post:
       tags: [Allocations]
-      summary: Allocate a website with its integrations
+      summary: Allocate a website with its plugins
       operationId: allocateOfficeWebsiteWithIntegrations
       description: |
-        Allocates a website and, optionally, the integrations it needs, in one
+        Allocates a website and, optionally, the plugins it needs, in one
         call. Requires `office:manage`.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
@@ -1904,7 +2427,7 @@ paths:
                   type: array
                   items:
                     type: string
-                  description: Integration IDs to allocate alongside the site.
+                  description: Plugin IDs to allocate alongside the site.
               required: [websiteId]
       responses:
         '201':
@@ -2189,7 +2712,7 @@ paths:
       description: |
         Deletes the group and every field in it. Requires `secrets:write`.
 
-        Integrations referencing this group are not updated. Check
+        Plugins referencing this group are not updated. Check
         `GET /offices/{officeId}/integrations/{integrationId}/secret-refs`
         before deleting one.
       responses:
@@ -2370,25 +2893,31 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        description: 'The plugin. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
           examples: [int_7d3a1f]
     get:
-      tags: [Integrations]
-      summary: Get an integration
+      tags: [Plugins]
+      summary: Get a plugin
       operationId: getOfficeIntegration
       description: |
         Requires `office:read`.
 
-        Returns the connection and its declared endpoints. **No credential value
-        is returned**, here or anywhere else on this surface: `tools` and the
-        secret references are pointers, and the values live in a vault.
+        Returns the connection, settings and declared endpoints. **No credential
+        value is returned**, here or anywhere else on this surface: `tools` and
+        the secret references are pointers, and the values live in a vault.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+        - name: withTemplateStatus
+          in: query
+          required: false
+          description: Send `true` to add `latestTemplateVersion` and `sourceTemplateName` when the plugin was copied from a template.
+          schema:
+            type: boolean
       responses:
         '200':
-          description: The integration.
+          description: The plugin.
           content:
             application/json:
               schema:
@@ -2404,24 +2933,71 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No plugin with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    error: Plugin not found
     patch:
-      tags: [Integrations]
-      summary: Update an integration
+      tags: [Plugins]
+      summary: Update a plugin
       operationId: updateOfficeIntegration
       description: |
-        Requires `office:manage`.
+        Requires `office:manage`. Send only the fields you want to change.
+        `status` is set by the platform and is not accepted.
 
-        `name`, `baseUrl` and `tools` are updatable. Changing authentication means
-        managing the integration's secret references, not patching it here, and
-        `status` is system managed.
+        | Field | How it is applied |
+        | --- | --- |
+        | `name`, `baseUrl` | Replaced |
+        | `tools` | **Replaces the whole array** |
+        | `config` | **Merged** into the stored settings. `null` removes a key |
+        | `auth` | Merged into the stored auth settings, then checked as a whole |
+        | `websiteId` | Replaced. An empty string removes the link |
 
-        **`tools` replaces the whole array rather than merging into it.** Send the
-        full set you want. Endpoints are declared as a set, so a merge would leave
-        no way to remove one. Omit the field to leave the existing endpoints alone.
+        <br />
 
-        The same `in` rule applies as on create: a parameter without one is
-        rejected with a 400. Updating the endpoints regenerates the integration's
-        skill, and the office picks the change up on its next boot.
+        **`tools` replaces the whole array rather than merging into it.** Send
+        the full set you want. Endpoints are declared as a set, so a merge would
+        leave no way to remove one. Omit the field to leave the existing
+        endpoints alone. The same `in` rule applies as on create: a parameter
+        without one is rejected with a 400.
+
+        **`auth` changes how the credential is sent, not where it is stored.**
+        Which secret group holds it is managed with
+        [Add a secret reference](/docs/api-reference/offices/plugins/addOfficeIntegrationSecretRef).
+        Fields you leave out of `auth` keep their stored values, with two
+        exceptions. Sending `headerName` or `queryParam` replaces the old
+        placement. Sending `token` replaces all the stored token settings, so
+        send the full `token` object. Changing `type` drops every setting the
+        new type does not use. The result goes through the same checks as on
+        create, except that named fields cannot be compared with `credentials`,
+        because none are sent here.
+
+        `config`, the parameter defaults in `tools`, and the auth settings are
+        checked together, as they will be after the write. A default cannot
+        read a key this call removes, and a key cannot be a field the new auth
+        reads.
+
+        Updating a plugin regenerates its skill in the background. Editing a
+        plugin copied from a template marks it `isCustomized`. The running
+        employee keeps the old settings until the office
+        [restarts](/docs/api-reference/offices/machine/restartOfficeMachine).
+
+        ```bash
+        curl -X PATCH "$HOS_API/offices/off_9c1e7d/integrations/int_7d3a1f?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "auth": { "type": "api_key", "headerName": "X-API-Key" },
+            "config": { "REGION": "eu", "OLD_SETTING": null }
+          }'
+        ```
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       requestBody:
@@ -2440,12 +3016,81 @@ paths:
                   description: Replaces every declared endpoint. Omit to leave them unchanged.
                   items:
                     $ref: '#/components/schemas/IntegrationTool'
+                auth:
+                  type: object
+                  description: |
+                    The auth settings to change. The same fields as on
+                    [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration),
+                    with `authType` sent here as `type`.
+                  properties:
+                    type:
+                      type: string
+                      enum: [bearer, api_key, basic, oauth2, hmac, none, multi_header, oauth2_client_credentials, jwt_bearer, signed_jwt]
+                    headerName:
+                      type: string
+                    queryParam:
+                      type: string
+                    credentialField:
+                      type: string
+                    token:
+                      $ref: '#/components/schemas/PluginTokenSettings'
+                    credentialHeaders:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/CredentialHeader'
+                config:
+                  type: object
+                  description: |
+                    Merged into the stored settings. `null` removes a key. The
+                    rules are those of `config` on the plugin.
+                  additionalProperties:
+                    oneOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                      - type: 'null'
+                  examples:
+                    - REGION: eu
+                      OLD_SETTING: null
+                websiteId:
+                  type: string
+                  description: |
+                    The website this plugin is the API of. From
+                    [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites).
+                    Send an empty string to remove the link.
       responses:
         '200':
-          description: The updated integration.
+          description: The updated plugin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginWriteResult'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '400':
+          description: |
+            A field is invalid, nothing was sent, or (when neither `baseUrl`
+            nor `auth` is sent) no plugin has that ID. Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                nothingToUpdate:
+                  value:
+                    success: false
+                    error: No fields to update
+                notFound:
+                  value:
+                    success: false
+                    error: Plugin not found
+                defaultKeyRemoved:
+                  value:
+                    success: false
+                    error: 'ga4_run_report.parameters.propertyId.default reads config.PROPERTY_ID, which is not set. Set config.PROPERTY_ID first.'
         '404':
-          description: No integration with that ID.
+          description: |
+            No plugin with that ID, when the body includes `baseUrl` or `auth`.
+            Without either, a missing plugin is a 400 instead.
           content:
             application/json:
               schema:
@@ -2454,14 +3099,18 @@ paths:
                 notFound:
                   value:
                     success: false
-                    error: Integration not found
+                    error: Plugin not found
         '403':
           $ref: '#/components/responses/Forbidden'
     delete:
-      tags: [Integrations]
-      summary: Delete an integration
+      tags: [Plugins]
+      summary: Delete a plugin
       operationId: deleteOfficeIntegration
-      description: Requires `office:manage`. Secret groups the integration referenced are not deleted.
+      description: |
+        Requires `office:manage`. The plugin's links to secret groups are
+        removed with it. The secret groups themselves are not deleted, because
+        another plugin may use the same group. Remove one you no longer need
+        from the office vault.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -2469,7 +3118,16 @@ paths:
           description: Deleted.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: The request is invalid, or no plugin has that ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    error: Plugin not found
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -2477,12 +3135,13 @@ paths:
     parameters:
       - $ref: '#/components/parameters/OfficeId'
     post:
-      tags: [Integrations]
-      summary: Create an integration from a template
+      tags: [Plugins]
+      summary: Create a plugin from a template
       operationId: createOfficeIntegrationFromTemplate
       description: |
-        Instantiates an entry from the tenant integration library into this
-        office. Requires `office:manage`.
+        Copies a template from the plugin library into this office. Requires
+        `office:manage`. The copy includes the template's settings and its
+        links to tenant secret groups.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       requestBody:
@@ -2521,16 +3180,20 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        description: 'The plugin. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
     post:
-      tags: [Integrations]
-      summary: Sync an integration from its template
+      tags: [Plugins]
+      summary: Sync a plugin from its template
       operationId: syncOfficeIntegrationFromTemplate
       description: |
-        Pulls newer template content down into an instantiated integration.
-        Requires `office:manage`.
+        Pulls newer template content down into a plugin copied from a
+        template. Requires `office:manage`.
+
+        A plugin the office has edited (`isCustomized: true`) is refused unless
+        you send `force`. Settings keys the office lacks are added from the
+        template, and values the office has set are kept.
 
         This is an automatic path, so it respects skill content locking: a
         `manual` or `verified` skill body is skipped rather than overwritten.
@@ -2560,15 +3223,15 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        description: 'The plugin. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
     post:
-      tags: [Integrations]
-      summary: Promote an integration to the tenant library
+      tags: [Plugins]
+      summary: Promote a plugin to the plugin library
       operationId: promoteOfficeIntegration
       description: |
-        Publishes this office's integration into the tenant library.
+        Publishes this office's plugin into the tenant's plugin library.
 
         **This endpoint is gated twice.** `office:manage` on the office, **and**
         a console scoped `integration:publish` **or** `tenant:manage`.
@@ -2611,16 +3274,16 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        description: 'The plugin. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
     post:
-      tags: [Integrations]
-      summary: Sync the integration's skill
+      tags: [Plugins]
+      summary: Sync the plugin's skill
       operationId: syncOfficeIntegrationSkill
       description: |
         Generates or refreshes the skill that lets the employee use this
-        integration. Requires `office:manage`.
+        plugin. Requires `office:manage`.
 
         This is the automatic path that content locking protects. A skill whose
         body was edited by a person, or verified against the live API, is skipped
@@ -2632,7 +3295,7 @@ paths:
           description: Synced.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
-          description: No integration with that ID.
+          description: No plugin with that ID.
           content:
             application/json:
               schema:
@@ -2646,16 +3309,16 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration the call was made through.'
+        description: 'The plugin the call was made through. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
     post:
-      tags: [Integrations]
-      summary: Report an integration call
+      tags: [Plugins]
+      summary: Report a plugin call
       operationId: reportOfficeIntegrationExecution
       description: |
         Records the outcome of one call an employee made through this
-        integration. Requires `office:manage`.
+        plugin. Requires `office:manage`.
 
         **This is reported by the office, not called by you.** An employee's
         calls happen on the office machine, which cannot write to the console's
@@ -2663,11 +3326,11 @@ paths:
         it exists and is reachable, not because an integrator needs it.
 
         A non-2xx response, a timeout, or a host that never answered marks the
-        integration with `lastFailureAt` and notifies everyone who can read the
+        plugin with a failure time and notifies everyone who can read the
         office. A 2xx is logged and changes nothing.
 
         `path` must be a path, not a full URL. A URL carries the query string,
-        and for an integration that signs its requests the query string is part
+        and for a plugin that signs its requests the query string is part
         of what gets signed. It would end up in a log line and in a notification
         body.
       parameters:
@@ -2685,7 +3348,7 @@ paths:
                   examples: [GET]
                 path:
                   type: string
-                  description: Path relative to the integration's base URL. Never a full URL.
+                  description: Path relative to the plugin's base URL. Never a full URL.
                   examples: ['/analytics/query/catalog']
                 status:
                   type: integer
@@ -2700,7 +3363,7 @@ paths:
                   type: string
                 error:
                   type: string
-                  description: Transport level failure text, when there was no status at all.
+                  description: Transport level failure text, when there was no status at all. Cut to 500 characters.
       responses:
         '202':
           description: Recorded.
@@ -2727,28 +3390,33 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        description: 'The plugin. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
           examples: [int_7d3a1f]
     post:
-      tags: [Integrations]
-      summary: Mark integration failures as reviewed
+      tags: [Plugins]
+      summary: Mark plugin failures as reviewed
       operationId: dismissOfficeIntegrationFailures
       description: |
-        Records that someone has looked at this integration's recent failures.
+        Records that someone has looked at this plugin's recent failures.
         Requires `office:manage`.
 
-        **It does not clear the failure and does not claim the integration
-        works.** It writes `failuresDismissedAt`, and the console warns while
-        `lastFailureAt` is greater than it. So the next failure raises the
-        warning again on its own, with nothing to reset.
+        **It does not clear the failure and does not claim the plugin works.**
+        It stores the time of this call as `failuresDismissedAt`. A plugin
+        needs attention while its last failure is later than that time, so the
+        next failure raises the warning again on its own, with nothing to
+        reset.
 
         This is why there is no boolean to clear. A flag turned off here would
-        suppress every later failure too, leaving a broken integration looking
+        suppress every later failure too, leaving a broken plugin looking
         healthy, which is worse than showing no warning at all.
 
-        Acknowledging needs the permission to fix the integration, not just to
+        [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations)
+        and [Get a plugin](/docs/api-reference/offices/plugins/getOfficeIntegration)
+        do not return the failure time or this time today.
+
+        Acknowledging needs the permission to fix the plugin, not just to
         read it. The notification goes to anyone with `office:read`, because
         being unable to fix something is not a reason to be left unaware of it.
       parameters:
@@ -2766,7 +3434,7 @@ paths:
                     const: true
                   failuresDismissedAt:
                     type: integer
-                    description: Epoch milliseconds. Compared against lastFailureAt to decide the warning.
+                    description: Epoch milliseconds. A failure after this time raises the warning again.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -2779,15 +3447,15 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        description: 'The plugin. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
     get:
-      tags: [Integrations]
+      tags: [Plugins]
       summary: List secret references
       operationId: listOfficeIntegrationSecretRefs
       description: |
-        Lists the secret groups this integration points at. Requires
+        Lists the secret groups this plugin points at. Requires
         `office:read`.
 
         **No value is returned.** These are associations only. Values live in the
@@ -2812,15 +3480,22 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
     post:
-      tags: [Integrations]
+      tags: [Plugins]
       summary: Add a secret reference
       operationId: addOfficeIntegrationSecretRef
       description: |
-        Points the integration at a secret group. Requires `office:manage`.
+        Points the plugin at a secret group. Requires `office:manage`.
+
+        [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration)
+        already links the group it makes. Use this call to add another group,
+        or to point the plugin at a group in the tenant vault.
 
         ## Two shapes, decided by `origin`
 
-        | | `origin: "office"` | `origin: "tenant"` |
+        `origin` is optional. Leave it out and the group is read from this
+        office's vault.
+
+        | | `origin: "office"` (default) | `origin: "tenant"` |
         | --- | --- | --- |
         | The group lives in | This office's vault | The tenant vault |
         | Reaches | This office only | Any office pointed at it |
@@ -2833,7 +3508,7 @@ paths:
 
         The group name and the variables it produces are different strings. A
         group called `stripe-live` holding a field `SECRET_KEY` is injected as
-        `STRIPE_LIVE_SECRET_KEY`, and that name is what the integration's skill
+        `STRIPE_LIVE_SECRET_KEY`, and that name is what the plugin's skill
         tells an employee to use.
 
         Linking a group re-derives that list immediately, and the response
@@ -2867,8 +3542,9 @@ paths:
                 origin:
                   type: string
                   enum: [office, tenant]
-                  description: Which vault the group lives in.
-              required: [secretName, origin]
+                  default: office
+                  description: Which vault the group lives in. Leave it out for this office's vault.
+              required: [secretName]
       responses:
         '201':
           description: Reference added.
@@ -2887,7 +3563,7 @@ paths:
                     type: array
                     description: |
                       The environment variable names the office will now inject,
-                      re-derived from every group this integration points at.
+                      re-derived from every group this plugin points at.
                       Available to the employee after the office restarts.
                     items:
                       type: string
@@ -2900,7 +3576,7 @@ paths:
                       the skill to bring the text in line.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          description: A field is missing or invalid, or the office has no vault.
+          description: A field is missing or invalid, or (for an office group) the office has no vault.
           content:
             application/json:
               schema:
@@ -2927,7 +3603,7 @@ paths:
       - name: integrationId
         in: path
         required: true
-        description: 'The integration. From [List integrations](/docs/api-reference/offices/integrations/listOfficeIntegrations).'
+        description: 'The plugin. From [List plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations).'
         schema:
           type: string
       - name: secretName
@@ -2936,7 +3612,7 @@ paths:
         schema:
           type: string
     delete:
-      tags: [Integrations]
+      tags: [Plugins]
       summary: Remove a secret reference
       operationId: removeOfficeIntegrationSecretRef
       description: |
@@ -2978,12 +3654,12 @@ paths:
     parameters:
       - $ref: '#/components/parameters/OfficeId'
     get:
-      tags: [Integrations]
+      tags: [Plugins]
       summary: List inherited tenant secrets
       operationId: listOfficeInheritedTenantSecrets
       description: |
         A read only aggregation of which tenant level secrets reach this office
-        through its integrations. Requires `office:read`.
+        through its plugins. Requires `office:read`.
 
         Answers "what does this employee actually have access to" without
         exposing anything. An audit view rather than a management one, which is
@@ -3154,7 +3830,7 @@ paths:
       description: |
         Removes the office's access to the site. Requires `office:manage`.
 
-        Integrations allocated alongside the site are not removed.
+        Plugins allocated alongside the site are not removed.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -3227,11 +3903,11 @@ paths:
   /global-integrations:
     get:
       tags: [Tenant libraries]
-      summary: List integration templates
+      summary: List plugin templates
       operationId: listGlobalIntegrations
       description: |
-        Lists the tenant's integration template library. Requires
-        `tenant:manage` at `console`.
+        Lists the tenant's plugin library. Requires `tenant:read` at
+        `console`.
       parameters:
         - name: category
           in: query
@@ -3250,17 +3926,21 @@ paths:
 
     post:
       tags: [Tenant libraries]
-      summary: Create an integration template
+      summary: Create a plugin template
       operationId: createGlobalIntegration
       description: |
-        Creates a template that any office can instantiate. Requires
-        `tenant:manage` at `console`.
+        Creates a template in the plugin library that any office can copy.
+        Requires `tenant:manage` at `console`.
 
-        If credentials are supplied, a secret group is provisioned **at tenant
-        level**, and office copies reference that group directly rather than
-        holding their own. One rotation there reaches every office using the
-        template, which is the reason to prefer templates over per office
-        integrations for anything shared.
+        If credentials are supplied, a secret group is created **in the tenant
+        vault** and linked to the template, and office copies reference that
+        group directly rather than holding their own. One rotation there
+        reaches every office using the template, which is the reason to prefer
+        templates over per office plugins for anything shared.
+
+        The auth fields and the credential rules are the same as on
+        [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration).
+        This call does not take `config`.
       requestBody:
         required: true
         content:
@@ -3275,12 +3955,34 @@ paths:
                   description: Must start with `http://` or `https://`.
                 authType:
                   type: string
-                  enum: [none, api_key, bearer, basic]
+                  enum: [bearer, api_key, basic, oauth2, hmac, none, multi_header, oauth2_client_credentials, jwt_bearer, signed_jwt]
+                  description: As on [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration).
+                headerName:
+                  type: string
+                  description: '`api_key` only: the header the key goes in.'
+                queryParam:
+                  type: string
+                  description: '`api_key` only: the query parameter the key goes in.'
+                credentialField:
+                  type: string
+                  description: The `credentials` key sent as the credential. Required when there are several keys.
+                credentialHeaders:
+                  type: array
+                  description: '`multi_header` only. 1 to 5 entries.'
+                  items:
+                    $ref: '#/components/schemas/CredentialHeader'
+                token:
+                  $ref: '#/components/schemas/PluginTokenSettings'
                 credentials:
                   type: object
                   additionalProperties:
                     type: string
-                  description: Required unless `authType` is `none`.
+                  description: Required unless `authType` is `none`. Written to the tenant vault.
+                websiteId:
+                  type: string
+                  description: |
+                    The website this plugin is the API of. From
+                    [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites).
                 category:
                   type: string
                 websiteMetadata:
@@ -3315,7 +4017,10 @@ paths:
           description: The template was created.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          description: A required field is missing, or `baseUrl` is malformed.
+          description: |
+            A required field is missing, `baseUrl` is malformed, or the auth
+            settings or credentials are invalid, with the same messages as
+            [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration).
           content:
             application/json:
               schema:
@@ -3346,19 +4051,23 @@ paths:
                   value:
                     success: false
                     error: Failed to create secret group in tenant vault
+                field:
+                  value:
+                    success: false
+                    error: 'Failed to store credential: API_KEY'
 
   /global-integrations/{globalIntegrationId}:
     parameters:
       - name: globalIntegrationId
         in: path
         required: true
-        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        description: 'The template. From [List plugin templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
         schema:
           type: string
           examples: [gint_4b8c2e]
     get:
       tags: [Tenant libraries]
-      summary: Get an integration template
+      summary: Get a plugin template
       operationId: getGlobalIntegration
       description: |
         Returns one template including its declared endpoints. Requires
@@ -3378,11 +4087,17 @@ paths:
           $ref: '#/components/responses/Forbidden'
     patch:
       tags: [Tenant libraries]
-      summary: Update an integration template
+      summary: Update a plugin template
       operationId: updateGlobalIntegration
       description: |
         Requires `tenant:manage`. Updating publishes a new version rather than
         editing in place, so `changelog` is worth sending.
+
+        This call does not change the auth settings or `config`. `tools`
+        replaces the whole array and, unlike on an office plugin, is not
+        checked here: send entries in exactly the shape
+        [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration)
+        accepts.
       requestBody:
         required: true
         content:
@@ -3404,12 +4119,17 @@ paths:
                   type: array
                   description: |
                     Replaces the template's declared endpoints. See
-                    [Create an integration](/docs/api-reference/offices/integrations/createOfficeIntegration)
+                    [Create a plugin](/docs/api-reference/offices/plugins/createOfficeIntegration)
                     for the same field on an office.
                   items:
                     $ref: '#/components/schemas/IntegrationTool'
                 websiteMetadata:
                   type: object
+                websiteId:
+                  type: string
+                  description: |
+                    The website this plugin is the API of. From
+                    [List websites](/docs/api-reference/offices/tenant-libraries/listTenantWebsites).
                 changelog:
                   type: string
       responses:
@@ -3417,7 +4137,7 @@ paths:
           description: The updated template.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
-          description: No template with that ID.
+          description: No template with that ID, when the body includes `baseUrl`. Otherwise a missing template is a 400.
           content:
             application/json:
               schema:
@@ -3431,7 +4151,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
     delete:
       tags: [Tenant libraries]
-      summary: Delete an integration template
+      summary: Delete a plugin template
       operationId: deleteGlobalIntegration
       description: |
         Requires `tenant:manage`.
@@ -3450,7 +4170,7 @@ paths:
       - name: globalIntegrationId
         in: path
         required: true
-        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        description: 'The template. From [List plugin templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
         schema:
           type: string
     get:
@@ -3459,10 +4179,10 @@ paths:
       operationId: listGlobalIntegrationVersions
       description: |
         The append only version history for a template. Requires
-        `tenant:manage`.
+        `tenant:read` at `console`.
 
         Every promotion from an office and every update adds an entry, so this
-        is the record of who changed a shared integration and when.
+        is the record of who changed a shared plugin and when.
       responses:
         '200':
           description: Version history.
@@ -3475,7 +4195,7 @@ paths:
       - name: globalIntegrationId
         in: path
         required: true
-        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        description: 'The template. From [List plugin templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
         schema:
           type: string
     get:
@@ -3507,10 +4227,13 @@ paths:
               properties:
                 secretName:
                   type: string
-                  description: 'The secret group being referenced. Names a group in the office or tenant vault.'
+                  description: 'The secret group being referenced. Names a group in the tenant vault.'
+                configId:
+                  type: string
+                  description: Leave it out. An empty value means the tenant vault, which is where template groups live.
               required: [secretName]
       responses:
-        '201':
+        '200':
           description: Reference added.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
@@ -3523,7 +4246,7 @@ paths:
       - name: globalIntegrationId
         in: path
         required: true
-        description: 'The template. From [List integration templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
+        description: 'The template. From [List plugin templates](/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations).'
         schema:
           type: string
       - name: secretName
@@ -3668,15 +4391,15 @@ paths:
           type: string
     get:
       tags: [Tenant libraries]
-      summary: List a website's integrations
+      summary: List a website's plugins
       operationId: listTenantWebsiteIntegrationRefs
       description: |
-        The integrations associated with this site. These are what
+        The plugins associated with this site. These are what
         `POST /offices/{officeId}/website-allocations` brings along when it
         allocates the site.
       responses:
         '200':
-          description: The site's integrations.
+          description: The site's plugins.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
           description: No website with that ID.
@@ -4106,23 +4829,14 @@ paths:
 
         ## It replaces the machine rather than rebooting it
 
-        The office's current machine is stopped first, then a fresh one is
-        started with the office's current settings. **There is a gap in service**
-        while the new machine starts, usually a few minutes. Work that arrives
-        during the gap waits for the new machine.
+        A fresh machine is started with the office's current settings, and it
+        replaces the office's current machine.
 
-        If the new machine is not ready within 20 minutes, it is stopped and the
-        restart fails. The old machine is already gone, so the office is left
-        asleep, and the next thing that arrives for it starts a new machine.
+        If the new machine is not ready within 20 minutes, the restart fails.
 
         If the account's credit balance is below zero, the restart is accepted
         and then fails with a message saying machine starts are paused. See
         [Machine lifecycle](/docs/cloud/lifecycle#when-the-credit-balance-goes-below-zero).
-
-        That indirection is the point. An office reads its settings once, when it
-        starts, and holds them for as long as that machine lives. Rebooting the
-        same machine keeps what it was built with, so a genuine restart means a
-        new machine.
 
         ## When you need it
 
@@ -4132,15 +4846,14 @@ paths:
         | --- | --- |
         | [Model provider or model](/docs/api-reference/offices/model-provider/updateOfficeModelProvider) | This call |
         | [Environment secrets](/docs/api-reference/offices/environment-secrets/listOfficeSecrets) | This call |
-        | Integrations | This call |
+        | [Plugins](/docs/api-reference/offices/plugins/listOfficeIntegrations): a new plugin, or changed endpoints, auth or settings | This call |
         | [Protocols](/docs/api-reference/offices/protocols/listOfficeProtocols) | This call |
-        | Skills | Immediately, no restart needed |
 
         <br />
 
-        **The response comes back before the work is done.** You get a
-        `deploymentId` and the replacement continues in the background, so a
-        `200` means it started rather than finished. Watch
+        **The response comes back before the work is done.** The replacement
+        continues in the background, so a `200` means it started rather than
+        finished. Watch
         [List instances](/docs/api-reference/offices/machine/listOfficeInstances)
         to see the new machine appear.
 
@@ -4172,19 +4885,18 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/MachineActionResult'
-                  - type: object
-                    properties:
-                      deploymentId:
-                        type: string
-                        description: Identifies this replacement.
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  message:
+                    type: string
               examples:
                 started:
                   value:
                     success: true
-                    deploymentId: dep_7Kd2mQ
-                    message: Recreate started
+                    message: Recreate initiated
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

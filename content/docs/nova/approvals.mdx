@@ -35,7 +35,7 @@ action happens only when the card is approved.
 | **Create a website** | A form. Fill it in and save | Reply with the one time code, or finish it in the app | The form waits in the app |
 | **Apply hierarchy changes** | A card. Apply or reject each change | Reply with the one time code to apply all of them, or choose in the app | A card waits in the app |
 | **Save an ingest transform** | A card. Choose what happens on a failure, then save | Reply with the one time code to save it as proposed, or choose in the app | A card waits in the app |
-| **Save credentials** for an integration | A secure form in the app | Not possible by text | The form waits in the app |
+| **Save credentials** for a plugin | A secure form in the app | Not possible by text | The form waits in the app |
 | **Add your own model provider key** | A secure form in the app | Not possible by text | The form waits in the app |
 
 Credentials and keys are never typed into a chat or a text message. The form writes
@@ -60,6 +60,11 @@ changes, [Changing access](/docs/nova/changing-access).
 If the action fails and nothing was changed, the card stays open so you can try
 again. If part of it was done, the card closes so nothing is done twice, and Nova
 tells you which parts happened.
+
+**A card can be answered once.** If an answer arrives for a card that was already
+answered, for example a second tap or a tap on another device, it is refused with "This card was already answered."
+and Nova does not start the work again. Called through the API, that refusal is a `409`
+with the code `action_already_answered`.
 
 Some cards are general questions, such as confirming a plan or choosing between
 options. You can answer those by tapping, or by replying in your own words.

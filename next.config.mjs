@@ -32,9 +32,16 @@ const withMDX = createMDX();
  */
 const movedPages = [
   // Integrations became a folder: the two standalone pages moved under it and a
-  // third joined them. Both old addresses stay live.
-  ['/docs/tools-and-secrets', '/docs/integrations'],
-  ['/docs/creating-integrations', '/docs/integrations/creating'],
+  // third joined them. Both old addresses stay live. Each points straight at the
+  // plugins page, so no address takes two redirects.
+  ['/docs/tools-and-secrets', '/docs/plugins'],
+  ['/docs/creating-integrations', '/docs/plugins/creating'],
+  // 2026-10-27: integrations were renamed plugins. The guide folder moved, and the
+  // reference tag "Integrations" became "Plugins". Operation ids did not change, so one
+  // pattern keeps every old reference address working.
+  ['/docs/integrations', '/docs/plugins'],
+  ['/docs/integrations/:page', '/docs/plugins/:page'],
+  ['/docs/api-reference/offices/integrations/:operation', '/docs/api-reference/offices/plugins/:operation'],
   [
     '/docs/api-reference/tenant-libraries',
     '/docs/api-reference/offices/tenant-libraries/listGlobalIntegrations',

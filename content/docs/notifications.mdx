@@ -27,7 +27,7 @@ chat, an office, a calendar.
 | --- | --- | --- |
 | Someone sends you a private message | The other person in the conversation | The conversation |
 | A message arrives in a group chat you are in | Every person in the chat except the sender | The chat |
-| An office's integration call fails | People who can read that office | The office's logs, filtered to that integration |
+| An office's plugin call fails | People who can read that office | The office's logs, filtered to that plugin |
 | A calendar account fails to sync | Admins who can manage that calendar | The calendar's Sources tab |
 
 In a group chat, a message from an AI employee notifies the people in the chat
@@ -50,7 +50,7 @@ two cannot disagree, and nobody has to maintain a list.
 
 | Notification | Action | Resource | Audience |
 | --- | --- | --- | --- |
-| Integration call failed | `office:read` | The office | Everyone who qualifies |
+| Plugin call failed | `office:read` | The office | Everyone who qualifies |
 | Calendar account failed to sync | `calendar:manage` | The calendar | Admins only |
 
 ### Everyone who qualifies, or admins only
@@ -58,9 +58,9 @@ two cannot disagree, and nobody has to maintain a list.
 A notification is sent to one of two audiences.
 
 **Everyone who qualifies** is every person whose roles allow the action on the
-resource. It suits information anyone entitled to the resource should have. An
-integration failure goes to everyone who can read the office, because they can
-read the logs it links to, even if fixing the integration needs more access than
+resource. It suits information anyone entitled to the resource should have. A
+plugin failure goes to everyone who can read the office, because they can
+read the logs it links to, even if fixing the plugin needs more access than
 they have.
 
 **Admins only** narrows that to people holding an
@@ -84,7 +84,7 @@ account does not bury everything else.
 | --- | --- |
 | Private message | Once per message |
 | Group chat | Once per chat until you read it. Later messages update the same notification and add to its count without pinging again. Reading the chat starts a new cycle |
-| Integration call failed | Once per failed call. An integration that keeps failing keeps notifying |
+| Plugin call failed | Once per failed call. A plugin that keeps failing keeps notifying |
 | Calendar account failed to sync | Every failure, grouped into one notification per account, described below |
 
 ### Calendar sync alerts

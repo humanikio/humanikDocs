@@ -1,0 +1,211 @@
+---
+title: Plugins and secrets
+description: Connecting software an employee can use, and where its credentials and settings live.
+---
+
+A **plugin** connects an AI employee to software outside its office: your billing system, your
+analytics, a partner's API. It is made of four parts.
+
+| Part | What it is |
+| --- | --- |
+| **The connection** | The software's base address and how the office signs in to it |
+| **Tools** | The endpoints the employee may call, each with its own name and parameters |
+| **Settings** | Values that are not secret, such as an account or property ID, kept on the plugin |
+| **A skill** | A document generated from the plugin that tells the employee what the software is for and how to use its tools |
+
+The credential is not one of the parts. It lives in a **vault**, and the plugin only points at
+it. The rest of this page is about why.
+
+<Callout>
+  **The API still says "integration".** Plugins were called integrations, and the API paths and
+  field names kept the older word: `/offices/{officeId}/integrations`, `integrationId`, and the
+  `integration` argument of `hos_plugin_request`. They are the same thing. The paths are the
+  contract, so they stay as they are.
+</Callout>
+
+## A plugin points at a secret. It does not hold one.
+
+When you create a plugin with credentials, the values do not go into the plugin. They are
+written into a **secret group** in a vault, and the plugin stores a link to that group.
+
+```
+plugin  ──links to──▶  secret group  ──read by the office when it calls──▶  your software
+```
+
+Three things follow from that:
+
+**No read endpoint returns a credential.** Listing plugins, reading one, or listing its secret
+links all return names and pointers. There is exactly one endpoint on the office surface that
+returns a decrypted value, and it needs a separate permission.
+
+**One secret can serve many plugins.** Rotating it is one write, not one per plugin.
+
+**Removing a plugin does not delete the credential.** The link goes; the group stays, still
+usable by anything else pointing at it.
+
+## Settings are not secrets
+
+Some values a plugin needs are not secret at all: the analytics property to report on, the
+account to bill, the region to use. Those go in the plugin's **settings**, not in the vault.
+
+| | Settings | Secret group |
+| --- | --- | --- |
+| Holds | IDs and options anyone who can see the plugin may read | Keys, passwords, private keys |
+| Shown to | Anyone who can read the office | Nobody, through any read endpoint |
+| Used by | Tool parameters, as their default value | The office, to sign in |
+
+A tool parameter can take its default from a setting. The employee then leaves the value out
+and the office fills it in, so the employee never has to look an ID up or guess it. See
+[Settings and parameter defaults](/docs/plugins/settings).
+
+## Two vaults, and the choice matters
+
+A secret group lives in one of two places.
+
+| | Office vault | Tenant vault |
+| --- | --- | --- |
+| Reaches | That one office | Any office pointed at it |
+| Rotating it affects | One employee | Every employee using it |
+| Good for | A credential only this employee should hold | A shared company account |
+
+**Prefer the tenant vault for anything shared.** A Stripe key used by four employees should be
+one group rotated once, not four copies rotated four times and forgotten in a fifth place.
+
+The tradeoff is blast radius. A tenant secret is reachable by every office pointed at it, so the
+decision is about who should hold the credential, not about convenience.
+
+## Changes reach the employee when the office restarts
+
+<Callout type="warn">
+  **A plugin is loaded when the office starts.** Adding a plugin, declaring a tool, changing a
+  setting or linking a different secret does not reach a running employee. If you changed
+  something and the employee still behaves the old way, the office has not restarted.
+</Callout>
+
+Restart the office from the console with **Restart**, or ask Nova to restart it. Both start a
+fresh machine for the office with its current plugins, settings and secrets. The employee is
+not available while the new machine starts, so pick a moment when it is not in the middle of
+work.
+
+## A plugin's endpoints become tools
+
+A plugin declares a base address, how it signs in, and a list of endpoints. Each enabled
+endpoint becomes a **tool the employee can call by name**, exactly like the ones that ship with
+the platform.
+
+The employee supplies the arguments. The office signs in and attaches the credential to the
+outgoing request. The key itself never enters the conversation, so it does not appear in
+transcripts or in anything you later export.
+
+<Callout>
+  **This works the same on a machine you own.** An employee running on your own hardware calls
+  plugin tools through its office, so it reaches the same software with the same credentials as
+  one running in the cloud. Nothing needs to be installed on the device, and no key is copied to
+  it. See [Tools your machine does not hold](/docs/devices/office-tools), and
+  [Plugins and MCP](/docs/plugins/mcp) for how the tools reach each kind of agent.
+</Callout>
+
+A plugin with no endpoints declared exposes no **named** tools, and it is still callable. The
+employee reaches it with `hos_plugin_request`, naming the plugin and supplying a path. The office
+resolves the host, attaches the credential and signs the request.
+
+<Callout>
+  **The host is not a parameter.** An employee can only reach software you already connected. It
+  cannot be talked into sending your credential somewhere else, because it never names a
+  destination: it names one of your plugins.
+</Callout>
+
+Declare endpoints anyway where you can. A named tool carries its own parameter schema and its
+defaults, so the employee is not guessing at the shape of a call. `hos_plugin_request` is the
+floor, not the replacement. Both paths are covered in [Plugin skills](/docs/plugins/skills).
+
+## Two permissions, not one
+
+Operating an office and reading its credentials are different rights.
+
+| Action | Permits |
+| --- | --- |
+| `office:read` · `office:manage` | Running the office, adding and changing its plugins |
+| `secrets:read` · `secrets:write` | Reading and writing vault values |
+
+Someone who can operate an employee does not automatically get to read the keys it uses. Grant
+them separately, and grant `secrets:read` sparingly: it is the one that returns plaintext.
+
+## The plugin library: define once, use everywhere
+
+A plugin created directly on an office belongs to that office. If eight employees all need the
+same connection, that is eight plugins to maintain.
+
+The **plugin library** on your account solves that. Define a plugin once as a template, then add
+it to any office. The credential lives in the tenant vault, so a rotation reaches every office
+using it. Nova checks the library first when you ask it to connect something.
+
+Two operations connect an office to the library:
+
+| Operation | Direction |
+| --- | --- |
+| **From template** | Library into an office |
+| **Promote to template** | An office's plugin back into the library |
+
+An office copy keeps its own settings when the template is synced: a sync adds settings the
+office does not have and leaves the office's values alone. Changing an office copy marks it as
+customized, and a sync then needs to be forced.
+
+<Callout type="warn">
+  **Promotion is gated twice.** It requires `office:manage` on the office **and** a console scoped
+  permission, because it writes into a shared library and creates a secret every office can be
+  pointed at. An action that starts inside one boundary and lands in a wider one is checked at
+  both ends.
+</Callout>
+
+## What an employee can see about its own access
+
+`GET /offices/{officeId}/inherited-tenant-secrets` answers *what does this employee actually have
+access to*, without exposing any value. It needs only `office:read`.
+
+It is the right endpoint for an audit, and it is worth running before widening anything.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Creating a plugin"
+    href="/docs/plugins/creating"
+    description="Describe the software and Nova connects it, or declare the endpoints yourself."
+  />
+  <Card
+    title="How a plugin signs in"
+    href="/docs/plugins/sign-in"
+    description="The ten ways a plugin can authenticate, including tokens the office renews itself."
+  />
+  <Card
+    title="Settings and parameter defaults"
+    href="/docs/plugins/settings"
+    description="Keep IDs out of the vault and out of the employee's guesswork."
+  />
+  <Card
+    title="Checking a plugin"
+    href="/docs/plugins/checking"
+    description="Make one real call through the office and see exactly what it sent."
+  />
+  <Card
+    title="Plugin skills"
+    href="/docs/plugins/skills"
+    description="The document generated from a plugin, and the two ways an employee calls one."
+  />
+  <Card
+    title="Plugins and MCP"
+    href="/docs/plugins/mcp"
+    description="How the office serves its tools, and what is coming."
+  />
+  <Card
+    title="Plugins API"
+    href="/docs/api-reference/offices/plugins/listOfficeIntegrations"
+    description="Create, change, promote, and manage secret links."
+  />
+  <Card
+    title="Access Control (IAM)"
+    href="/docs/access-control"
+    description="How to grant secrets:read without granting everything else."
+  />
+</Cards>
