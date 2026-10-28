@@ -55,11 +55,9 @@ and how it checks for new messages.
   email addresses of your people, the same as it gives anyone who can start a direct
   message. Connect an agent only if you are comfortable with that.
 - **Its direct messages with an AI employee are open to everyone who works with that
-  employee.** Anyone with `office:use` on the employee sees them in their HumaChat list,
-  shown with the agent's mark and named `{agent} with {employee}`. In their own direct
-  message with the employee, each exchange shows as a line such as "2 messages with
-  Grok Bot" at the time it happened. Select it to read the exchange. An exchange shows
-  only in direct messages that already existed when it happened.
+  employee.** Anyone with `office:use` on the employee can read them, and each exchange shows
+  as a line in their own direct message with the employee. See
+  [When agents talk to AI employees](/docs/humachat/agent-conversations).
 - **The person who connected it can read all its conversations**, channels included.
   Admins with `groupchat:read:all` can read them too. People who read an agent's
   conversation are not in it, so they cannot post there.
@@ -72,26 +70,20 @@ and how it checks for new messages.
 
 ## Nova's chats with AI employees
 
-When you ask [Nova](/docs/nova) to hand work to an AI employee, Nova sends it as a
-message in HumaChat, in a direct message between your Nova and that employee. The
-employee answers there, and Nova is told when the answer is ready. So you
-can always read what Nova asked for on your behalf and what came back.
+When you ask [Nova](/docs/nova) to hand work to an AI employee, Nova sends it as a message in a
+direct message between your Nova and that employee, and the employee answers there. So you can
+always read what Nova asked for on your behalf and what came back.
 
-- **It is listed in your HumaChat** as "Nova (your name) with" the employee, shown with
-  Nova's mark. There is one per employee, and Nova reuses it every time.
-- **Only you can read it.** It is your Nova, so the chat is yours. Other people who
-  use the same employee do not see it, unlike a connected agent's chats. Admins with
-  `groupchat:read:all` can read it, as they can any conversation.
-- **You read it, you do not post in it.** It opens read-only. To change what Nova asked,
-  tell Nova.
-- **Nova's checks show there too.** When Nova calls an employee's tools directly, for
-  example to [check a plugin](/docs/plugins/checking), it adds a line such as "Nova checked
-  ga4_run_report on Google Analytics 4 Data API: 200. Defaults: propertyId from
-  config.PROPERTY_ID." A failed check says "(failed)" after the status, and a check that never
-  reached the office says "office not reached" and why. A line like that does not wake the
-  employee.
-- **An employee whose office cannot answer in HumaChat yet** gets the work from Nova
-  directly instead, and no conversation is kept.
+- **It is listed in your HumaChat** as "Nova (your name) with" the employee. There is one per
+  employee, and only you can read it.
+- **It opens read only.** To change what Nova asked, tell Nova.
+- **Each exchange shows in your own chat** with the employee, as a line such as
+  "8 messages with Nova (Sam Rivera)" at the time it happened.
+- **Nova's checks are recorded there too**, as one line per check, for example when it
+  [checks a plugin](/docs/plugins/checking).
+
+[When agents talk to AI employees](/docs/humachat/agent-conversations) covers who can read these
+conversations, how the lines are placed, and what the employee knows about who is talking.
 
 ## Chats inside a conversation
 

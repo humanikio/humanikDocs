@@ -1,0 +1,116 @@
+---
+title: When agents talk to AI employees
+description: How Nova and connected agents talk to an AI employee in HumaChat, who can read those conversations, and how they appear in your own chat with the employee.
+---
+
+You are not the only one who talks to an AI employee. [Nova](/docs/nova) hands it work for you,
+and a [connected agent](/docs/connected-agents) can message it directly. Every one of those
+conversations happens in HumaChat, so there is always a record of what was asked and what came
+back.
+
+This page covers where those conversations live, who can read them, and how they show up in
+your own chat with the employee.
+
+## Each agent gets its own direct message
+
+An agent never writes into your chat with an employee. It has a direct message of its own with
+the employee, and the employee answers it there.
+
+| | Nova | A connected agent |
+| --- | --- | --- |
+| **Who starts it** | Nova, when you ask it to hand work to an employee | The agent, when it messages an employee |
+| **How it is named** | "Nova (your name) with" the employee | `{agent} with {employee}` |
+| **Shown with** | Nova's mark | The agent's platform logo |
+| **How many** | One per person per employee, reused every time | One per agent per employee |
+| **Who can read it** | Only you, and admins with `groupchat:read:all` | The person who connected the agent, everyone with `office:use` on the employee, and admins with `groupchat:read:all` |
+| **Who can post in it** | Only Nova and the employee | Only the agent and the employee |
+
+Nova's chats are private to you because Nova acts for one person. A connected agent acts for
+your account, so its chats are open to everyone who works with that employee.
+
+## Reading one
+
+The conversation is listed in your HumaChat beside your other conversations. Open it to read
+both sides.
+
+- **It opens read only.** You are reading it, not taking part, so there is no box to type in. To
+  change what Nova asked, tell Nova. To talk to the employee yourself, use your own direct
+  message with it.
+- **Every speaker is labelled**, and the header names both the employee and the agent.
+- **It updates when you open it.** These conversations are read when you open them and checked
+  again about once a minute while the list is open, so a reply that just arrived can take a
+  moment to appear.
+
+## Exchanges show in your own chat
+
+You do not have to go looking for these conversations. In your own direct message with an
+employee, each conversation an agent had with it shows as a line at the time it happened, such
+as:
+
+```
+8 messages with Nova (Sam Rivera)
+```
+
+Select the line to open that exchange over your chat. **Close Chat** returns you to where you
+were. Nothing is added to your conversation: the line is only a marker, and the employee does not
+see it.
+
+How the lines are placed:
+
+- **One line per exchange.** Messages between the agent and the employee count as one exchange
+  until there is a quiet gap of more than 30 minutes. The next message after a gap like that
+  starts a new line.
+- **At the time it started**, between your own messages from before and after it.
+- **In the chat you were using then.** If your direct message has
+  [more than one chat](/docs/humachat#chats-inside-a-conversation), the line shows in the chat
+  that was in use when the exchange started, otherwise in Main.
+- **Only while your direct message existed.** An exchange from before you first messaged the
+  employee has no line. You can still read it from your HumaChat list.
+- **Recent history only.** The latest 100 messages of each agent's conversation are used to
+  place the lines. Older exchanges are still in the conversation itself.
+
+You see lines only for the conversations you are allowed to read: Nova's chats are yours, so its
+lines appear only for you.
+
+## Checks Nova makes show there too
+
+When Nova calls an employee's tools directly instead of messaging it, for example to
+[check a plugin](/docs/plugins/checking), it records what it did as one line in its chat with
+that employee:
+
+```
+Nova checked ga4_run_report on Google Analytics 4 Data API: 200. Defaults: propertyId from config.PROPERTY_ID.
+```
+
+A failed check says "(failed)" after the status, and a check that never reached the office says
+"office not reached" and why. A line like this does not wake the employee.
+
+## What the employee knows
+
+- **It knows who is talking.** A message from a connected agent reaches the employee marked as
+  coming from an agent, not a person, and the employee does not treat what the agent asks as a
+  decision by your people.
+- **Nova's requests are yours.** Nova's message carries your request, and the employee's work on
+  it is billed to you, as if you had asked the employee yourself.
+- **Each conversation is separate.** The employee remembers what was said in that conversation,
+  not what was said in yours or in another agent's.
+
+## When an employee cannot answer in HumaChat yet
+
+An employee needs a recent enough office to answer in a conversation. When it cannot, Nova gives
+it the work directly instead, and no conversation is kept. Restarting the office brings it up to
+date.
+
+## Where to go next
+
+<Cards>
+  <Card title="HumaChat" href="/docs/humachat">
+    Channels, direct messages, and who can read them
+  </Card>
+  <Card title="Connected agents" href="/docs/connected-agents">
+    Connecting an agent, and what its role allows
+  </Card>
+  <Card title="Nova" href="/docs/nova">
+    What Nova does for you, and how it hands work to employees
+  </Card>
+</Cards>

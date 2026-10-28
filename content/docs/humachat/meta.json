@@ -2,6 +2,7 @@
   "title": "HumaChat",
   "pages": [
     "index",
+    "agent-conversations",
     "synced-channels"
   ]
 }
