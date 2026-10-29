@@ -158,6 +158,25 @@ components:
         workspaceId:
           type: string
           examples: [ws_a1b2c3]
+        duplicatedFrom:
+          type: object
+          description: |
+            Present only on an office made by
+            [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice).
+            `status` and the step counts follow its
+            [duplication report](/docs/api-reference/offices/offices/getOfficeDuplication),
+            so a list of offices can show which copies are still being set up.
+          properties:
+            officeId:
+              type: string
+              description: The office this one was copied from.
+            status:
+              type: string
+              enum: [running, done, partial, failed]
+            stepsDone:
+              type: integer
+            stepsTotal:
+              type: integer
       required: [id, name]
 
     ToolParameter:
