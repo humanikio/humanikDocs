@@ -132,7 +132,36 @@ setup as the app, as you, so it needs `office:manage` the same way. Nova deletes
 after you approve the card it shows you ([What Nova asks you to approve](/docs/nova/approvals)).
 An AI employee cannot ask Nova to do any of the three.
 
-## You choose how long an office stays awake
+## Duplicating an office
+
+You can make a copy of an AI employee in the same workspace, from the API
+([`POST /offices/{officeId}/duplicate`](/docs/api-reference/offices)) or by asking
+[Nova](/docs/nova). The copy is a new office with its own machine, its own credentials and its
+own identity, set up the way the original is. It needs `office:manage` on the original and on
+the workspace.
+
+The copy is made at once, and its setup is filled in over the next minute or so.
+
+| The copy gets | The copy does not get |
+| --- | --- |
+| Its identity files, such as `SOUL.md` | Its HumaChat conversations. People start a new chat with the copy |
+| Its model and settings, skills and look | Telegram and WhatsApp |
+| Its memory, unless you ask for it without | Phone numbers and email addresses |
+| Its own past sessions, as context | Channels it is a member of |
+| Its plugins and protocols, with their credentials | Connected accounts, calendars and browsers |
+| The databases, apps and websites it is connected to | Workflows that name the original |
+| Its scheduled tasks, paused | Files it created itself on its machine |
+
+- **Scheduled tasks arrive paused**, so nothing runs twice. Turn them on when the copy is ready,
+  or ask for them to arrive running.
+- **Credentials are copied, not shared.** The copy has its own copy of each plugin credential
+  that belonged to the original alone. Changing one office's credentials does not change the
+  other's. Credentials shared across your account stay shared.
+- **A database is connected only if you can read it.** If you cannot, the copy is made without
+  it, and the copy's report says so.
+- **The copy lists what it did not get**, so you can reconnect what it needs.
+
+
 
 An office can scale to zero when idle, or stay running as long as you want. That
 is a setting, not a fixed behaviour.
