@@ -21,6 +21,21 @@ Each piece of model work is charged once, when it finishes, at what its tokens
 cost. The charge is recorded in your [usage records](/docs/spend/usage), and the
 same figure is what [budgets](/docs/spend/budgets) count.
 
+## What model work is charged at
+
+Model work on our account runs through OpenRouter, and **you are charged what OpenRouter
+charged for that request**. Nova and AI employees are charged the same way. OpenRouter
+reports the charge for each request, so the figure already includes what the model's
+vendor charges for cached tokens, longer prompts and any other pricing rule. We do not
+work it out again from a price list of our own.
+
+- **One piece of work, many requests.** A task an AI employee works on can make many model
+  requests, for example one for each tool it uses. Its charge is the total of all of them.
+- **When OpenRouter does not report a charge** for a request, that request is
+  priced from the model's published price per token instead.
+- **On your own OpenRouter account**, nothing is charged to your credit, and the cost in your
+  usage records is what OpenRouter charged your account.
+
 Machine time is charged once an hour, as described below. Budgets do not count
 it.
 
