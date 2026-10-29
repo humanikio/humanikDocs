@@ -43,11 +43,13 @@ The office existing does not mean the office is ready. Check
 callers in the same workspace can legitimately get different lists. A shorter
 list is not an error.
 
-**Two operations are gated twice.**
+**Three operations are gated twice.**
 [Promotion](/docs/api-reference/offices/plugins/promoteOfficeIntegration) needs a console
-scoped action on top of `office:manage`, and
+scoped action on top of `office:manage`,
+[duplicating an office](/docs/api-reference/offices/offices/duplicateOffice) needs
+`office:manage` on the workspace as well as on the office, and
 [allocating a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace) needs
-`datasource:read` on the namespace itself. In both cases an action starts inside
+`datasource:read` on the namespace itself. In each case an action starts inside
 one boundary and lands in another, so it is checked at both ends.
 
 ## Not everything an office holds is allocated through this API

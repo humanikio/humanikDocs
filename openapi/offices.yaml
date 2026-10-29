@@ -979,6 +979,255 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /offices/{officeId}/duplicate:
+    parameters:
+      - $ref: '#/components/parameters/OfficeId'
+    post:
+      tags: [Offices]
+      summary: Duplicate an office
+      operationId: duplicateOffice
+      description: |
+        Makes a copy of an office in the same workspace. The copy is a new
+        office with its own machine, its own API key and its own identity, set
+        up the way the original is. See
+        [Duplicating an office](/docs/offices-and-employees/duplicating) for
+        what is copied and why.
+
+        **Gated twice.** The route needs `office:manage` on the office being
+        copied, and the handler then needs `office:manage` on the workspace, the
+        permission for creating an office.
+
+        **The answer comes before the copying is done.** The call returns `202`
+        as soon as the new office exists, with its ID. Its setup, plugins,
+        credentials and scheduled tasks are copied over the next minute or so.
+        Poll [the duplication report](/docs/api-reference/offices/offices/getOfficeDuplication)
+        on the new office to see progress and the outcome.
+
+        **Some things are never copied:** HumaChat conversations, Telegram and
+        WhatsApp, phone numbers, email addresses, connected accounts, channel
+        memberships, calendars, browsers, and workflows that name the original.
+        The report lists the ones the original had under `notCopied`.
+
+        **Scheduled tasks arrive paused** unless `crons` is `running`. One-time
+        tasks stay with the original. **A database is connected to the copy only
+        if the caller can read it** (`datasource:read`); otherwise the copy is
+        made without it and the report says so.
+
+        A step that fails does not undo the others. The copy is kept and its
+        report ends as `partial`. Delete it with
+        [Delete an office](/docs/api-reference/offices/offices/deleteOffice) if
+        you do not want it.
+
+        Get the ID of the office to copy from
+        [List offices](/docs/api-reference/offices/offices/listOffices):
+
+        ```bash
+        curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                  description: |
+                    Name for the copy. Defaults to the original's name followed
+                    by "(copy)". Longer names are cut to 80 characters.
+                  examples: [Front desk (West)]
+                memory:
+                  type: boolean
+                  default: true
+                  description: |
+                    Copy the employee's memory. `false` leaves out `MEMORY.md`
+                    and its memory notes; everything else is still copied.
+                crons:
+                  type: string
+                  enum: [paused, running]
+                  default: paused
+                  description: |
+                    `paused` copies every repeating scheduled task turned off.
+                    `running` keeps each one on or off as it is on the original.
+                workspaceId:
+                  type: string
+                  description: Accepted in the body as well as the query string.
+      responses:
+        '202':
+          description: The copy exists. Its setup is still being copied.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  officeId:
+                    type: string
+                    description: The new office. Use it to read its duplication report.
+                    examples: [off_4d2a8b]
+                  name:
+                    type: string
+                    examples: [Front desk (copy)]
+                  message:
+                    type: string
+        '400':
+          description: A field has the wrong type, or no workspace was given.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badCrons:
+                  value:
+                    success: false
+                    error: "crons must be 'paused' or 'running'"
+                badMemory:
+                  value:
+                    success: false
+                    error: memory must be true or false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: |
+            The caller lacks `office:manage` on the office, or on the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                workspace:
+                  value:
+                    success: false
+                    error: 'Duplicating an office needs permission to create offices in this workspace (office:manage).'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/duplication:
+    parameters:
+      - name: officeId
+        in: path
+        required: true
+        description: |
+          The copy, as returned by
+          [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice).
+          Not the original.
+        schema:
+          type: string
+          examples: [off_4d2a8b]
+    get:
+      tags: [Offices]
+      summary: Get a duplication report
+      operationId: getOfficeDuplication
+      description: |
+        Returns how the copying went for an office made by
+        [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice).
+        Requires `office:read` on the copy.
+
+        `status` is `running` until every step has run, then `done`, `partial`
+        (some steps failed) or `failed` (every step failed). Poll until it is
+        no longer `running`. Steps are added to `steps` as they finish.
+
+        `notCopied` is the list to act on: the channels, numbers, addresses and
+        accounts the original had that the copy needs reconnecting, if at all.
+
+        An office that was not made by duplication returns 404.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The report.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  report:
+                    type: object
+                    properties:
+                      sourceOfficeId:
+                        type: string
+                        description: The office that was copied.
+                      sourceOfficeName:
+                        type: string
+                      requestedBy:
+                        type: string
+                        description: The user or service account that asked for the copy.
+                      status:
+                        type: string
+                        enum: [running, done, partial, failed]
+                      options:
+                        type: object
+                        properties:
+                          memory: { type: boolean }
+                          crons: { type: string, enum: [paused, running] }
+                      steps:
+                        type: array
+                        description: One entry per step that has finished.
+                        items:
+                          type: object
+                          properties:
+                            key:
+                              type: string
+                              enum: [officeFiles, voice, byok, skills, memory, chats, links, vault, plugins, serviceConfig, crons, notCopied]
+                            status:
+                              type: string
+                              enum: [done, failed, skipped]
+                            copied:
+                              type: integer
+                              description: How many items the step wrote.
+                            warnings:
+                              type: array
+                              items: { type: string }
+                              description: Plain sentences, for example a scheduled task that was not copied.
+                            error:
+                              type: string
+                              description: Present when the step failed.
+                      notCopied:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            kind:
+                              type: string
+                              enum: [telegram, whatsapp, phoneNumber, email, connectedAccount, channel, calendar, browser, voiceAgent, plugin, cron]
+                            label:
+                              type: string
+                              description: What it is, in words a person reads.
+                      startedAt:
+                        type: string
+                        format: date-time
+                      finishedAt:
+                        type: [string, 'null']
+                        format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The office was not made by duplicating another office.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /offices/{officeId}/cloud-config:
     parameters:
       - $ref: '#/components/parameters/OfficeId'

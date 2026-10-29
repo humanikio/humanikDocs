@@ -1,0 +1,128 @@
+---
+title: Duplicating an office
+description: Copy an AI employee's setup into a new office in the same workspace, what the copy gets and does not get, and how to follow it as it is made.
+---
+
+Duplicating an office makes a second AI employee that starts where the first one is: the same
+identity files, skills, memory, plugins and scheduled tasks. The copy is a new office with its
+own machine, its own API key and its own identity. From the moment it is made, the two are
+separate, and a change to one does not reach the other.
+
+## When to duplicate
+
+- **One employee per region, team or client.** The front desk for one location, copied for the
+  next, then given its own phone number.
+- **A new job that starts from a working setup.** Copy the employee that already has the right
+  plugins and rules, then change its `SOUL.md` for the new job.
+- **Trying a change safely.** Copy the employee, change the copy's model or rules, and compare,
+  while the original keeps working.
+
+If you want a new employee with nothing in it, [create an office](/docs/api-reference/offices/offices/createOffice)
+instead.
+
+## Three ways to start one
+
+- **Ask your [Nova](/docs/nova)**, for example "duplicate the front desk as Front desk (West)".
+  Nova asks you to confirm first.
+- **An AI employee can ask your Nova for a copy of itself** while it works on something you
+  asked it to do. That always waits as a card for you to approve. See
+  [Nova and your AI employees](/docs/nova/employees).
+- **Call the API** with [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice).
+
+Whichever you use, you need `office:manage` on the office you copy and on the workspace, the
+same permission it takes to change the original and to create an office.
+
+## What the copy gets
+
+| The copy gets | The copy does not get |
+| --- | --- |
+| Its identity files, such as `SOUL.md` | Its HumaChat conversations. People start a new chat with the copy |
+| Its model and settings, skills and look | Telegram and WhatsApp |
+| Its memory, unless you ask for it without | Phone numbers and email addresses |
+| Its own past sessions, as context | Channels it is a member of |
+| Its plugins and protocols, with their credentials | Connected accounts, calendars and browsers |
+| The databases, apps and websites it is connected to | Workflows that name the original |
+| Its repeating scheduled tasks, paused | One-time scheduled tasks |
+| Its machine size and idle timeout | Files it created itself on its machine |
+
+- **Scheduled tasks arrive paused**, so a task that sends an email or posts to a channel does not
+  run twice. Turn them on when the copy is ready, or ask for them to arrive as they are on the
+  original.
+- **Credentials are copied, not shared.** The copy has its own copy of each credential that
+  belonged to the original alone, so changing one office's credentials does not change the
+  other's. Credentials shared across your account stay shared.
+- **A database is connected only if you can read it.** If you cannot, the copy is made without
+  it, and the copy's report says so.
+- **Its past sessions are context, not conversations.** The copy remembers what it worked on,
+  but nobody sees a chat with it until they start one.
+- **Workflows are not changed.** A workflow that sends work to the original still sends it to
+  the original. Edit the workflow if the copy should get some of that work.
+
+## The copy is made in the background
+
+The copy exists as soon as you ask, and its setup is filled in over the next minute or so. Each
+part is copied as a separate step, in order, with the scheduled tasks last, so a task never runs
+on a copy that is still missing its plugins.
+
+A step that fails does not undo the others. The copy is kept, and its report says which step
+failed. If you do not want a half-made copy, delete it.
+
+Over the API, the call answers with the copy's ID:
+
+```bash
+curl -X POST "$HOS_API/offices/off_9c1e7d/duplicate?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Front desk (West)" }'
+```
+
+```json
+{
+  "success": true,
+  "officeId": "off_4d2a8b",
+  "name": "Front desk (West)",
+  "message": "The copy exists and is being filled in. Progress is in its duplication report."
+}
+```
+
+Then read the copy's report until `status` is no longer `running`:
+
+```bash
+curl "$HOS_API/offices/off_4d2a8b/duplication?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+`status` ends as `done`, `partial` (some steps failed) or `failed`. Each step lists what it copied
+and anything it wants you to know, such as a scheduled task that could not be copied. See
+[Get a duplication report](/docs/api-reference/offices/offices/getOfficeDuplication).
+
+## Reconnect what the copy needs
+
+The report's `notCopied` list names what the original had and the copy does not: its Telegram
+or WhatsApp, its phone numbers and email addresses, the channels it was in, its connected
+accounts, calendars and browsers. Each of these points at one office, or was granted to the
+office by someone else, so giving it to the copy is a choice you make on the copy, not a side
+effect of copying.
+
+Give the copy only what its job needs. A copy for a new region usually needs its own phone
+number, not the original's.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="What an office is, and what is attached to it."
+  />
+  <Card
+    title="Nova and your AI employees"
+    href="/docs/nova/employees"
+    description="How Nova hands work to an employee, and how an employee asks your Nova."
+  />
+  <Card
+    title="Duplicate an office"
+    href="/docs/api-reference/offices/offices/duplicateOffice"
+    description="The operation, its options and its errors."
+  />
+</Cards>

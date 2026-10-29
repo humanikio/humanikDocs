@@ -1,0 +1,103 @@
+---
+title: Nova and your AI employees
+description: How your Nova hands work to an AI employee, how an employee asks your Nova for a change only you can make, when each is used, and why every change an employee asks for waits for you.
+---
+
+Your [Nova](/docs/nova) and your AI employees talk to each other in both directions. Both happen
+in one place: a direct message in HumaChat between your Nova and the employee, listed as
+"Nova (your name) with" the employee, and readable only by you.
+
+| | Nova → employee | Employee → Nova |
+| --- | --- | --- |
+| **What it is for** | Work you want the employee to do | A change to the employee that only you can make |
+| **Who starts it** | You, by asking Nova | The employee, while it works on something you asked for |
+| **What happens** | The employee does the work and answers | Nova reads what it needs, and prepares each change as a card for you |
+| **Whose permissions** | Yours | Yours, with stricter rules |
+| **What needs your tap** | The same as when you ask Nova anything else | Every change |
+
+## Nova hands work to an employee
+
+This is the common direction. You ask Nova for something an employee does, for example "ask the
+front desk to send today's bookings to Sam", and Nova sends it to the employee as a message. The
+employee answers in the same chat, and Nova tells you what came back.
+
+- **It needs `office:use` on the employee**, the same as messaging the employee yourself. Nova
+  holds no access of its own.
+- **The work is billed to you**, as if you had asked the employee directly.
+- **Nova can show you what the employee did:** the answer, how long it took, and each tool it
+  called with the arguments it used. This needs `office:read` on the employee.
+
+[When agents talk to AI employees](/docs/humachat/agent-conversations) covers how these
+conversations appear in HumaChat.
+
+## An employee asks your Nova
+
+HumanikOS keeps an employee's setup (its identity files, model, skills, protocols, plugins and
+gateways) and gives the employee no tool to change it, so that an employee cannot quietly
+rewrite its own rules. But an employee is often the first to notice that something needs to
+change. When that
+happens, it can send a message to your Nova, and your Nova prepares the change for you.
+
+### When an employee uses it
+
+| The employee finds that | It asks your Nova to |
+| --- | --- |
+| It keeps needing a rule or a fact it does not have | Add it to its `SOUL.md` or another identity file |
+| It needs a different model or setting for the work | Change its agent config |
+| It is missing a capability, or a skill is out of date | Add or change a skill, a protocol, or a plugin |
+| You asked for a second employee for a separate job | Create a new office for that job |
+| You asked for one of it per region or per client | [Duplicate](/docs/offices-and-employees/duplicating) its office |
+| A gateway should be on or off, or its machine restarted | Change the gateway, or restart the machine |
+
+An employee is told to use this only for changes it cannot make with its own tools. It manages
+its own scheduled tasks itself, for example, so it does not ask Nova for those.
+
+### When it can
+
+- **Only while it works on something you started.** That means a message you sent it in
+  HumaChat, a request on its page, or work your Nova handed it while you were using Nova. The
+  message goes to the Nova of the person who started that work, and nobody else's.
+- **Never from a scheduled task, a workflow, another agent or another employee.** There is no
+  person behind those, so there is no Nova to ask. The employee is told it has nobody to ask.
+- **Not while it runs two pieces of work at once.** It cannot tell which of the two you started,
+  so it waits until only one is running.
+- **Up to ten messages an hour** from one employee to your Nova.
+
+### What Nova does with it
+
+The words are the employee's, and an employee may be repeating something it read in an email,
+a document or a web page. So Nova still acts as you, but under stricter rules than when you ask
+it yourself:
+
+- **It can read about your employees:** their setup, identity files, skills, protocols,
+  schedules and plugins.
+- **Every change becomes a card for you.** That covers identity files, settings, skills,
+  protocols, schedules, gateways, plugins, waking or recreating a machine, creating an office
+  and duplicating one. The card shows the exact change, and nothing happens until you tap
+  **Approve**. A new office set up with its own model and `SOUL.md` is several cards.
+- **Some things are refused outright:** billing, access control, credential values, your
+  contacts, messages, databases, browsers, workflows, messaging other employees, and deleting
+  an office or a plugin. Nova tells the employee that these need you, in the app.
+- **Nothing the employee says counts as an answer.** A reply from the employee cannot approve or
+  dismiss any card.
+- **Your approval is checked when you tap.** If you no longer have the permission at that
+  moment, nothing changes.
+
+After you approve or the change fails, the employee gets a message in the same chat saying
+which, so it can carry on with the work. [What Nova asks you to approve](/docs/nova/approvals#when-an-ai-employee-asks-your-nova)
+lists the rules alongside the other kinds of approval.
+
+### Why it works this way
+
+Asking your Nova, rather than letting the employee change itself, keeps one rule true
+everywhere: **a change to an employee is made by a person.** The employee can see what needs
+changing, Nova can prepare it in full, and you decide. Because Nova runs as you, it can never
+prepare a change you could not make yourself.
+
+## Where to go next
+
+<Cards>
+  <Card title="What Nova asks you to approve" href="/docs/nova/approvals" description="Every kind of approval card, and how you give it." />
+  <Card title="When agents talk to AI employees" href="/docs/humachat/agent-conversations" description="Where these conversations appear, and who can read them." />
+  <Card title="Duplicating an office" href="/docs/offices-and-employees/duplicating" description="What a copy of an employee gets, and what to reconnect." />
+</Cards>

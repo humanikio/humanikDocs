@@ -178,11 +178,12 @@ granted at the workspace above it to cover every office in it.
 | `office:manage` | Administer an office: its integrations, scheduled work, configuration, and the office itself. | `office` |
 
 <Accordions>
-<Accordion title="Endpoints that need `office:read` (22)">
+<Accordion title="Endpoints that need `office:read` (23)">
 - [Mark plugin failures as reviewed](/docs/api-reference/offices/plugins/dismissOfficeIntegrationFailures)
 - [Get an office](/docs/api-reference/offices/offices/getOffice)
 - [Get an allocated app](/docs/api-reference/offices/allocations/getOfficeApp)
 - [Get office cloud config](/docs/api-reference/offices/offices/getOfficeCloudConfig)
+- [Get a duplication report](/docs/api-reference/offices/offices/getOfficeDuplication)
 - [Get the office's identity](/docs/api-reference/offices/identity/getOfficeIam)
 - [Get a plugin](/docs/api-reference/offices/plugins/getOfficeIntegration)
 - [Get an allocated namespace](/docs/api-reference/offices/allocations/getOfficeNamespace)
@@ -210,7 +211,7 @@ granted at the workspace above it to cover every office in it.
 - [Shut down an office](/docs/api-reference/offices/machine/shutdownOfficeMachine)
 - [Wake an office](/docs/api-reference/offices/machine/wakeOfficeMachine)
 </Accordion>
-<Accordion title="Endpoints that need `office:manage` (34)">
+<Accordion title="Endpoints that need `office:manage` (35)">
 - [Add a secret reference](/docs/api-reference/offices/plugins/addOfficeIntegrationSecretRef)
 - [Allocate an app](/docs/api-reference/offices/allocations/allocateOfficeApp)
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
@@ -230,6 +231,7 @@ granted at the workspace above it to cover every office in it.
 - [Delete a protocol](/docs/api-reference/offices/protocols/deleteOfficeProtocol)
 - [Delete a skill](/docs/api-reference/offices/skills/deleteOfficeSkill)
 - [Mark plugin failures as reviewed](/docs/api-reference/offices/plugins/dismissOfficeIntegrationFailures)
+- [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice)
 - [Get an office's model provider](/docs/api-reference/offices/model-provider/getOfficeModelProvider)
 - [Promote a plugin to the plugin library](/docs/api-reference/offices/plugins/promoteOfficeIntegration)
 - [Provision a missing office API key](/docs/api-reference/offices/identity/provisionOfficeApiKey)
@@ -501,9 +503,10 @@ granted at the workspace above it to cover every office in it.
 | `datasource:manage` | Create and change data namespaces, sources and subscriptions. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `datasource:read` (13)">
+<Accordion title="Endpoints that need `datasource:read` (14)">
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
 - [Post a tile](/docs/api-reference/bulletin/tiles/createBulletinTile)
+- [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice)
 - [Get a bucket](/docs/api-reference/buckets/buckets/getBucket)
 - [Read through a tile](/docs/api-reference/bulletin/tile-data/getBulletinTileData)
 - [Get a namespace](/docs/api-reference/namespaces/namespaces/getNamespace)

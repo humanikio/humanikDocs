@@ -29,6 +29,7 @@ person is this?** A message with no identifiable person behind it cannot run,
 because there is nothing to run it as.
 
 <Cards>
+  <Card title="Nova and your AI employees" href="/docs/nova/employees" description="How Nova hands work to an employee, and how an employee asks your Nova for a change only you can make." />
   <Card title="What Nova asks you to approve" href="/docs/nova/approvals" description="Which actions wait for your approval, and how you give it in the app, by text and from a scheduled task." />
   <Card title="Texting Nova" href="/docs/nova/texting" description="Assign a phone number to Nova, then text it, or send it a photo or a file, from your own handset." />
   <Card title="Scheduled tasks" href="/docs/nova/scheduled-tasks" description="Give Nova work to do on a schedule, running with your permissions when nobody is watching." />
@@ -79,6 +80,9 @@ that run: the prompt, the answer, how long it took, and each tool the employee c
 the arguments it used. Ask, for example, "which arguments did it pass to the report?". This
 needs `office:read` on the employee. It shows a tool call only once the office has saved it,
 so a run that is still going may show fewer calls than it will have at the end.
+
+The conversation also works the other way: an employee can ask your Nova for a change only you
+can make. [Nova and your AI employees](/docs/nova/employees) covers both directions.
 
 <Callout type="warn">
   **Tool calls are not shown yet for an employee whose turns run on a machine you own.** Nova
