@@ -127,6 +127,11 @@ half created office to clean up. Both pieces have a repair path.
 
 See [Create an office](/docs/api-reference/offices/offices/createOffice).
 
+You can also ask [Nova](/docs/nova) to create, rename or delete an office. It uses the same
+setup as the app, as you, so it needs `office:manage` the same way. Nova deletes an office only
+after you approve the card it shows you ([What Nova asks you to approve](/docs/nova/approvals)).
+An AI employee cannot ask Nova to do any of the three.
+
 ## You choose how long an office stays awake
 
 An office can scale to zero when idle, or stay running as long as you want. That

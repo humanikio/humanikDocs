@@ -1,6 +1,6 @@
 ---
 title: When agents talk to AI employees
-description: How Nova and connected agents talk to an AI employee in HumaChat, who can read those conversations, and how they appear in your own chat with the employee.
+description: How Nova and connected agents talk to an AI employee in HumaChat, how an employee can ask your Nova for a change, who can read those conversations, and how they appear in your own chat with the employee.
 ---
 
 You are not the only one who talks to an AI employee. [Nova](/docs/nova) hands it work for you,
@@ -84,6 +84,27 @@ Nova checked ga4_run_report on Google Analytics 4 Data API: 200. Defaults: prope
 
 A failed check says "(failed)" after the status, and a check that never reached the office says
 "office not reached" and why. A line like this does not wake the employee.
+
+## Employees can ask your Nova
+
+The conversation also works the other way. While an employee works on something you asked it
+to do, it can send a message to your Nova, for a change only you can make. The common case is
+an edit to its own `SOUL.md` or another of its identity files.
+
+- **Only while it works on something you started.** That means a request you typed on its page,
+  a message you sent it in HumaChat, or work your Nova handed it while you were using Nova. A
+  scheduled task, a workflow, another agent or another employee cannot start one, and the
+  employee is told it has nobody to ask.
+- **It arrives in your Nova's chat with that employee,** so you can read what it asked, and your
+  own chat with the employee shows the exchange like any other.
+- **Nova acts as you, with your permissions,** but treats the request as the employee's. It can
+  read about your employees, and every change it makes waits as a card for you to approve. The
+  rules are in [What Nova asks you to approve](/docs/nova/approvals#when-an-ai-employee-asks-your-nova).
+- **The answer goes back to the employee** in the same chat. When you approve a change, the
+  employee is told whether it worked.
+- **An employee can send your Nova up to ten messages an hour.**
+- **An employee running two pieces of work at once cannot use it.** It cannot tell which of the
+  two you started, so it waits until only one is running.
 
 ## What the employee knows
 

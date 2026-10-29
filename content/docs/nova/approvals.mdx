@@ -1,6 +1,6 @@
 ---
 title: What Nova asks you to approve
-description: Which of Nova's actions wait for your approval, how you give it in the app, by text and from a scheduled task, and what Nova does without asking.
+description: Which of Nova's actions wait for your approval, how you give it in the app, by text, from a scheduled task and when an AI employee asks, and what Nova does without asking.
 ---
 
 Nova acts as you. For most requests it does the work as soon as you ask: it sends
@@ -28,15 +28,17 @@ role. See [Access control](/docs/access-control).
 For the actions below, Nova cannot do the work itself. It shows you a card, and the
 action happens only when the card is approved.
 
-| Action | In the app | By text message | From a scheduled task |
-| --- | --- | --- | --- |
-| **Create a scheduled task** | A card. Tap **Approve** | Created straight away (see below) | A card waits in the app |
-| **Change access** (roles, policies, who holds them) | A card. Tap **Approve** | Reply with the one time code, or tap in the app | A card waits in the app |
-| **Create a website** | A form. Fill it in and save | Reply with the one time code, or finish it in the app | The form waits in the app |
-| **Apply hierarchy changes** | A card. Apply or reject each change | Reply with the one time code to apply all of them, or choose in the app | A card waits in the app |
-| **Save an ingest transform** | A card. Choose what happens on a failure, then save | Reply with the one time code to save it as proposed, or choose in the app | A card waits in the app |
-| **Save credentials** for a plugin | A secure form in the app | Not possible by text | The form waits in the app |
-| **Add your own model provider key** | A secure form in the app | Not possible by text | The form waits in the app |
+| Action | In the app | By text message | From a scheduled task | When an AI employee asks |
+| --- | --- | --- | --- | --- |
+| **Create a scheduled task** | A card. Tap **Approve** | Created straight away (see below) | A card waits in the app | Not available |
+| **Change access** (roles, policies, who holds them) | A card. Tap **Approve** | Reply with the one time code, or tap in the app | A card waits in the app | Not available |
+| **Create a website** | A form. Fill it in and save | Reply with the one time code, or finish it in the app | The form waits in the app | Not available |
+| **Apply hierarchy changes** | A card. Apply or reject each change | Reply with the one time code to apply all of them, or choose in the app | A card waits in the app | Not available |
+| **Save an ingest transform** | A card. Choose what happens on a failure, then save | Reply with the one time code to save it as proposed, or choose in the app | A card waits in the app | Not available |
+| **Save credentials** for a plugin | A secure form in the app | Not possible by text | The form waits in the app | Not possible |
+| **Add your own model provider key** | A secure form in the app | Not possible by text | The form waits in the app | Not possible |
+| **Delete an AI employee** | A card. Tap **Approve** | A card waits in the app | A card waits in the app | Not available |
+| **A change an AI employee asked for** (see below) | | | | A card waits in the app |
 
 Credentials and keys are never typed into a chat or a text message. The form writes
 them straight to secure storage, and Nova does not see them.
@@ -134,6 +136,30 @@ Nothing is approved on your behalf.
 A scheduled task cannot approve its own cards, and it cannot create another
 scheduled task without you. If a task that runs often asks for the same kind of
 approval again, the new card replaces its older open one, so only the latest is waiting.
+
+## When an AI employee asks your Nova
+
+An AI employee can send a message to your Nova while it works on something you asked it
+to do. It does this for changes only you can make, such as an edit to its own
+`SOUL.md`. [When agents talk to AI employees](/docs/humachat/agent-conversations#employees-can-ask-your-nova)
+explains when it can and where the conversation is kept.
+
+Nova then acts as you, but the words are the employee's, and an employee may be repeating
+something it read in an email or on a web page. So the rules are stricter than anywhere
+else:
+
+- **Nova can read about your AI employees:** their setup, files, skills, protocols,
+  schedules and plugins. It cannot reach billing, access control, credential values,
+  your contacts, messages, databases or browsers at all.
+- **Every change waits for you.** Changes to an employee's identity files, settings,
+  skills, protocols, schedules, gateways and plugins, and waking or recreating its
+  machine, become a card in your Nova chat. The card shows the exact change. Nothing
+  happens until you tap **Approve**.
+- **Nothing the employee says counts as an answer.** A reply from the employee cannot
+  approve or dismiss any card, yours included.
+- **When you approve, it is checked as you, at that moment.** If you no longer have the
+  permission, nothing changes. The employee is told the outcome in its chat with your
+  Nova.
 
 ## Related
 
