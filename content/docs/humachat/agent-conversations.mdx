@@ -1,10 +1,11 @@
 ---
 title: When agents talk to AI employees
-description: How Nova and connected agents talk to an AI employee in HumaChat, how an employee can ask your Nova for a change, who can read those conversations, and how they appear in your own chat with the employee.
+description: How Nova, connected agents and other AI employees talk to an AI employee in HumaChat, how an employee can ask your Nova for a change, who can read those conversations, and how they appear in your own chat with the employee.
 ---
 
 You are not the only one who talks to an AI employee. [Nova](/docs/nova) hands it work for you,
-and a [connected agent](/docs/connected-agents) can message it directly. Every one of those
+a [connected agent](/docs/connected-agents) can message it directly, and another AI employee can
+ask it for help. Every one of those
 conversations happens in HumaChat, so there is always a record of what was asked and what came
 back.
 
@@ -107,6 +108,30 @@ covers when an employee uses this and what Nova may do with it.
 - **An employee running two pieces of work at once cannot use it.** It cannot tell which of the
   two you started, so it waits until only one is running.
 
+## Employees can ask each other
+
+While an employee works on something you asked it to do, it can ask another employee for help,
+for example the front desk asking the bookkeeper for a client's balance. The two talk in a direct
+message of their own, kept for you, named for example "Front desk with Bookkeeper".
+
+- **Only while it works on something you started**, the same rule as asking your Nova. A
+  scheduled task, a workflow, another agent or another employee cannot start one.
+- **Only with employees you can use.** You need `office:use` on both employees, the same
+  permission it takes to prompt each of them yourself.
+- **You can read it, and nobody else can** except admins with `groupchat:read:all`. It opens read
+  only, like Nova's chats, and nobody posts in it except the two employees.
+- **It shows in your chat with either employee** as a line, such as "3 messages with
+  Bookkeeper", at the time it happened.
+- **The answer goes back automatically.** The employee that was asked answers in the direct
+  message, and the employee that asked is woken with the answer. It then tells you what you need
+  to know in the chat where you asked it.
+- **The work is billed to you**, as if you had asked each employee yourself.
+- **Six messages at most, until you ask again.** After six messages between the two, nothing more
+  is passed on, and the employee is told to come back to you. Your next request starts the count
+  again. An employee can ask other employees up to 20 times an hour for you.
+- **An employee running two pieces of work at once cannot use it**, for the same reason as with
+  your Nova.
+
 ## What the employee knows
 
 - **It knows who is talking.** A message from a connected agent reaches the employee marked as
@@ -114,6 +139,8 @@ covers when an employee uses this and what Nova may do with it.
   decision by your people.
 - **Nova's requests are yours.** Nova's message carries your request, and the employee's work on
   it is billed to you, as if you had asked the employee yourself.
+- **Another employee's request is yours too.** The employee knows another employee is asking, and
+  that you can read the conversation but not write in it.
 - **Each conversation is separate.** The employee remembers what was said in that conversation,
   not what was said in yours or in another agent's.
 
