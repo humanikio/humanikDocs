@@ -59,8 +59,18 @@ waiting and without paying for the reorganisation.
 
 ## Adding a file
 
-Files are uploaded through the platform. There is no direct upload to storage and
-no separate storage account to configure.
+There are two ways to add a file, and neither needs a separate storage account.
+
+| Way | How | Use it when |
+| --- | --- | --- |
+| **Upload** | Send the file to the platform in one request | The file is with the caller already |
+| **Direct upload** | Ask for a link, send the bytes to it, then complete | The bytes should go straight to storage, for example from a machine running a local agent |
+
+A direct upload link sends bytes to one location only and cannot overwrite a
+file. The file is filed only when the caller that asked for the link completes
+the upload, within ten minutes, and it is recorded with the size and type that
+storage measured, not the ones the caller declared. See
+[Start a direct upload](/docs/api-reference/buckets/files/startDirectUpload).
 
 | | |
 | --- | --- |

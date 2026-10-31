@@ -70,7 +70,11 @@ are not the same and swapping them would break the system in two different ways.
   **An answer is produced once and is not replayable.** For a completion measured
   in seconds this is not something you will meet. For a long agent turn it means
   a network interruption on our side discards the tail of the work rather than
-  resuming it, and the turn has to be asked again.
+  resuming it, and the turn has to be asked again. This is true even when the
+  machine reconnects at once: the answer was tied to the connection that ended.
+  The platform stops waiting soon after that connection ends and reports the
+  machine as offline. If no part of the answer had reached the office yet, an
+  office with a fallback model sends the turn there.
 </Callout>
 
 ## Why the queue is addressed to a gateway instance

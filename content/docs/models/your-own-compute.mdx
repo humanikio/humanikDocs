@@ -101,10 +101,19 @@ offline, not that the setting was lost.
 
 ## When a connected machine fails a request
 
-A machine can be connected and still fail. Its Claude subscription can reach its
-usage limit, the agent on it can exit with an error, or it can take too long to
-start answering. In each case the office sends that request to its fallback
-model instead, so the employee keeps working.
+There are two kinds of failure, and the office handles them differently.
+
+| What happened | What the office does |
+| --- | --- |
+| **The machine cannot be reached.** It is not connected, or its connection drops while it is working on the request | Sends the request to its fallback model, so the employee keeps working |
+| **The machine answered with an error.** Its Claude subscription reached its usage limit, a setting on the machine refused the job, or the agent on it exited with an error | The request fails with the machine's own error message |
+
+**Why an error is not sent to the fallback.** A fallback model is in the cloud. It
+cannot see your machine, its files or its connectors, so it cannot fix a problem
+on your machine, and an answer from it would hide the message that tells you what
+to change. The error says what went wrong on the machine, in the machine's words.
+
+When the fallback does run:
 
 - **Only with a fallback model.** An office with no `fallbackModelId` has nothing
   to fall back to, and the request fails.
@@ -114,8 +123,8 @@ model instead, so the employee keeps working.
   answering and then fails, the request fails. Starting again would show two
   partial answers.
 - **Not shown on the board.** The model row reflects whether the machine is
-  connected. A single request that fell back while the machine stayed connected
-  does not change it.
+  connected. A single request that fell back because the connection dropped and
+  came straight back does not change it.
 - **Repeated failures pause the fallback.** After ten in a row it stops for five
   minutes, so a broken machine cannot move an office onto paid models all day.
 

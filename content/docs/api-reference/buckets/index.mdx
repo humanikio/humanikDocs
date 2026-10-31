@@ -186,3 +186,5 @@ HTTP. Text files can be read over HTTP with
 **Uploads are capped at 50 MB** and a larger file is rejected before the request
 reaches the handler, so it returns a plain `500` rather than the usual envelope.
 Check the size before sending.
+[A direct upload](/docs/api-reference/buckets/files/startDirectUpload) has the
+same cap and refuses a larger file with `413` and a `code`, in the usual envelope.

@@ -111,6 +111,31 @@ components:
           type: string
       required: [success, error]
 
+    DirectUploadError:
+      type: object
+      description: |
+        A direct upload failure. Unlike the rest of this reference, `code` is a
+        stable machine code. `error` is still a human readable string.
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+        code:
+          type: string
+          enum:
+            - bad_request
+            - too_large
+            - not_found
+            - expired
+            - not_uploaded
+            - already_completed
+            - path_exists
+            - storage_error
+            - failed
+      required: [success, error, code]
+
     Forbidden:
       type: object
       description: The permission gate refused, and the message says which action and scope it evaluated.
@@ -816,6 +841,257 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/uploads:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+
+    post:
+      tags: [Files]
+      summary: Start a direct upload
+      operationId: startDirectUpload
+      description: |
+        Gets a link that you send a file's bytes to directly, so the file does
+        not pass through this API. Requires `datasource:manage`, the same as
+        [Upload a file](/docs/api-reference/buckets/files/uploadObject).
+
+        Three steps:
+
+        1. Call this with the file's name, size and type. The reply has an
+           `uploadId` and an `uploadUrl`.
+        2. `PUT` the raw bytes to `uploadUrl`, with a `Content-Type` header set
+           to the file's type. Send no `Authorization` header: the link is the
+           permission.
+        3. Call [Complete a direct upload](/docs/api-reference/buckets/files/completeDirectUpload)
+           with the `uploadId`. The file is filed only then.
+
+        ```bash
+        curl -X PUT "$UPLOAD_URL" \
+          -H "Content-Type: application/pdf" \
+          --data-binary @proposal.pdf
+        ```
+
+        **Maximum 50 MB**, the same as the multipart upload. A larger
+        `sizeBytes` is refused here with `413`, and complete measures the stored
+        file again.
+
+        **Complete within 10 minutes** of this call. After that, complete
+        refuses with `410` and you start again.
+
+        **The link is a credential for one file.** Anyone holding it can send
+        bytes to that one location for up to two hours, which is longer than the
+        10 minutes you have to complete. It cannot overwrite a file that is
+        already there, and nothing sent to it is filed unless the caller that
+        started the upload completes it in time. Do not log it.
+
+        `sizeBytes` and `mimeType` are used to refuse an oversized file early.
+        The file is recorded with the size and type that storage reports after
+        the `PUT`, not with these values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, sizeBytes, mimeType]
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    The workspace the namespace lives in. From `GET /workspaces`.
+                    Falls back to the caller's currently selected workspace, and
+                    returns `400` only when neither is present. Send the same
+                    value to complete.
+                fileName:
+                  type: string
+                  description: The file's name, used for the path when `path` is a folder or absent.
+                  examples: ['proposal.pdf']
+                sizeBytes:
+                  type: integer
+                  minimum: 0
+                  maximum: 52428800
+                  description: The file's size in bytes.
+                  examples: [1572864]
+                mimeType:
+                  type: string
+                  description: The file's content type. Send the same value as the `Content-Type` of the `PUT`.
+                  examples: ['application/pdf']
+                path:
+                  type: string
+                  description: |
+                    Where to put it in the bucket. Same rules as the multipart
+                    upload: a value ending in `/` means that folder, keeping
+                    `fileName`; anything else is the full path including the
+                    filename; omit for the bucket root under `fileName`.
+                  examples: ['/readyProposals/']
+      responses:
+        '201':
+          description: Link issued. Nothing is filed yet.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  uploadId:
+                    type: string
+                    format: uuid
+                    description: Pass to complete.
+                  uploadUrl:
+                    type: string
+                    format: uri
+                    description: '`PUT` the raw bytes here.'
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    description: Complete before this time.
+                  path:
+                    type: string
+                    description: Where the file will be filed in the bucket.
+                    examples: ['/readyProposals/proposal.pdf']
+        '400':
+          description: '`bad_request`: a missing or invalid field, or a path that is not valid.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: '`not_found`: no such bucket in this namespace.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '413':
+          description: '`too_large`: `sizeBytes` is over 50 MB.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '500':
+          description: '`failed`: an unhandled failure, or file storage is not set up for the account.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '502':
+          description: '`storage_error`: the link could not be issued.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+
+  /namespaces/{namespaceId}/buckets/{bucketId}/objects/uploads/{uploadId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/BucketId'
+      - name: uploadId
+        in: path
+        required: true
+        description: 'The `uploadId` from [Start a direct upload](/docs/api-reference/buckets/files/startDirectUpload).'
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Files]
+      summary: Complete a direct upload
+      operationId: completeDirectUpload
+      description: |
+        Files a direct upload after its bytes were sent to the `uploadUrl`.
+        Requires `datasource:manage`.
+
+        **Storage decides the size and type.** The file is recorded with what
+        storage reports, not with what start was told. A stored file over 50 MB
+        is refused with `413` and removed.
+
+        **Only the caller that started the upload can complete it.** Another
+        caller gets `404`, the same as an upload that does not exist.
+
+        **Safe to retry until it succeeds.** A call before the bytes arrive gets
+        `409` with `not_uploaded` and changes nothing. Once one call has filed the
+        upload, another gets `409` with `already_completed`.
+
+        After a `201` the file is the same as one from
+        [Upload a file](/docs/api-reference/buckets/files/uploadObject): it starts
+        at `status: "processing"`, and preparing it for search spends platform
+        credit when the namespace has file search enabled.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    The same workspace sent to start. From `GET /workspaces`.
+                    Falls back to the caller's currently selected workspace.
+      responses:
+        '201':
+          description: Filed. Preparation for search has not finished.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+        '400':
+          description: '`bad_request`: a missing field, or the file could not be recorded.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: '`not_found`: no such upload for this caller, or the bucket no longer exists.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '409':
+          description: |
+            `not_uploaded`: no bytes have reached the link yet. Send them, then call again.
+            `already_completed`: another call filed this upload.
+            `path_exists`: a file already exists at the path. The sent bytes are removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '410':
+          description: '`expired`: more than 10 minutes since start. Start a new upload.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '413':
+          description: '`too_large`: the stored file is over 50 MB. It has been removed.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '500':
+          description: '`failed`: an unhandled failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
+        '502':
+          description: '`storage_error`: storage could not be read.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectUploadError'
 
   /namespaces/{namespaceId}/buckets/{bucketId}/objects/{objectId}:
     parameters:
