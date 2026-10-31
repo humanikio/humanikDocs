@@ -123,7 +123,7 @@ gets no reply, is in [Texting Nova](/docs/nova/texting).
 #### Configuring a number
 
 Per number settings sit at console scope, because the number is an organization
-asset. The office voice configuration is the exception and sits at office scope.
+asset. The office voice agent is the exception and sits at office scope.
 
 | Method | Path | Permission |
 | --- | --- | --- |
@@ -133,7 +133,8 @@ asset. The office voice configuration is the exception and sits at office scope.
 | `POST` | `/twilio/phone-numbers/{phoneNumberSid}/voicemail-greeting/generate` | `tenant:manage` @ `console` |
 | `GET` | `/twilio/voicemail/voices` | `tenant:read` @ `console` |
 | `GET` | `/twilio/voice/forwarding-users` | `tenant:read` @ `console` |
-| `GET` · `PATCH` | `/twilio/offices/{officeId}/voice-config` | `office:read` · `office:manage` @ office |
+| `GET` · `PATCH` | `/voice-agent/offices/{officeId}` | `office:read` · `office:manage` @ office |
+| `GET` | `/voice-agent/models` | Signed in |
 
 `voice-config` carries [who answers](/docs/phone/answering), the ring order and
 [voicemail](/docs/phone/voicemail). `sms-config` carries
@@ -143,7 +144,12 @@ added to a first message and how often they are repeated. The greeting upload is
 `file`, MP3 or WAV, 5 MB. Generating a greeting returns a preview: saving it goes
 back through the upload endpoint, so there is one write path rather than two.
 
-The office `voice-config` requires `?workspaceId=`.
+The office voice agent holds how the employee sounds and thinks on a call: the
+voice (an ElevenLabs voice id) and the speaking model (an id from
+`/voice-agent/models`). It applies to every number the employee holds, inbound
+and outbound. Whether a number is answered at all stays on that number's
+`voice-config`. The voice agent requires `?workspaceId=`. A new voice applies to
+the next call. A new speaking model applies after the employee next restarts.
 
 #### Checking and repairing where a number routes
 
