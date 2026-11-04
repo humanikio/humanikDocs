@@ -1201,13 +1201,39 @@ paths:
         Sending is not idempotent. Every call adds a message, and in a direct
         message with an AI employee every call starts more work, so do not retry
         a send that returned `201`.
+
+        ## Sending files
+
+        `files` posts files that are already in one of your workspace's
+        [buckets](/docs/api-reference/buckets). Each one is copied into the
+        conversation, so the people in it can open and download it like any file
+        sent in the app, and a later change to the bucket's copy does not change
+        the message. Two or more files are posted together as one album.
+
+        Find the three IDs with
+        [List files](/docs/api-reference/buckets/files/listObjects):
+
+        ```bash
+        curl "$HOS_API/namespaces/ns_orders/buckets/6f1d2c3a-0b4e-4c55-9a7e-2d8f1b6c9e10/objects?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        - **You need `datasource:read` on each file's namespace**, the same access
+          it takes to download the file from the bucket.
+        - **Every file is checked before any is copied.** If one is missing or too
+          large, nothing is sent.
+        - **Limits:** 20 files, 50 MB each, 100 MB together.
+        - `content` may be empty when you send files. It becomes the album's
+          caption.
+
+        This is how an AI employee hands over its work. A download link would stop
+        working when it expires; a file in the conversation does not.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [content]
               properties:
                 workspaceId:
                   type: string
@@ -1217,7 +1243,9 @@ paths:
                   examples: [ws_a1b2c3]
                 content:
                   type: string
-                  description: The message text. Leading and trailing space is removed. It cannot be empty.
+                  description: |
+                    The message text. Leading and trailing space is removed. It
+                    cannot be empty unless you send `files`.
                   examples: [Can you draft the release note for Friday?]
                 mentions:
                   type: array
@@ -1246,12 +1274,42 @@ paths:
                     In a channel, replying to an AI employee's message starts its
                     work, the same as mentioning it.
                   examples: [msg_5c2e]
+                files:
+                  type: array
+                  maxItems: 20
+                  description: |
+                    Files from your workspace's buckets to post with this
+                    message. See "Sending files" above.
+                  items:
+                    type: object
+                    required: [namespaceId, bucketId, objectId]
+                    properties:
+                      namespaceId:
+                        type: string
+                        description: |
+                          The namespace that holds the bucket. From
+                          [List namespaces](/docs/api-reference/namespaces/namespaces/listNamespaces).
+                        examples: [ns_orders]
+                      bucketId:
+                        type: string
+                        description: |
+                          The bucket that holds the file. From
+                          [List buckets](/docs/api-reference/buckets/buckets/listBuckets).
+                        format: uuid
+                      objectId:
+                        type: string
+                        description: |
+                          The file. From
+                          [List files](/docs/api-reference/buckets/files/listObjects).
+                        format: uuid
                 mediaUrl:
                   type: string
                   description: |
                     Only for a conversation synced to Telegram or to text
                     messages: a publicly fetchable URL of a file to deliver with
-                    this message on that channel. It is not stored on the message.
+                    this message on that channel. It is not stored on the
+                    message, so the people in HumaChat do not see the file. To
+                    put a file in the conversation, use `files`.
             examples:
               directMessage:
                 summary: To an AI employee in a direct message
@@ -1267,6 +1325,14 @@ paths:
                     - memberId: off_4d1c
                       displayName: Marketing
                       type: direct
+              withFiles:
+                summary: With two files from a bucket
+                value:
+                  workspaceId: ws_a1b2c3
+                  content: The two drafts for review
+                  files:
+                    - { namespaceId: ns_orders, bucketId: 6f1d2c3a-0b4e-4c55-9a7e-2d8f1b6c9e10, objectId: 0c7e5a91-3d2b-4f60-8e14-7a9b2c4d6f01 }
+                    - { namespaceId: ns_orders, bucketId: 6f1d2c3a-0b4e-4c55-9a7e-2d8f1b6c9e10, objectId: 9b3f0d27-6e1a-4c88-b5d2-1f4e7a0c3b92 }
       responses:
         '201':
           description: |
@@ -1330,13 +1396,20 @@ paths:
                   value: { success: false, error: The message you replied to was not found }
                 otherChat:
                   value: { success: false, error: You can only reply to a message in the same chat }
+                filesNotAList:
+                  value: { success: false, error: 'files must be a list of { namespaceId, bucketId, objectId }' }
+                fileMissingId:
+                  value: { success: false, error: 'files[1] needs namespaceId, bucketId and objectId' }
+                tooManyFiles:
+                  value: { success: false, error: At most 20 files per message }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: |
             The caller lacks `groupchat:send`, is a person who is not in this
-            conversation, or sent a `senderId` or `senderType` that names
-            someone other than the caller.
+            conversation, sent a `senderId` or `senderType` that names
+            someone other than the caller, or lacks `datasource:read` on the
+            namespace of a file in `files`.
           content:
             application/json:
               schema:
@@ -1349,6 +1422,30 @@ paths:
                     message: You are not a member of this conversation
                 notYou:
                   value: { success: false, error: An agent can only send as itself }
+        '404':
+          description: |
+            A file in `files` is not in that namespace and bucket. Nothing was
+            sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noFile:
+                  value: { success: false, error: File 0c7e5a91-3d2b-4f60-8e14-7a9b2c4d6f01 was not found in bucket 6f1d2c3a-0b4e-4c55-9a7e-2d8f1b6c9e10 }
+        '413':
+          description: |
+            A file in `files` is over 50 MB, or the files together are over
+            100 MB. Nothing was sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                oneTooLarge:
+                  value: { success: false, error: launch-video.mp4 is over 50 MB }
+                togetherTooLarge:
+                  value: { success: false, error: The files together are over 100 MB }
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1533,6 +1630,244 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/NotAMember'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/{groupChatId}/messages/{messageId}/attachment/text:
+    parameters:
+      - $ref: '#/components/parameters/GroupChatId'
+      - name: messageId
+        in: path
+        required: true
+        description: |
+          A message that carries a file: one with `attachment` set. From the `id`
+          of a message in
+          [List messages](/docs/api-reference/humachat/messages/listMessages). In
+          an album, each file is its own message, so pass the ID of the one you
+          want.
+        schema:
+          type: string
+          examples: [msg_9d2c]
+    get:
+      tags: [Messages]
+      summary: Read a file as text
+      operationId: getAttachmentText
+      description: |
+        The text of the file on a message, 30,000 characters at a time. Use it to
+        read a document someone sent without downloading and parsing it
+        yourself. AI employees read documents this way.
+
+        **Permission:** `groupchat:read` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        Find the message with
+        [List messages](/docs/api-reference/humachat/messages/listMessages):
+
+        ```bash
+        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        ```bash
+        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages/msg_9d2c/attachment/text?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        | File | What `text` holds |
+        | --- | --- |
+        | PDF | Its text, all pages in order. A scanned PDF has no text, so `text` is empty |
+        | Word (`.docx`) | The document's text, without formatting |
+        | Spreadsheet (`.xlsx`, `.xls`, `.ods`) | Each sheet as comma separated rows |
+        | EPUB | The chapters in reading order |
+        | Text, Markdown, CSV, JSON, code | The file as it is |
+        | Image, video, anything else | Empty |
+
+        **Reading the rest.** When `nextOffset` is a number, call again with
+        `offset` set to it. It is `null` on the last page. The text is worked out
+        again on each call, so read only the pages you need.
+
+        **Very long files are cut.** At most 100,000 characters are read from one
+        file. `truncated: true` says the file had more.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: offset
+          in: query
+          required: false
+          description: Where to start, in characters. `nextOffset` from the previous page.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: One page of the file's text.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  fileName: { type: string }
+                  mimeType: { type: string }
+                  text:
+                    type: string
+                    description: This page. Empty when the file has no text.
+                  offset: { type: integer }
+                  nextOffset:
+                    type: [integer, 'null']
+                    description: Where the next page starts, or `null` on the last page.
+                  totalChars:
+                    type: integer
+                    description: The length of all the text read from the file.
+                  truncated:
+                    type: boolean
+                    description: The file had more than 100,000 characters, and the rest was not read.
+              examples:
+                firstPage:
+                  value:
+                    success: true
+                    fileName: Brand brief.docx
+                    mimeType: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+                    text: "Brand brief\n\nWho we sell to: ..."
+                    offset: 0
+                    nextOffset: null
+                    totalChars: 8412
+                    truncated: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/NotAMember'
+        '404':
+          description: The message is not in this conversation, or it has no file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noMessage:
+                  value: { success: false, error: Message not found }
+                noFile:
+                  value: { success: false, error: Message msg_9d2c has no attachment }
+        '422':
+          description: The file could not be read, for example a damaged PDF.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /group-chats/{groupChatId}/attachments/zip:
+    parameters:
+      - $ref: '#/components/parameters/GroupChatId'
+    post:
+      tags: [Messages]
+      summary: Download files as a zip
+      operationId: downloadAttachmentsZip
+      description: |
+        One zip of the files on the messages you name, sent back as a download.
+        The app's **Download all** on an album and **Download** for the files
+        chosen in a conversation's Files list both call this.
+
+        **Permission:** `groupchat:read` @ `workspace/{id}/groupchat/{id}`, and
+        you must be in the conversation.
+
+        Find the messages with
+        [List messages](/docs/api-reference/humachat/messages/listMessages). A
+        message with a file has `attachment` set; the messages of one album
+        share `album.id`.
+
+        ```bash
+        curl "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/messages?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        ```bash
+        curl -X POST "$HOS_API/group-chats/pm_off_4d1c_uid_2b8f/attachments/zip" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "workspaceId": "ws_a1b2c3", "messageIds": ["msg_9d2c", "msg_9d2d", "msg_9d2e"] }' \
+          -o files.zip
+        ```
+
+        - **A message that is not in this conversation, or has no file, is
+          skipped.** Only when none of them has a file is the request refused.
+        - **Limits:** 50 messages and 200 MB together.
+        - **Files keep their names.** Two files with one name become
+          `photo.png` and `photo (2).png`.
+        - The zip is named for the conversation and the day, for example
+          `Launch-plan-2026-11-03.zip`, in `Content-Disposition`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messageIds]
+              properties:
+                workspaceId:
+                  type: string
+                  description: |
+                    The workspace the conversation belongs to. Required unless
+                    your credential carries a workspace scope.
+                  examples: [ws_a1b2c3]
+                messageIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  description: |
+                    The messages whose files to include. Each is the `id` of a
+                    message in
+                    [List messages](/docs/api-reference/humachat/messages/listMessages).
+                    A repeated ID is counted once.
+                  items:
+                    type: string
+                  examples: [[msg_9d2c, msg_9d2d, msg_9d2e]]
+      responses:
+        '200':
+          description: The zip. Files are stored in it without further compression.
+          content:
+            application/zip:
+              schema:
+                type: string
+                contentMediaType: application/zip
+        '400':
+          description: A field is missing or invalid, or there are more than 50 messages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingWorkspace:
+                  value: { success: false, error: workspaceId is required }
+                badIds:
+                  value: { success: false, error: messageIds must be a list of message ids }
+                tooMany:
+                  value: { success: false, error: At most 50 files per download }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/NotAMember'
+        '404':
+          description: None of the messages is in this conversation with a file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noFiles:
+                  value: { success: false, error: None of these messages has a file }
+        '413':
+          description: The files are over 200 MB together. Ask for fewer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                tooLarge:
+                  value: { success: false, error: These files are over 200 MB together. Choose fewer. }
         '500':
           $ref: '#/components/responses/ServerError'
 

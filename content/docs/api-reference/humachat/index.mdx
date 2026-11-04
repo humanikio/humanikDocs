@@ -23,9 +23,10 @@ how roles, policies, and assignments fit together. That model is in
 
 | Action | Covers |
 | --- | --- |
-| `groupchat:read` | List chats inside a conversation, read a conversation and its messages |
+| `groupchat:read` | List chats inside a conversation, read a conversation and its messages, read a file as text, download files as a zip |
 | `groupchat:send` | Send a message, open a direct message, list who you can message, start a chat |
 | `office:use` | Checked on the employee when you open a direct message with an AI employee |
+| `datasource:read` | Checked on each file's namespace when you send files from a bucket with `files` |
 
 Every operation on one conversation has a second check: **you must be in it.** A
 person who is not gets `403` and *You are not a member of this conversation*,
