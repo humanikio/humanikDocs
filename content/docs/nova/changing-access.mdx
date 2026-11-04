@@ -107,7 +107,18 @@ The platform reads a person's roles on every request, so an approved change appl
 from their next request. A Nova task that is already running keeps the permissions
 it started with.
 
-## Not available from chat yet
+## Checking who can do what
 
-Editing or deleting an existing role or policy. Use the IAM pages in the console for
-those.
+Nova can read all of access control: every role and policy, including Deny
+statements, who holds each role and where, and every place a policy can name
+(offices, databases, browsers, calendars, channels and projects in each workspace).
+Ask it whether someone can do something, and it checks with the same rules the
+platform enforces and shows you the statement that decided the answer.
+
+If the name you give matches more than one person, Nova asks which one you mean
+before it checks.
+
+## Editing roles and policies
+
+Nova does not edit or delete an existing role or policy. Use the IAM pages in the
+console for those: **Edit** on a custom policy, or the role's page.
