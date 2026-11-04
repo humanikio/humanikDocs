@@ -188,7 +188,29 @@ Deny statements are evaluated first and win outright. Use them to carve an
 exception out of a broad allow, and remember that they do not constrain the
 tenant owner.
 
-Policies are managed under **Organization → IAM → Policies**. The editor shows
-each area, such as Contacts or Billing, at None, View, Use or Manage, and writes
-the statements for you. A policy that uses deny, or applies different statements in
-different places, opens in **Advanced**, which shows the statements themselves.
+Policies are managed under **Organization → IAM → Policies**. The editor has two
+views of the same policy:
+
+- **Full (allow and deny)** shows the statements themselves: Allow or Deny on each,
+  its actions, and the places it applies to. A new policy opens here.
+- **Simple (allow only)** shows each area, such as Contacts or Billing, at None, View,
+  Use or Manage, with one set of places for the whole policy, and writes the statements
+  for you. A policy that uses Deny, or applies different statements in different places,
+  cannot be shown this way and opens in Full.
+
+The places you can choose are listed under each workspace: its offices, databases,
+browsers, calendars, channels and projects, or the whole workspace.
+
+To change a custom policy, select **Edit** on its row in the list, or **Edit policy**
+under its statements when the row is open. Built-in policies cannot be changed, so
+they show **Open**. A change applies to every role that uses the policy, and the list
+says how many do.
+
+From a role's page you can work on its policies without leaving it:
+
+- **The pencil on a policy** opens that policy in the editor.
+- **New policy** creates one, then brings you back to the role with the new policy
+  ticked. Save the role to add it.
+
+If the role has changes you have not saved, both open in a new tab, so the changes
+stay where they are.
