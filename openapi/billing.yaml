@@ -87,6 +87,64 @@ components:
       schema:
         type: string
         examples: [ws_a1b2c3]
+    UsageWorkspaceQuery:
+      name: workspaceId
+      in: query
+      required: false
+      description: |
+        Only work in this workspace: Nova, its employees and its cloud browsers.
+        From [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+        Send `console` for Nova working at account level, outside any workspace.
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+    UsageOfficeQuery:
+      name: officeId
+      in: query
+      required: false
+      description: |
+        Only this employee's own work. From
+        [List offices](/docs/api-reference/offices/offices/listOffices).
+        **Nova's work on this employee is not included**: when Nova changes an
+        employee's setup, the record names the employee but the spend is Nova's.
+      schema:
+        type: string
+        examples: [off_9c1e7d]
+    UsageKindQuery:
+      name: kind
+      in: query
+      required: false
+      description: |
+        Only one kind of work: `nova`, `office` (an AI employee) or `browser`
+        (a cloud browser). Sent with `officeId`, any kind other than `office`
+        returns nothing.
+      schema:
+        type: string
+        enum: [nova, office, browser]
+    ComputeOfficeQuery:
+      name: officeId
+      in: query
+      required: false
+      description: |
+        Only the machine time of this office. From
+        [List offices](/docs/api-reference/offices/offices/listOffices).
+        Wins over `workspaceId` when both are sent, and is ignored when
+        `serviceId` is sent.
+      schema:
+        type: string
+        examples: [off_9c1e7d]
+    ComputeWorkspaceQuery:
+      name: workspaceId
+      in: query
+      required: false
+      description: |
+        Only the machines of offices in this workspace. From
+        [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+        Web services and cloud browsers belong to no workspace, so they never
+        match. Ignored when `officeId` or `serviceId` is sent.
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
 
   responses:
     BudgetNotFound:
@@ -907,8 +965,8 @@ paths:
         - name: limit
           in: query
           required: false
-          description: How many to return. Defaults to 50.
-          schema: { type: integer, default: 50 }
+          description: How many to return, 1 to 200. Defaults to 50.
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
         - name: startAfter
           in: query
           required: false
@@ -916,6 +974,19 @@ paths:
             The `id` of the last entry on the previous page. Omit for the first
             page.
           schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          description: Only records from this time on, epoch milliseconds.
+          schema: { type: integer }
+        - name: to
+          in: query
+          required: false
+          description: Only records before this time, epoch milliseconds.
+          schema: { type: integer }
+        - $ref: '#/components/parameters/UsageWorkspaceQuery'
+        - $ref: '#/components/parameters/UsageOfficeQuery'
+        - $ref: '#/components/parameters/UsageKindQuery'
       responses:
         '200':
           description: OK.
@@ -963,6 +1034,9 @@ paths:
           required: false
           description: An IANA timezone name. Defaults to UTC.
           schema: { type: string, examples: ['America/Toronto'] }
+        - $ref: '#/components/parameters/UsageWorkspaceQuery'
+        - $ref: '#/components/parameters/UsageOfficeQuery'
+        - $ref: '#/components/parameters/UsageKindQuery'
       responses:
         '200':
           description: OK.
@@ -1031,6 +1105,9 @@ paths:
           required: false
           description: An IANA timezone name. Decides where day and month boundaries fall.
           schema: { type: string }
+        - $ref: '#/components/parameters/UsageWorkspaceQuery'
+        - $ref: '#/components/parameters/UsageOfficeQuery'
+        - $ref: '#/components/parameters/UsageKindQuery'
       responses:
         '200':
           description: OK.
@@ -1875,6 +1952,8 @@ paths:
             [List services](/docs/api-reference/cloud/services/listCloudServices).
             Omit it for the whole account.
           schema: { type: string }
+        - $ref: '#/components/parameters/ComputeOfficeQuery'
+        - $ref: '#/components/parameters/ComputeWorkspaceQuery'
       responses:
         '200':
           description: OK.
@@ -2054,6 +2133,8 @@ paths:
           required: true
           description: End of the window, epoch milliseconds. Not included.
           schema: { type: integer }
+        - $ref: '#/components/parameters/ComputeOfficeQuery'
+        - $ref: '#/components/parameters/ComputeWorkspaceQuery'
       responses:
         '200':
           description: OK.

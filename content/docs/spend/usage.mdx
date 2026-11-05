@@ -38,7 +38,7 @@ Each record says what kind of work it was and where it ran.
 
 | Kind | Means | Also names |
 | --- | --- | --- |
-| Nova | Nova, in a chat, a scheduled task, or a text message conversation | The workspace, and the employee's office when Nova was working inside one |
+| Nova | Nova, in a chat, a scheduled task, or a text message conversation | The workspace, and the employee Nova was working on, when there was one |
 | AI employee | An employee working in its office | The workspace and the employee |
 | Cloud browser | A cloud browser session | The workspace and the browser |
 
@@ -48,6 +48,10 @@ been deleted is reported as missing, with its ID in place of a name.
 
 Nova working at account level, rather than inside a workspace, shows as the
 workspace **Console**.
+
+**Spend belongs to whoever ran the work.** When Nova changes an employee's
+setup, the record names that employee, but the spend is Nova's. Filtering by
+that employee does not include it.
 
 A record also carries the person the work ran for, when there was one. A
 scheduled task runs for the person who created it, so its spend is recorded
@@ -108,6 +112,22 @@ in [List compute charges](/docs/api-reference/billing/compute/listComputeCharges
 which is how to put an employee's model use next to its machine time.
 [Get usage for one service](/docs/api-reference/billing/compute/getComputeServiceUsage)
 does that join for you, for one service at a time.
+
+## Narrowing to a workspace, an employee or a kind
+
+The list, the summary and the series all take the same three optional filters:
+
+| Filter | Returns |
+| --- | --- |
+| `workspaceId` | Everything spent in that workspace: Nova, its employees and its cloud browsers. Use `console` for Nova working at account level. |
+| `officeId` | One employee's own work. Nova's work on that employee is not included. |
+| `kind` | One kind of work: `nova`, `office` (an AI employee) or `browser`. |
+
+`officeId` with a `kind` other than `office` returns nothing. The list also
+takes `from` and `to`, in milliseconds since the epoch, to limit it to a window.
+
+Filters narrow what you see. They do not change who can call these: each still
+needs `billing:read` at `console`.
 
 ## Totals and charts
 

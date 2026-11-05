@@ -36,7 +36,12 @@ window resets.
 | --- | --- | --- | --- |
 | **The whole account** | Every workspace | Every workspace | `billing:manage` @ `console` |
 | **One workspace** | That workspace, including all of its employees | That workspace | `workspace:manage` on the workspace, or `billing:manage` |
-| **One employee** | That employee, plus Nova while it works inside that employee's office | That employee, and Nova working inside its office | `workspace:manage` on the workspace, or `billing:manage` |
+| **One employee** | That employee's own work | That employee | `workspace:manage` on the workspace, or `billing:manage` |
+
+**Nova's work counts as Nova's.** When Nova changes an employee's setup, for
+example its scheduled tasks or its instructions, that spend is Nova's, not the
+employee's. It counts toward the workspace and account budgets, and an employee
+budget never stops Nova.
 
 What a budget covers is fixed when it is created. To move a limit from a
 workspace to one employee, delete the budget and create another.
