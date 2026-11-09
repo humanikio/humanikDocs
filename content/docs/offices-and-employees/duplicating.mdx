@@ -44,7 +44,7 @@ same permission it takes to change the original and to create an office.
 | Its identity files, such as `SOUL.md` | Its HumaChat conversations. People start a new chat with the copy |
 | Its model and settings, skills and look | Telegram and WhatsApp |
 | Its memory, unless you ask for it without | Phone numbers and email addresses |
-| Its own past sessions, as context | Channels it is a member of |
+| Its own past sessions, as context, with its memory | Channels it is a member of |
 | Its plugins and protocols, with their credentials | Connected accounts, calendars and browsers |
 | The databases, apps and websites it is connected to | Workflows that name the original |
 | Its repeating scheduled tasks, paused | One-time scheduled tasks |
@@ -97,7 +97,10 @@ curl "$HOS_API/offices/off_4d2a8b/duplication?workspaceId=ws_a1b2c3" \
   -H "Authorization: Bearer $HOS_KEY"
 ```
 
-`status` ends as `done`, `partial` (some steps failed) or `failed`. Each step lists what it copied
+`status` ends as `done`, `partial` (some steps failed) or `failed`. It can also end as
+`interrupted`: the copying stopped before it finished, for example during a platform restart,
+and it will not continue. What was copied is kept. Use the copy as it is, or delete it and
+duplicate again. Each step lists what it copied
 and anything it wants you to know, such as a scheduled task that could not be copied. See
 [Get a duplication report](/docs/api-reference/offices/offices/getOfficeDuplication).
 

@@ -172,7 +172,7 @@ components:
               description: The office this one was copied from.
             status:
               type: string
-              enum: [running, done, partial, failed]
+              enum: [running, done, partial, failed, interrupted]
             stepsDone:
               type: integer
             stepsTotal:
@@ -1064,8 +1064,9 @@ paths:
                   type: boolean
                   default: true
                   description: |
-                    Copy the employee's memory. `false` leaves out `MEMORY.md`
-                    and its memory notes; everything else is still copied.
+                    Copy the employee's memory. `false` leaves out `MEMORY.md`,
+                    its memory notes and its past sessions; everything else is
+                    still copied.
                 crons:
                   type: string
                   enum: [paused, running]
@@ -1155,7 +1156,13 @@ paths:
 
         `status` is `running` until every step has run, then `done`, `partial`
         (some steps failed) or `failed` (every step failed). Poll until it is
-        no longer `running`. Steps are added to `steps` as they finish.
+        no longer `running`. Steps are added to `steps` as they finish, and
+        `currentStep` names the one running now.
+
+        `interrupted` means the copying stopped before it finished, for example
+        during a platform restart, and it will not continue. What was copied
+        is kept and `steps` shows how far it got. Use the copy as it is, or
+        delete it and duplicate the original again.
 
         `notCopied` is the list to act on: the channels, numbers, addresses and
         accounts the original had that the copy needs reconnecting, if at all.
@@ -1187,12 +1194,21 @@ paths:
                         description: The user or service account that asked for the copy.
                       status:
                         type: string
-                        enum: [running, done, partial, failed]
+                        enum: [running, done, partial, failed, interrupted]
                       options:
                         type: object
                         properties:
                           memory: { type: boolean }
                           crons: { type: string, enum: [paused, running] }
+                      stepKeys:
+                        type: array
+                        description: Every step, in the order they run. Use it to show steps that have not started yet.
+                        items:
+                          type: string
+                          enum: [serviceKey, officeFiles, voice, byok, skills, memory, chats, links, vault, plugins, serviceConfig, crons, notCopied]
+                      currentStep:
+                        type: [string, 'null']
+                        description: The step running now. `null` between steps and once the copy has finished.
                       steps:
                         type: array
                         description: One entry per step that has finished.
@@ -1201,7 +1217,7 @@ paths:
                           properties:
                             key:
                               type: string
-                              enum: [officeFiles, voice, byok, skills, memory, chats, links, vault, plugins, serviceConfig, crons, notCopied]
+                              enum: [serviceKey, officeFiles, voice, byok, skills, memory, chats, links, vault, plugins, serviceConfig, crons, notCopied]
                             status:
                               type: string
                               enum: [done, failed, skipped]
@@ -1215,6 +1231,9 @@ paths:
                             error:
                               type: string
                               description: Present when the step failed.
+                            skippedReason:
+                              type: string
+                              description: Present when the step did nothing on purpose, for example `memory` and `chats` when memory was not requested.
                       notCopied:
                         type: array
                         items:
@@ -1222,7 +1241,7 @@ paths:
                           properties:
                             kind:
                               type: string
-                              enum: [telegram, whatsapp, phoneNumber, email, connectedAccount, channel, calendar, browser, voiceAgent, plugin, cron]
+                              enum: [telegram, whatsapp, phoneNumber, email, connectedAccount, channel, calendar, browser, voiceAgent, website]
                             label:
                               type: string
                               description: What it is, in words a person reads.
