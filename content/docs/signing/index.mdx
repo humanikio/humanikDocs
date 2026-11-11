@@ -1,0 +1,153 @@
+---
+title: Document signing
+description: Send a PDF to people for signature. They sign on a private link, with no account.
+---
+
+{/* DRAFT, p_36/s_8. Not listed in content/docs/meta.json. Publish only after sending and
+signing are live and one real request has been signed end to end. The consent text is not
+quoted here until it is approved. */}
+
+Document signing turns a PDF into something people can sign online. You prepare the
+document once as a **template**, then send it as a **request** to the people who need to
+sign. Each person gets an email with their own private link. They do not need an account.
+
+When the last person has signed, everyone receives the finished document.
+
+```
+   Template                         Request
+     PDF + boxes for each person  →   sent to real people
+                                       ├─ Client     ana@example.com      signed
+                                       └─ Manager    sam@acme.com         waiting
+                                                    ↓
+                                       Finished document + audit pages
+```
+
+## Templates
+
+A template is one PDF, the people who sign it, and the boxes each of them fills in.
+
+1. Open **HumaDocs** in a workspace, go to **Templates** and select **Create template**. Upload a
+   PDF. It can be up to 25 MB and 200 pages.
+   A password protected PDF cannot be used. Remove the password and upload it again.
+2. Name the people who sign. These are **roles**, such as "Client" or "Manager", not real
+   people yet. A template has between 1 and 10 roles.
+3. Drag boxes onto the pages and give each box to a role.
+4. Select **Save**.
+
+There are seven kinds of box:
+
+| Box | What the signer does |
+| --- | --- |
+| Signature | Draws, types or uploads a signature |
+| Initials | Draws, types or uploads initials |
+| Signed date | Nothing. The date is filled in when they finish, in their own time zone |
+| Text | Types a short answer |
+| Name | Types their name |
+| Email | Types an email address |
+| Checkbox | Ticks or leaves it empty |
+
+A box can be required or optional.
+
+The PDF of a template never changes. To use a different PDF, make a new template.
+Archiving a template hides it from the list. Requests already sent from it are not
+affected.
+
+## Sending
+
+Select **New document**, or **Use** beside a template. Choose a person for each role, with a
+name and an email address. Select **Send**, or tick **Save as a draft** to send it later from
+**Documents**.
+
+**Order.** Each role has an order number. People with the same number sign at the same
+time. People with a higher number are emailed only after everyone before them has
+finished. If every role has the same number, everyone is emailed at once.
+
+**Expiry.** You can set a date after which the request can no longer be signed. It must
+be between one hour and one year ahead.
+
+**Reminders.** People who have not signed yet are reminded every 2, 3 or 7 days, or not
+at all. The default is every 3 days. Each person gets at most 3 reminders, and none after
+the request expires.
+
+A sent request keeps its own copy of the template. Changing the template later does not
+change what people were sent.
+
+## What signers see
+
+The link opens the document in the browser. The signer:
+
+1. Agrees to sign electronically. Nothing can be filled in before that.
+2. Fills in their own boxes. They cannot see or change boxes that belong to someone else.
+3. Selects **Finish**. Required boxes must be filled in first.
+
+A signer can also **decline**, with a reason. Declining stops the whole request, and the
+person who sent it is told by email.
+
+<Callout type="info">
+  **Each reminder has a new link, and the old link stops working.** A signer who opens an
+  older email sees that the link no longer works. They should use the newest email.
+</Callout>
+
+## The finished document
+
+When everyone has signed, Humanik OS makes the finished document: the original PDF with
+every answer and signature drawn onto it, followed by **audit pages**.
+
+The audit pages list:
+
+- the request name, and when it was created and finished
+- the original file, its page count and its SHA-256 hash
+- for each signer: name, email, role, when they signed (in UTC and their own time zone),
+  their IP address and browser, and when they agreed to sign electronically
+- every step of the request, in order
+
+The finished document's own SHA-256 hash cannot be printed inside the document, because
+printing it would change it. It is shown on the request page and in the email.
+
+**Delivery.** Each signer receives an email with their own download link, which works for
+30 days. The document is never sent as an attachment. Members with access can download it
+from the request page at any time.
+
+**The seal.** The finished document carries a digital signature from Humanik OS. Any PDF
+reader can use it to tell whether the file was changed after it was finished. Adobe Reader
+shows the signer's identity as unknown, because the certificate is not on Adobe's trusted
+list. It still reports whether the document was changed.
+
+Signatures, answers and the finished document are stored encrypted.
+
+## Checking a copy
+
+Anyone who receives a copy of a finished document can check that Humanik OS made that
+exact file. Open the verify page at `/sign/verify` in the Humanik OS app (a finished
+request links to it as **Check a copy**) and choose the file. No account is needed.
+
+The file is not uploaded. The browser computes its SHA-256 hash and only the hash is
+checked. The answer says whether the file is known, the document name, who sent it and
+when it was finished. It never shows the signers' details.
+
+A file that was changed in any way, even by one byte, is not recognised.
+
+Deleting a request removes the documents, signatures and answers. A copy of its finished
+document can still be checked afterwards.
+
+## Who can do what
+
+Three actions control document signing in a workspace:
+
+| Action | Lets someone |
+| --- | --- |
+| `signing:read` | See templates and requests, who has signed, and download finished documents |
+| `signing:send` | Send a template, send a request to a signer again, and cancel a request |
+| `signing:manage` | Create, change and archive templates, and delete requests |
+
+Signers need none of these. Their link is their access. See
+[Actions](/docs/access-control/actions) for how these are granted.
+
+## Limits
+
+- Chinese, Japanese and Korean characters are not drawn onto the finished document yet.
+  They appear as question marks, and the audit pages say so. The answers themselves are
+  kept as typed.
+- The time inside the seal comes from the Humanik OS server. No outside timestamp service
+  is used.
+- A request cannot be cancelled once everyone has signed.
