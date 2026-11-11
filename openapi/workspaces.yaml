@@ -424,24 +424,30 @@ paths:
       summary: Delete a workspace
       tags: [Workspaces]
       description: |
-        Removes the workspace record.
+        Deletes the workspace and what it holds. Each thing is removed the way
+        its own delete removes it:
 
-        > **Nothing inside it is removed.** Offices, automations, conversations,
-        > data and allocations are not cascaded and not cleaned up. They stop
-        > being reachable, because every route to them runs through a workspace
-        > that no longer exists, and any machines they were running keep
-        > running.
-        >
-        > **Empty a workspace before deleting it.** Delete its offices through
-        > [Delete an office](/docs/api-reference/offices/offices/deleteOffice),
-        > and its automations through
-        > [Delete a workflow](/docs/api-reference/workflows/workflows/deleteWorkflow),
-        > then delete the workspace.
+        - **Deleted:** its offices (and their Humanik Cloud services), its
+          databases (tables, buckets and files), workflows (parked runs are
+          cancelled), Nova scheduled tasks, data source ingest URLs, calendars
+          (booking links stop working), browsers, chats, settings and its
+          Humanik Cloud project.
+        - **Revoked:** connected third-party agents.
+        - **Released and kept:** phone numbers, email addresses and Telegram
+          groups. They can be given to another workspace afterwards.
+        - **Removed from every person and service account:** role assignments
+          on the workspace or anything in it.
 
-        Role assignments written against this workspace are also left in place.
-        They stop resolving to anything, and are worth removing through
-        [Access control](/docs/access-control/assignments) so the account does
-        not accumulate grants pointing at nothing.
+        **Refused, with nothing touched (409),** while a copy is being made
+        into or out of the workspace, or while one of its calendars has
+        upcoming confirmed bookings. `blockers` lists every reason.
+
+        **Stopped partway (502)** if an office or a database cannot be
+        deleted. The workspace is kept so the request can be sent again;
+        what was already deleted is not deleted twice. `blockers` names
+        what was left.
+
+        A large workspace can take a few minutes to answer.
 
         **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
       responses:
@@ -453,9 +459,55 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, const: true }
+                  removed:
+                    type: object
+                    description: How many of each thing were deleted. `cloudProject` says whether the Humanik Cloud project was.
+                    properties:
+                      offices: { type: integer }
+                      workflows: { type: integer }
+                      novaCrons: { type: integer }
+                      databases: { type: integer }
+                      buckets: { type: integer }
+                      ingestRoutes: { type: integer }
+                      calendars: { type: integer }
+                      browsers: { type: integer }
+                      agents: { type: integer }
+                      roleAssignments: { type: integer }
+                      cloudProject: { type: boolean }
+                  released:
+                    type: object
+                    description: Kept, and free to give to another workspace.
+                    properties:
+                      phoneNumbers: { type: array, items: { type: string } }
+                      emailAddresses: { type: array, items: { type: string } }
+                      telegramGroups: { type: array, items: { type: string } }
+                  warnings:
+                    type: array
+                    items: { type: string }
+                    description: Parts that did not finish. The workspace is deleted all the same.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Refused. Nothing was touched.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: false }
+                  error: { type: string, description: The first reason. }
+                  blockers: { type: array, items: { type: string } }
+        '502':
+          description: Stopped partway. The workspace is kept; send the request again.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: false }
+                  error: { type: string }
+                  blockers: { type: array, items: { type: string }, description: The offices or databases that could not be deleted. }
         '500': { $ref: '#/components/responses/ServerError' }
 
   /workspaces/{workspaceId}/timeConfig:
