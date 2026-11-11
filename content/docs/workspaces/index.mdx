@@ -1,0 +1,45 @@
+---
+title: Workspaces
+description: What a workspace is, what lives in it, and how to copy or remove one.
+---
+
+A workspace groups AI employees, data, automations and conversations, so separate teams or
+separate clients can work in one account without seeing each other's work. Almost every other
+call in this API takes a `workspaceId`, and almost every permission names a workspace, which
+makes it the practical unit of access: scope someone to one workspace and they see only that
+workspace's work.
+
+A workspace itself is small: a name and a timezone. The things you think of as being in it (its
+offices, databases, workflows, contacts, phone numbers) each record which workspace they belong
+to.
+
+## Working with workspaces
+
+- **Create, rename and list** them in the console, or with
+  [Create a workspace](/docs/api-reference/workspaces/workspaces/createWorkspace) and
+  [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+- **Copy one** to start a second workspace set up the same way, for a new location or a new
+  client. See [Duplicating a workspace](/docs/workspaces/duplicating).
+- **Delete one** with everything it holds. Phone numbers, email addresses and Telegram groups are
+  released rather than deleted, so you can give them to another workspace. See
+  [Delete a workspace](/docs/api-reference/workspaces/workspaces/deleteWorkspace).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Duplicating a workspace"
+    href="/docs/workspaces/duplicating"
+    description="What a copy gets, the optional data, and how to follow it as it is made."
+  />
+  <Card
+    title="Offices and employees"
+    href="/docs/offices-and-employees"
+    description="The AI employees that work inside a workspace."
+  />
+  <Card
+    title="Access control"
+    href="/docs/access-control"
+    description="How permissions name a workspace, and how to scope people to one."
+  />
+</Cards>

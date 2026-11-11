@@ -510,6 +510,471 @@ paths:
                   blockers: { type: array, items: { type: string }, description: The offices or databases that could not be deleted. }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /workspaces/{workspaceId}/duplicate:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceIdPath'
+
+    post:
+      operationId: duplicateWorkspace
+      summary: Duplicate a workspace
+      tags: [Workspaces]
+      description: |
+        Makes a new workspace in the same account, set up the way this one
+        is. The original is not changed. See
+        [Duplicating a workspace](/docs/workspaces/duplicating) for what is
+        copied and why.
+
+        **Gated twice.** The route needs `workspace:manage` on the workspace
+        being copied, and the handler then needs `workspace:manage` on the
+        console, the permission for creating a workspace. Each part of the
+        copy then checks what it would give the copy: `office:manage` for each
+        AI employee, `datasource:read` for each database, `workflow:read` for
+        the workflows, `contact:read` for contacts and `opportunity:read` for
+        deals. A part the caller cannot read is left out and named in the
+        report's warnings; the rest is still copied.
+
+        **The answer comes before the copying is done.** The call returns
+        `202` as soon as the new workspace exists, with its ID. Its setup is
+        copied over the next few minutes, and contacts, rows and files after
+        that when you ask for them. Poll
+        [the duplication report](/docs/api-reference/workspaces/workspaces/getWorkspaceDuplication)
+        on the new workspace to see progress and the outcome.
+
+        **Copied:** AI employees (each as a new office, through
+        [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice)),
+        workflows and their folders, databases with their tables and buckets,
+        data sources with **new** ingest URLs, pipelines, tags, custom fields,
+        email templates, channels and their members, budgets, the board and
+        the bulletin, the timezone and model settings.
+
+        **Copied only when asked:** contacts and deals (`contacts`), the rows
+        of every table (`rows`) and the files in every bucket (`files`). Call
+        [Preview a workspace copy](/docs/api-reference/workspaces/workspaces/getWorkspaceDuplicationPreview)
+        first to see how many of each there are.
+
+        **Never copied:** HumaChat conversations, phone numbers, email
+        addresses, calendars and booking links, browsers, Telegram groups,
+        and people's access to the workspace. The report lists the ones the
+        original had under `notCopied`.
+
+        **Nothing starts on its own.** Workflows and data-triggered prompts
+        arrive turned off. Scheduled tasks arrive paused unless `crons` is
+        `running`.
+
+        A part that fails does not undo the others. The copy is kept and its
+        report ends as `partial`. Delete it with
+        [Delete a workspace](/docs/api-reference/workspaces/workspaces/deleteWorkspace)
+        if you do not want it.
+
+        Get the ID of the workspace to copy from
+        [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces),
+        and the IDs for `offices` from
+        [List offices](/docs/api-reference/offices/offices/listOffices):
+
+        ```bash
+        curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}` and
+        `workspace:manage` @ `console`
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                  description: |
+                    Name for the copy. Defaults to the original's name
+                    followed by "(copy)". Longer names are cut to 80
+                    characters.
+                  examples: [Downtown (West)]
+                offices:
+                  description: |
+                    Which AI employees to copy: `all` (the default), or a list
+                    of office IDs from the original. If any ID is not an
+                    office in the original, no AI employees are copied: the
+                    `offices` step fails and names the IDs, and the rest of
+                    the copy goes ahead.
+                  oneOf:
+                    - type: string
+                      const: all
+                    - type: array
+                      items: { type: string, examples: [off_9c1e7d] }
+                  default: all
+                memory:
+                  type: boolean
+                  default: true
+                  description: |
+                    Copy each employee's memory. `false` leaves out
+                    `MEMORY.md`, its memory notes and its past sessions.
+                crons:
+                  type: string
+                  enum: [paused, running]
+                  default: paused
+                  description: |
+                    `paused` copies every repeating scheduled task turned off.
+                    `running` keeps each one on or off as it is on the
+                    original, so a task that sends messages sends them from
+                    both workspaces.
+                contacts:
+                  type: boolean
+                  default: false
+                  description: |
+                    Copy contacts and deals, with their notes. Opt-outs and
+                    unsubscribes come too, including numbers and addresses
+                    that opted out without becoming a contact, so the copy
+                    never messages someone who asked to stop. Conversation
+                    history is not copied. A deal whose pipeline was not
+                    copied is left out.
+                rows:
+                  type: boolean
+                  default: false
+                  description: |
+                    Copy every row of every table into the copy's own tables.
+                    Row IDs and timestamps are kept, and search embeddings are
+                    copied rather than made again.
+                files:
+                  type: boolean
+                  default: false
+                  description: |
+                    Copy every file in every bucket into the copy's own
+                    buckets, with their extracted text and search embeddings.
+                    Only the current version of each file is copied. Deleting
+                    a file on one side never touches the other.
+      responses:
+        '202':
+          description: The copy exists. Its setup is still being copied.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  workspaceId:
+                    type: string
+                    description: The new workspace. Use it to read its duplication report.
+                    examples: [ws_7f3e9a]
+                  name:
+                    type: string
+                    examples: [Downtown (copy)]
+                  jobId:
+                    type: string
+                    description: The copy job. Shown in the report as well; you do not need to keep it.
+                  message: { type: string }
+        '400':
+          description: A field has the wrong type.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badOffices:
+                  value:
+                    success: false
+                    error: "offices must be 'all' or a list of office ids"
+                badContacts:
+                  value:
+                    success: false
+                    error: contacts must be true or false
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: |
+            The caller lacks `workspace:manage` on the workspace, or on the
+            console.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                console:
+                  value:
+                    success: false
+                    error: 'Duplicating a workspace needs permission to create workspaces (workspace:manage on the console).'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500':
+          description: |
+            Server side failure. If the error names a new workspace, it was
+            made but could not be set up: delete it, then try again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /workspaces/{workspaceId}/duplicate/preview:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceIdPath'
+
+    get:
+      operationId: getWorkspaceDuplicationPreview
+      summary: Preview a workspace copy
+      tags: [Workspaces]
+      description: |
+        How much data the optional parts of
+        [Duplicate a workspace](/docs/api-reference/workspaces/workspaces/duplicateWorkspace)
+        would copy: contacts, deals, table rows and files. Changes nothing.
+
+        Each count is `null` when it could not be read. Row counts cover the
+        first 200 tables; `tables` is the full number. A large workspace can
+        take several seconds to answer.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  preview:
+                    type: object
+                    properties:
+                      contacts: { type: [integer, 'null'], examples: [10809] }
+                      opportunities: { type: [integer, 'null'], description: Deals., examples: [10765] }
+                      rows: { type: [integer, 'null'], description: Rows across every table., examples: [11378] }
+                      tables: { type: [integer, 'null'], examples: [13] }
+                      files: { type: [integer, 'null'], description: Files, not counting folders., examples: [32] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/duplication:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        description: |
+          The copy, as returned by
+          [Duplicate a workspace](/docs/api-reference/workspaces/workspaces/duplicateWorkspace).
+          Not the original.
+        schema:
+          type: string
+          examples: [ws_7f3e9a]
+
+    get:
+      operationId: getWorkspaceDuplication
+      summary: Get a workspace duplication report
+      tags: [Workspaces]
+      description: |
+        How the copying went for a workspace made by
+        [Duplicate a workspace](/docs/api-reference/workspaces/workspaces/duplicateWorkspace).
+
+        `status` is `running` until every step has run, then `done`,
+        `partial` (some steps failed) or `failed` (every step failed). Poll
+        until it is no longer `running`. Steps are added to `steps` as they
+        finish, and `currentStep` names the one running now. While a data step
+        runs, `currentStepCopied` is how many items it has copied so far.
+
+        `interrupted` means the copying stopped before it finished, for
+        example during a platform restart. What was copied is kept. Carry on
+        from the last finished step with
+        [Resume a workspace copy](/docs/api-reference/workspaces/workspaces/resumeWorkspaceDuplication).
+
+        Each AI employee is copied as its own office copy. `offices` lists
+        them; each one's detail is in its own
+        [office duplication report](/docs/api-reference/offices/offices/getOfficeDuplication).
+
+        `notCopied` is the list to act on: the phone numbers, email
+        addresses, calendars, browsers and Telegram groups the original had,
+        which the copy needs its own of, if at all.
+
+        A workspace that was not made by duplication returns 404.
+
+        **Permission:** `workspace:read` @ `workspace/{workspaceId}`
+      responses:
+        '200':
+          description: The report.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  report:
+                    type: object
+                    properties:
+                      sourceWorkspaceId:
+                        type: string
+                        description: The workspace that was copied.
+                      sourceWorkspaceName: { type: string }
+                      requestedBy:
+                        type: string
+                        description: The user or service account that asked for the copy.
+                      status:
+                        type: string
+                        enum: [running, done, partial, failed, interrupted]
+                      options:
+                        type: object
+                        description: The options the copy was made with, defaults filled in.
+                        properties:
+                          offices:
+                            oneOf:
+                              - { type: string, const: all }
+                              - { type: array, items: { type: string } }
+                          memory: { type: boolean }
+                          crons: { type: string, enum: [paused, running] }
+                          contacts: { type: boolean }
+                          rows: { type: boolean }
+                          files: { type: boolean }
+                      stepKeys:
+                        type: array
+                        description: |
+                          Every step, in the order they run. `contacts`, `tableRows`
+                          and `files` are present only when their option was on.
+                        items:
+                          type: string
+                          enum: [settings, crmSetup, dataStructure, sources, offices, afterOffices, workflows, display, contacts, tableRows, files, notCopied]
+                      stepsTotal: { type: integer }
+                      currentStep:
+                        type: [string, 'null']
+                        description: The step running now. `null` between steps and once the copy has finished.
+                      currentStepCopied:
+                        type: integer
+                        description: Items the running data step has copied so far. Absent between steps.
+                      steps:
+                        type: array
+                        description: One entry per step that has finished.
+                        items:
+                          type: object
+                          properties:
+                            key:
+                              type: string
+                              enum: [settings, crmSetup, dataStructure, sources, offices, afterOffices, workflows, display, contacts, tableRows, files, notCopied]
+                            status:
+                              type: string
+                              enum: [done, failed, skipped]
+                            copied:
+                              type: integer
+                              description: How many items the step wrote.
+                            warnings:
+                              type: array
+                              items: { type: string }
+                              description: |
+                                Plain sentences, for example a data source's new ingest
+                                URL, or a part left out because the caller cannot read it.
+                            error:
+                              type: string
+                              description: Present when the step failed.
+                            skippedReason:
+                              type: string
+                              description: Present when the step did nothing on purpose.
+                      offices:
+                        type: array
+                        description: One entry per AI employee copied.
+                        items:
+                          type: object
+                          properties:
+                            sourceOfficeId: { type: string, description: The office in the original. }
+                            officeId: { type: string, description: Its copy. Read its own report with this ID. }
+                            name: { type: string }
+                      notCopied:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            kind:
+                              type: string
+                              enum: [phoneNumber, email, calendar, browser, telegram]
+                            label:
+                              type: string
+                              description: What it is, in words a person reads.
+                      idMap:
+                        type: object
+                        description: |
+                          For each kind of thing the copy made (`offices`, `workflows`,
+                          `namespaces`, `pipelines` and so on), the original's ID mapped
+                          to the copy's. Use it to find the copy of something you know
+                          in the original.
+                        additionalProperties:
+                          type: object
+                          additionalProperties: { type: string }
+                      startedAt: { type: string, format: date-time }
+                      finishedAt: { type: [string, 'null'], format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The workspace was not made by duplicating another workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notACopy:
+                  value:
+                    success: false
+                    error: This workspace was not made by duplicating another workspace.
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /workspaces/{workspaceId}/duplication/resume:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        description: |
+          The copy whose report reads `interrupted`, as returned by
+          [Duplicate a workspace](/docs/api-reference/workspaces/workspaces/duplicateWorkspace).
+        schema:
+          type: string
+          examples: [ws_7f3e9a]
+
+    post:
+      operationId: resumeWorkspaceDuplication
+      summary: Resume a workspace copy
+      tags: [Workspaces]
+      description: |
+        Carries on a workspace copy that stopped partway. Steps that finished
+        are not run again, and a step that was copying contacts, rows or files
+        carries on from where it got to, so nothing is copied twice.
+
+        Only a copy whose
+        [report](/docs/api-reference/workspaces/workspaces/getWorkspaceDuplication)
+        reads `interrupted` can be resumed. A copy reads `interrupted` when it
+        has shown no progress for 15 minutes. Poll the report again after this
+        call.
+
+        **Permission:** `workspace:manage` @ `workspace/{workspaceId}`
+      responses:
+        '202':
+          description: The copy is carrying on.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  jobId: { type: string }
+                  message: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The workspace was not made by duplicating another workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The copy is still running, or has finished.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                running:
+                  value:
+                    success: false
+                    error: The copy is still running.
+                finished:
+                  value:
+                    success: false
+                    error: The copy has finished.
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /workspaces/{workspaceId}/timeConfig:
     parameters:
       - $ref: '#/components/parameters/WorkspaceIdPath'

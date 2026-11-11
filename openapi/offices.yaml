@@ -1160,9 +1160,10 @@ paths:
         `currentStep` names the one running now.
 
         `interrupted` means the copying stopped before it finished, for example
-        during a platform restart, and it will not continue. What was copied
-        is kept and `steps` shows how far it got. Use the copy as it is, or
-        delete it and duplicate the original again.
+        during a platform restart. What was copied is kept and `steps` shows
+        how far it got. Carry on from the last finished step with
+        [Resume an office copy](/docs/api-reference/offices/offices/resumeOfficeDuplication),
+        or delete the copy and duplicate the original again.
 
         `notCopied` is the list to act on: the channels, numbers, addresses and
         accounts the original had that the copy needs reconnecting, if at all.
@@ -1263,6 +1264,103 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /offices/{officeId}/duplication/resume:
+    parameters:
+      - name: officeId
+        in: path
+        required: true
+        description: |
+          The copy whose report reads `interrupted`, as returned by
+          [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice).
+        schema:
+          type: string
+          examples: [off_4d2a8b]
+    post:
+      tags: [Offices]
+      summary: Resume an office copy
+      operationId: resumeOfficeDuplication
+      description: |
+        Carries on an office copy that stopped partway. Steps that finished
+        are not run again. Requires `office:manage` on the copy.
+
+        Only a copy whose
+        [report](/docs/api-reference/offices/offices/getOfficeDuplication)
+        reads `interrupted` can be resumed. A copy reads `interrupted` when it
+        has shown no progress for 15 minutes. Poll the report again after this
+        call.
+
+        **An office copied as part of a workspace copy** is resumed with
+        [Resume a workspace copy](/docs/api-reference/workspaces/workspaces/resumeWorkspaceDuplication)
+        on the new workspace, not here.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '202':
+          description: The copy is carrying on.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  jobId:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: No workspace was given.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noWorkspace:
+                  value:
+                    success: false
+                    error: workspaceId is required
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: |
+            The office was not made by duplicating another office, or it was
+            copied before copies could be resumed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notACopy:
+                  value:
+                    success: false
+                    error: This office was not made by duplicating another office.
+                tooOld:
+                  value:
+                    success: false
+                    error: This copy was made before copies could be resumed.
+        '409':
+          description: |
+            The copy is still running, has finished, or is part of a workspace
+            copy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                running:
+                  value:
+                    success: false
+                    error: The copy is still running.
+                partOfWorkspace:
+                  value:
+                    success: false
+                    error: This copy is part of a workspace copy. Resume the workspace copy instead.
         '500':
           $ref: '#/components/responses/ServerError'
 

@@ -98,9 +98,10 @@ curl "$HOS_API/offices/off_4d2a8b/duplication?workspaceId=ws_a1b2c3" \
 ```
 
 `status` ends as `done`, `partial` (some steps failed) or `failed`. It can also end as
-`interrupted`: the copying stopped before it finished, for example during a platform restart,
-and it will not continue. What was copied is kept. Use the copy as it is, or delete it and
-duplicate again. Each step lists what it copied
+`interrupted`: the copying stopped before it finished, for example during a platform restart.
+What was copied is kept. Press **Resume copying** in the console, or call
+[Resume an office copy](/docs/api-reference/offices/offices/resumeOfficeDuplication), to carry
+on from the last finished step. Each step lists what it copied
 and anything it wants you to know, such as a scheduled task that could not be copied. See
 [Get a duplication report](/docs/api-reference/offices/offices/getOfficeDuplication).
 

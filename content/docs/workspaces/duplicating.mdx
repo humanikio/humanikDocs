@@ -1,0 +1,145 @@
+---
+title: Duplicating a workspace
+description: Copy a workspace's setup into a new workspace, choose whether its contacts, rows and files come too, and follow the copy as it is made.
+---
+
+Duplicating a workspace makes a second workspace in the same account, set up the way the first
+one is: its AI employees, workflows, databases, pipelines and settings. You choose whether its
+contacts, table rows and files come too. The original is not changed, and from the moment the
+copy is made the two are separate.
+
+## When to duplicate
+
+- **A new location or a new client** that works the way an existing one does. Copy the setup,
+  leave the customers behind, and give the copy its own phone numbers and addresses.
+- **A full working copy** to try changes on, with the same contacts and data, while the original
+  keeps running.
+
+If you want an empty workspace, [create one](/docs/api-reference/workspaces/workspaces/createWorkspace)
+instead. To copy a single AI employee within a workspace, see
+[Duplicating an office](/docs/offices-and-employees/duplicating).
+
+## Ways to start one
+
+- **In the console.** Choose **Duplicate…** from a workspace's menu on the Workspaces page, or use
+  **Duplicate this workspace** on its settings page. The dialog walks through four steps: the
+  copy's name, its AI employees and scheduled tasks, its data, and a review of every choice before
+  you start.
+- **Call the API** with [Duplicate a workspace](/docs/api-reference/workspaces/workspaces/duplicateWorkspace).
+
+Either way you need `workspace:manage` on the workspace you copy and on the console, the same
+permission it takes to change the original and to create a workspace.
+
+## What the copy gets
+
+| The copy gets | The copy does not get |
+| --- | --- |
+| Its AI employees, each as a new office with its own machine | HumaChat conversations |
+| Workflows and their folders, turned off | Phone numbers and email addresses |
+| Databases, tables and buckets | Calendars and booking links |
+| Data sources, each with a new ingest URL | Browsers and Telegram groups |
+| Pipelines, tags, custom fields and email templates | People's access to the workspace |
+| Channels and their members, budgets, the board and the bulletin | Run history of workflows |
+| The timezone and model settings | |
+| **When you choose:** contacts and deals, table rows, files | |
+
+- **Nothing starts on its own.** Workflows and data-triggered prompts arrive turned off, and
+  scheduled tasks arrive paused unless you ask for them as they are. Turn them on when the copy is
+  ready, so nothing sends the same message from both workspaces.
+- **Data sources get new ingest URLs.** Anything that sends data to the original keeps sending it
+  to the original. The copy's report lists each new URL; point a sender at it when the copy
+  should receive its data.
+- **You copy only what you can read.** An AI employee, database or workflow you do not have
+  access to is left out, and the report says so.
+- **Each AI employee is copied the way [Duplicating an office](/docs/offices-and-employees/duplicating)
+  copies it**, with or without its memory as you choose.
+
+## Contacts, rows and files
+
+These are off by default, so a copy starts with the same setup and no customers or records. Turn
+on any of them to bring that data across. The console shows how much of each there is; over the
+API, call [Preview a workspace copy](/docs/api-reference/workspaces/workspaces/getWorkspaceDuplicationPreview).
+
+| Option | What comes | What to know |
+| --- | --- | --- |
+| `contacts` | Contacts and deals, with their notes | Opt-outs and unsubscribes come too, including numbers and addresses that opted out without becoming a contact, so the copy never messages someone who asked to stop. Conversation history does not come. Copied contacts do not start workflows that run on new contacts |
+| `rows` | Every row of every table | Row IDs and timestamps are kept, and search works at once: embeddings are copied, not made again |
+| `files` | Every file in every bucket | Each file is copied into the copy's own buckets, with its extracted text and search embedding. Only the current version comes. Deleting a file in one workspace never touches the other |
+
+A large workspace takes longer: tens of thousands of contacts take a few minutes, and the copy's
+progress shows how many have come across so far.
+
+## The copy is made in the background
+
+The copy exists as soon as you ask. Its setup is copied over the next few minutes, one step at a
+time, followed by its data if you chose any. The console shows each step as it finishes, and you
+can keep working while it runs.
+
+Over the API, the call answers with the copy's ID:
+
+```bash
+curl -X POST "$HOS_API/workspaces/ws_a1b2c3/duplicate" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Downtown (West)", "contacts": true }'
+```
+
+```json
+{
+  "success": true,
+  "workspaceId": "ws_7f3e9a",
+  "name": "Downtown (West)",
+  "jobId": "job_5b81c2",
+  "message": "The copy exists and is being filled in. Progress is in its duplication report."
+}
+```
+
+Then read the copy's report until `status` is no longer `running`:
+
+```bash
+curl "$HOS_API/workspaces/ws_7f3e9a/duplication" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+`status` ends as `done`, `partial` (some steps failed) or `failed`. A step that fails does not undo
+the others, and each step lists what it copied and anything it wants you to know. See
+[Get a workspace duplication report](/docs/api-reference/workspaces/workspaces/getWorkspaceDuplication).
+
+## If a copy stops partway
+
+A copy that shows no progress for 15 minutes, for example after a platform restart, reads
+`interrupted`. What was copied is kept. Press **Resume copying** in the console, or call
+[Resume a workspace copy](/docs/api-reference/workspaces/workspaces/resumeWorkspaceDuplication).
+It carries on from the last finished step, and a step that was copying contacts, rows or files
+carries on from where it got to, so nothing is copied twice.
+
+If you would rather start again, delete the copy with
+[Delete a workspace](/docs/api-reference/workspaces/workspaces/deleteWorkspace). That removes
+everything the copy made, its AI employees included.
+
+## Reconnect what the copy needs
+
+The report's `notCopied` list names what the original had and the copy does not: its phone
+numbers, email addresses, calendars, browsers and Telegram groups. Each of these belongs to one
+workspace at a time, so the copy gets its own, if it needs them, from the console. Each AI
+employee's own report lists what that employee needs reconnecting.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Duplicate a workspace"
+    href="/docs/api-reference/workspaces/workspaces/duplicateWorkspace"
+    description="The operation, its options and its errors."
+  />
+  <Card
+    title="Duplicating an office"
+    href="/docs/offices-and-employees/duplicating"
+    description="How each AI employee is copied."
+  />
+  <Card
+    title="Workspaces"
+    href="/docs/workspaces"
+    description="What a workspace is, and what lives in it."
+  />
+</Cards>
