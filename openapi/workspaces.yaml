@@ -312,7 +312,9 @@ paths:
 
         Creating one does more than write a record. It also registers the
         workspace with the compute platform so offices can run in it, sets up a
-        default layout, and extends existing inherited access to it.
+        default layout, creates a `knowledgeBase` namespace with a `documents`
+        bucket and a `/knowledgeBase/company/` folder for documents about your
+        company, and extends existing inherited access to it.
 
         > **Those follow-on steps are best effort and are not retried.** A
         > workspace can exist while one of them has not completed. If a newly
