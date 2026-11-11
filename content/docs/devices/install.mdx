@@ -40,11 +40,12 @@ One command installs both. It is the same command the console shows in
 In Terminal:
 
 ```bash
-curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh
+curl -fsSL https://app.humanik.io/install.sh | sh
 ```
 
-humanikd goes in `/usr/local/bin`. If that folder needs it, the installer asks for
-your password. The app goes in `/Applications/Humanik OS.app` (or `Applications`
+humanikd goes in `/usr/local/bin`. A new Mac does not have that folder yet, so the
+installer creates it. Creating the folder or writing into it needs your password,
+and the installer asks for it. The app goes in `/Applications/Humanik OS.app` (or `Applications`
 in your home folder if you cannot write to `/Applications`) and opens.
 
 </Tab>
@@ -53,7 +54,7 @@ in your home folder if you cannot write to `/Applications`) and opens.
 In **PowerShell**, not Command Prompt:
 
 ```powershell
-irm https://github.com/humanikio/humanikd-dist/releases/latest/download/install.ps1 | iex
+irm https://app.humanik.io/install.ps1 | iex
 ```
 
 humanikd goes in `%LOCALAPPDATA%\Programs\humanikd` and is added to your PATH. The
@@ -72,14 +73,26 @@ different program that rejects those options.
 In a terminal:
 
 ```bash
-curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh
+curl -fsSL https://app.humanik.io/install.sh | sh
 ```
 
-humanikd goes in `/usr/local/bin`. If that folder needs it, the installer asks for
-your password. There is no Linux app.
+humanikd goes in `/usr/local/bin`. The installer creates that folder if it is
+missing. If the folder needs your password, the installer asks for it. There is no
+Linux app.
 
 </Tab>
 </Tabs>
+
+`app.humanik.io/install.sh` and `app.humanik.io/install.ps1` send you on to the installer in the
+latest release on GitHub. If you cannot reach `app.humanik.io`, use the GitHub address directly:
+
+```bash
+curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh
+```
+
+```powershell
+irm https://github.com/humanikio/humanikd-dist/releases/latest/download/install.ps1 | iex
+```
 
 The installer picks the build for your chip, and checks every file against the
 checksum published with the release. It refuses to install a file that does not
@@ -130,20 +143,29 @@ page, and it starts receiving work. See
 </Step>
 </Steps>
 
+## If the install command fails
+
+| What you see | What it means | What to do |
+| --- | --- | --- |
+| `curl: (2) no URL specified`, then `command not found` | The command was split across two lines when it was pasted. curl is not missing: macOS includes it. | Paste the command again as one line. The copy button on the Devices page in Humanik Cloud copies it on one line. |
+| `needs an administrator password, and there is no terminal here to type it into` | The command ran somewhere that cannot ask for a password, such as an AI agent's shell, a CI job or an editor's task runner. Nothing was downloaded or changed. | Run the command in Terminal. |
+| `CHECKSUM MISMATCH` | The download did not match the published checksum. Nothing was installed. | Run the command again. If it happens again, tell us. |
+| `syntax error` on line 1 | The address returned a web page, not the installer. This happens with a shortened or mistyped link. | Use the command on this page exactly as written. |
+
 ## Install humanikd without the app
 
 <Tabs items={['macOS', 'Windows']}>
 <Tab value="macOS">
 
 ```bash
-curl -fsSL https://github.com/humanikio/humanikd-dist/releases/latest/download/install.sh | sh -s -- --no-app
+curl -fsSL https://app.humanik.io/install.sh | sh -s -- --no-app
 ```
 
 </Tab>
 <Tab value="Windows">
 
 ```powershell
-$env:HUMANIKD_NO_APP = '1'; irm https://github.com/humanikio/humanikd-dist/releases/latest/download/install.ps1 | iex
+$env:HUMANIKD_NO_APP = '1'; irm https://app.humanik.io/install.ps1 | iex
 ```
 
 </Tab>

@@ -130,7 +130,10 @@ message of their own, kept for you, named for example "Front desk with Bookkeepe
   is passed on, and the employee is told to come back to you. Your next request starts the count
   again. An employee can ask other employees up to 20 times an hour for you.
 - **An employee running two pieces of work at once cannot use it**, for the same reason as with
-  your Nova.
+  your Nova. Work counts as running until it ends. On an employee that runs Claude Code on your
+  own computer, a command it started and left running, such as a local web server, keeps that
+  work open. When the employee says it could not ask, wait until its other work has finished, or
+  ask the other employee yourself.
 
 ## What the employee knows
 
@@ -142,7 +145,10 @@ message of their own, kept for you, named for example "Front desk with Bookkeepe
 - **Another employee's request is yours too.** The employee knows another employee is asking, and
   that you can read the conversation but not write in it.
 - **Each conversation is separate.** The employee remembers what was said in that conversation,
-  not what was said in yours or in another agent's.
+  not what was said in yours or in another agent's. One exception for now: an employee that runs
+  Claude Code on your own computer keeps one Claude Code session for all its conversations, so it
+  can see what was said in its other conversations, including Nova's and other people's. Keep this
+  in mind before you share such an employee.
 
 ## When an employee cannot answer in HumaChat yet
 

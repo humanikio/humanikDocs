@@ -280,7 +280,9 @@ granted at the workspace above it to cover every office in it.
 | `groupchat:read:all` | Read any conversation in the workspace, including ones you are not in. Membership is checked first; this is what lets an administrator through when it fails, and every access it grants is logged. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `groupchat:read` (4)">
+<Accordion title="Endpoints that need `groupchat:read` (6)">
+- [Download files as a zip](/docs/api-reference/humachat/messages/downloadAttachmentsZip)
+- [Read a file as text](/docs/api-reference/humachat/messages/getAttachmentText)
 - [Get a conversation](/docs/api-reference/humachat/conversations/getConversation)
 - [List messages](/docs/api-reference/humachat/messages/listMessages)
 - [List chats](/docs/api-reference/humachat/chats/listThreads)
@@ -503,7 +505,7 @@ granted at the workspace above it to cover every office in it.
 | `datasource:manage` | Create and change data namespaces, sources and subscriptions. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `datasource:read` (14)">
+<Accordion title="Endpoints that need `datasource:read` (15)">
 - [Allocate a namespace](/docs/api-reference/offices/allocations/allocateOfficeNamespace)
 - [Post a tile](/docs/api-reference/bulletin/tiles/createBulletinTile)
 - [Duplicate an office](/docs/api-reference/offices/offices/duplicateOffice)
@@ -517,6 +519,7 @@ granted at the workspace above it to cover every office in it.
 - [List a file's versions](/docs/api-reference/buckets/editing/listObjectVersions)
 - [Resolve a path](/docs/api-reference/buckets/paths/resolveObject)
 - [Search files](/docs/api-reference/buckets/search/searchObjects)
+- [Send a message](/docs/api-reference/humachat/messages/sendMessage)
 - [View a text file](/docs/api-reference/buckets/editing/viewTextObject)
 </Accordion>
 <Accordion title="Endpoints that need `datasource:manage` (16)">
@@ -866,6 +869,14 @@ granted at the workspace above it to cover every office in it.
 </Accordion>
 </Accordions>
 
+## Signing
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `signing:read` | See signing templates and requests, who has signed, the activity record, and download finished documents. | `workspace` |
+| `signing:send` | Send an existing template to people for signing, send a reminder again, and cancel a request. | `workspace` |
+| `signing:manage` | Create, change and archive signing templates, and delete requests. | `workspace` |
+
 ## Device
 
 | Action | Allows | Usually written at |
@@ -902,6 +913,9 @@ Usually that means they gate a console-only surface. See
 - `surface:read`
 - `surface:edit`
 - `surface:manage`
+- `signing:read`
+- `signing:send`
+- `signing:manage`
 - `device:use`
 
 ## Where to go next
