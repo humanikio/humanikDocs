@@ -1,0 +1,127 @@
+---
+title: Security and the audit record
+description: How HumaDocs keeps documents private, records who signed what, and makes any later change visible.
+---
+
+{/* DRAFT, p_36 (2026-11-11). "Legal standing" below is deliberately factual and makes no
+compliance claim (ESIGN, UETA, eIDAS). Tyler to confirm, with legal advice, before publishing. */}
+
+A signed document is only useful if three things hold: nobody but the right people could see
+or sign it, there is a record of who signed and when, and nobody can change it afterwards
+without that showing. This page explains how HumaDocs does each.
+
+<SigningLifecycle />
+
+## Who can open a document
+
+**People in your workspace** reach templates and documents only through
+[permissions](/docs/signing#who-can-do-what). Every request is checked against the
+workspace the document belongs to.
+
+**Signers** reach a document only through their own link. A link is a long random value,
+192 bits, so it cannot be guessed. It opens one document, for one person, and shows only that
+person's fields.
+
+- HumanikOS stores a SHA-256 fingerprint of each link to look it up. A fingerprint cannot be
+  turned back into the link.
+- The current link is also kept encrypted, so a member with `signing:send` can copy it from
+  the document page without breaking it.
+- Making a new link (a reminder, **Resend**, **New link**) stops the previous one at once.
+- A link stops working when its person finishes or declines, and when the document is
+  cancelled or expires.
+- In a signing order, a link opens only when it is that person's turn.
+- The signing pages limit how often each address and each link can be used.
+
+The signing pages are not indexed by search engines, and they do not send the link to any
+other site the page loads from.
+
+## Encryption
+
+Everything a signer enters is encrypted the moment it is saved:
+
+| Encrypted | When |
+| --- | --- |
+| Every value a signer types or ticks | On each save |
+| Every signature and initials image | When it is adopted or placed |
+| Values the sender filled in before sending | When the draft is saved |
+| Each person's current link | When the link is made |
+| The finished document | When it is made |
+
+Encryption uses AES-256-GCM with a key kept apart from every other HumanikOS secret. Each
+encrypted value is bound to the document and the person it belongs to: copied anywhere else,
+it cannot be read, so one person's signature can never appear as someone else's. Anything
+that fails this check is refused, never shown and never drawn onto a document.
+
+The PDF you upload, and each document's copy of it, are kept in private storage. They are
+not encrypted with the signing key, because they hold your own content and no signer's data.
+
+## The audit pages
+
+Every finished document ends with audit pages, added after the last page of your PDF. They
+record:
+
+- the document name and its ID, the workspace, when it was created and when everyone signed
+- the original file: its name, page count and SHA-256 fingerprint
+- for each signer: name, email address and role, when they signed (in UTC and in their own
+  time zone), the internet address and browser they signed from, when they agreed to sign
+  electronically, and the exact words they agreed to
+- every event, in order: sent, opened, agreed, signed, reminded, declined, and how each link
+  was delivered
+
+The same record is on the document page in HumaDocs and through the
+[API](/docs/api-reference/signing/activity/listSigningEvents). Entries are added as things
+happen and are not edited afterwards.
+
+The finished document's own fingerprint cannot be printed inside it, because printing it
+would change it. It is shown on the document page and in the email each signer receives.
+
+## The digital seal
+
+The finished document carries a digital signature from HumanikOS, the kind a PDF reader
+shows in its signatures panel. We call it the seal.
+
+<SealCheck />
+
+**What it proves.** The file has not changed since HumanikOS made it. Change one byte, and
+the reader reports that the document was altered. Nobody can make a new seal for a changed
+file, because only HumanikOS holds the private key.
+
+**Checking it needs nothing from us.** The public certificate travels inside the PDF, so a
+reader checks the seal offline. See [Checking a finished document](/docs/signing/verify).
+
+**What a reader says about the signer.** Adobe Reader reports whether the document changed.
+It may also say the signer's identity is unknown, because our certificate is not on Adobe's
+list of trusted certificates. That message is about who issued the certificate, not about
+whether the document is intact.
+
+**The time in the seal** comes from the HumanikOS server. No outside timestamp service is
+used.
+
+## SHA-256 fingerprints
+
+A SHA-256 fingerprint is a 64 character value worked out from every byte of a file. The same
+file always gives the same fingerprint, and changing even one byte gives a completely
+different one. It cannot be turned back into the file.
+
+HumaDocs records the fingerprint of the original PDF and of the finished document. The
+finished document is checked against its fingerprint every time it is downloaded, and anyone
+can check a copy against it on the verify page.
+
+## Copies and deletion
+
+Signers get the finished document through a download link that works for 30 days, never as
+an email attachment, so the signed file does not sit unencrypted in every mailbox along the
+way. Members with `signing:read` can download it from the document page at any time.
+
+Deleting a document removes its files, its values, its signatures and its activity. A copy
+of a finished document can still be checked on the verify page afterwards, which shows that
+the sender has since deleted it.
+
+## Legal standing
+
+HumaDocs records what is commonly used to show that an electronic signature is valid: that
+the signer agreed to sign electronically, the exact words they agreed to, that they acted to
+sign each field, who they were sent to, when and from where they signed, and a seal that
+shows the document has not changed since. Whether a signature is enforceable depends on
+where you are and on the kind of document. Some documents must still be signed on paper.
+Ask your own legal adviser if you are not sure.

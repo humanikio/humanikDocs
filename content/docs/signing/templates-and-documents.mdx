@@ -1,0 +1,108 @@
+---
+title: Templates and documents
+description: A template is a PDF prepared once. A document is one copy of it, sent to real people.
+---
+
+{/* DRAFT, p_36 (2026-11-11). */}
+
+HumaDocs keeps two things apart:
+
+| | Template | Document |
+| --- | --- | --- |
+| What it is | A PDF, the roles who sign it, and the fields each role fills in | One copy of a template, with real people in each role |
+| Used for | Preparing a PDF once and sending it many times | One signing, from draft to finished |
+| Changes reach | New documents only | This document only |
+
+Sending copies the template's PDF, roles and fields into the document. Changing the template
+afterwards never changes a document that was already made from it.
+
+## Templates
+
+<Steps>
+
+<Step>
+**Upload a PDF.** Open **HumaDocs**, go to **Templates** and select **Create template**. The
+PDF can be up to 25 MB and 200 pages. A password protected PDF cannot be used: remove the
+password and upload it again.
+</Step>
+
+<Step>
+**Name the roles.** A role is a part someone plays, such as "Client" or "Manager", not a
+person yet. A template has between 1 and 10 roles.
+</Step>
+
+<Step>
+**Place the fields.** Drag fields onto the pages and give each one to a role. Select several
+fields to move, copy or delete them together.
+</Step>
+
+<Step>
+**Save.** The editor shows whether your changes are saved, and asks before you leave with
+changes that are not.
+</Step>
+
+</Steps>
+
+The PDF of a template never changes. To use a different PDF, make a new template. Archiving
+a template hides it from the list; documents already made from it are not affected.
+
+### Fields
+
+| Field | What the signer does |
+| --- | --- |
+| Signature | Draws, types or uploads a signature |
+| Initials | Draws, types or uploads initials |
+| Date signed | Nothing. The date is filled in when they finish, in their own time zone |
+| Text | Types a short answer |
+| Name | Types their name |
+| Email | Types an email address |
+| Checkbox | Ticks it, or leaves it empty |
+
+Every field except the date signed can be **required** or **optional**. A person cannot
+finish until their required fields are filled in.
+
+## Documents
+
+Select **Use** beside a template, or **New document** and choose a template. HumaDocs makes a
+draft document and opens it in the document editor. In the draft you can:
+
+- **Choose the people.** One person per role: pick a CRM contact, or type a name, email
+  address and mobile number. You can replace, remove or combine people before sending.
+- **Change the fields.** Add, move or remove fields for this document only. The template
+  stays as it was.
+- **Fill in values yourself.** Type a value into a field before sending, for example a price
+  or a start date. The signer sees it filled in and cannot change it, unless you tick
+  **Signer can change it**.
+- **Set the signing order.** See below.
+
+A draft saves even when it is incomplete. Every check runs when you send it: each role needs
+a person and at least one field, and every required value you filled in must be valid.
+
+**Save as template** makes a new template from the document's PDF, roles and fields. It never
+changes the template the document came from. **Duplicate** makes a new draft from a
+document, without its people, values or sign-by date.
+
+## Signing order
+
+Each role has an order number.
+
+- **Same number:** those people sign at the same time.
+- **Higher number:** those people are invited only after everyone before them has finished.
+
+If every role has the same number, everyone is invited at once. A person who opens their
+link before their turn sees that someone else signs first.
+
+## Statuses
+
+| Status | Means |
+| --- | --- |
+| Draft | Not sent. You can still change everything |
+| Out for signing | Sent. Waiting for one or more people |
+| Completing | Everyone has signed. The finished document is being made |
+| Completed | The finished document is ready |
+| Declined | Someone declined. Nobody else can sign it |
+| Cancelled | You stopped it. Every link stopped working |
+| Expired | The sign-by date passed before everyone signed |
+
+A document cannot be cancelled once everyone has signed. A document that is out for signing
+cannot be deleted; cancel it first.

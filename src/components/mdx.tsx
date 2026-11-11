@@ -17,6 +17,7 @@ import {
 } from '@/components/device-diagrams';
 import { EmployeeShapes, EmployeeStates, WhoIsWho } from '@/components/huma-figures';
 import { Platforms, TwoPrograms } from '@/components/install-figures';
+import { SealCheck, SigningLifecycle } from '@/components/signing-figures';
 import type { MDXComponents } from 'mdx/types';
 
 // Components available in every MDX file without an import. Anything used in
@@ -49,6 +50,8 @@ export function getMDXComponents(components?: MDXComponents) {
     EmployeeStates,
     Platforms,
     TwoPrograms,
+    SigningLifecycle,
+    SealCheck,
     ...components,
   } satisfies MDXComponents;
 }

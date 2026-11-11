@@ -1,0 +1,65 @@
+---
+title: Checking a finished document
+description: Confirm that a copy is exactly the file HumanikOS made, on the verify page or in any PDF reader.
+---
+
+{/* DRAFT, p_36 (2026-11-11). The Adobe Reader messages below are Adobe's standard wording and
+have not yet been checked against a real HumaDocs file. Check before publishing. */}
+
+Anyone who has a copy of a finished document can check it. There are two ways, and they
+answer slightly different questions.
+
+| | The verify page | The seal, in a PDF reader |
+| --- | --- | --- |
+| Answers | Did HumanikOS make this exact file? | Has this file changed since it was sealed? |
+| Needs | A browser | Any PDF reader that shows signatures |
+| Contacts HumanikOS | Yes, with the fingerprint only | No |
+
+## On the verify page
+
+<Steps>
+
+<Step>
+Open the verify page: `/sign/verify` in the HumanikOS app. No account is needed. A finished
+document page in HumaDocs links to it.
+</Step>
+
+<Step>
+Choose the PDF. The file is **not uploaded**. Your browser works out its SHA-256 fingerprint
+and sends only that.
+</Step>
+
+<Step>
+Read the answer. A file HumanikOS made shows its document name, who sent it, when it was
+finished, and whether it carries a seal. It never shows the signers' details.
+</Step>
+
+</Steps>
+
+A file that was changed in any way, even by one byte, is not recognised. A file whose
+document the sender has since deleted is still recognised, and the answer says it was
+deleted.
+
+The same check is available without the page:
+[Check a finished document](/docs/api-reference/signing/finished-documents/verifySignedDocument).
+
+```bash
+curl "$HOS_API/public/signing/verify/$(shasum -a 256 signed.pdf | cut -d' ' -f1)"
+```
+
+## In Adobe Reader, or another PDF reader
+
+Open the PDF and look at its signatures panel (in Adobe Reader, **Signature Panel**, or the
+banner at the top of the document).
+
+- **"Document has not been modified since this signature was applied"**: the file is exactly
+  what HumanikOS sealed.
+- **"Document has been altered or corrupted"**: something changed after sealing. Do not rely
+  on this copy.
+- **"The signer's identity is unknown"**: expected. The HumanikOS certificate is not on
+  Adobe's list of trusted certificates. This is about who issued the certificate, not about
+  whether the document changed.
+
+This check happens on your own computer. See
+[the digital seal](/docs/signing/security-and-audit#the-digital-seal) for how it works.
+

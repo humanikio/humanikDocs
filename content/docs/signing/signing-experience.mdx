@@ -1,0 +1,93 @@
+---
+title: What signers see
+description: The guided page a signer fills in, on a computer or a phone. No account needed.
+---
+
+{/* DRAFT, p_36 (2026-11-11). The consent wording is not quoted until it is approved. */}
+
+A signer opens their link in any browser. They do not need an account and they do not
+install anything.
+
+## 1. Read, then agree
+
+The page shows who sent the document, its name, any message from the sender, and the
+sign-by date. The document itself is shown below, so the signer can read it before
+anything else.
+
+Before they can fill anything in, the signer agrees to sign electronically. The page says
+they can ask the sender for a paper copy instead. The time they agreed, and the exact words
+they were shown, are recorded and printed on the audit pages.
+
+## 2. Fill in, with a guide
+
+After they agree, a bar at the top shows how many required fields are done, for example
+**2 of 5 required fields done**, and one button that leads the way:
+
+| The button says | It does |
+| --- | --- |
+| **Start** | Goes to the first required field |
+| **Next** | Goes to the next required field that is still empty |
+| **Finish** | Shown when every required field is filled. Finishes signing |
+
+The guide visits required fields only, in reading order. Optional fields are filled by
+selecting them on the page, or from the list of fields beside the document. Each jump
+scrolls the field to the middle of the screen, and a text field is ready to type in.
+Pressing Enter in a text field moves to the next one.
+
+On a computer, an arrow beside the document points at the current field and does the same as
+the button. On a phone, the button sits in a bar at the bottom of the screen, where the thumb
+is.
+
+How fields look:
+
+| Field | Looks like |
+| --- | --- |
+| Required, still empty | Shaded, in the HumanikOS purple |
+| Optional, still empty | A dashed outline |
+| The one being filled | A soft pulsing ring, with its name above it |
+| Filled | A green check |
+| Filled in by the sender | Shown with its value. It cannot be changed unless the sender allowed it |
+
+Signers see only their own fields. They see the names of other people signing and whether
+each has signed, never their email addresses. Answers are saved as they go, so a signer can
+close the page and come back to the same link later.
+
+## 3. Sign
+
+Selecting a signature field opens a pad with three ways to sign:
+
+- **Draw**, with a mouse, a trackpad or a finger
+- **Type** the name, drawn in a handwriting style
+- **Upload** a picture of a signature
+
+The first signature is adopted. Every other signature field then signs with one select, and
+the signer can still change any of them. Initials work the same way, separately from the
+signature. Each field is something the signer chose to sign: nothing is filled in on their
+behalf.
+
+## 4. Finish
+
+**Finish** can always be selected. If a required field is still empty, every empty one is
+marked in red, the page scrolls to the first of them, and a message says how many are left.
+
+When nothing is missing, HumanikOS checks every required field again on the server, fills in
+the date signed in the signer's own time zone, and records the time, the address and the
+browser they signed from. The link then stops working.
+
+When the last person finishes, everyone gets an email with a link to download the finished
+document. That link works for 30 days. The document is never sent as an attachment.
+
+## Declining
+
+A signer can **Decline to sign**, with a reason if they want to give one. Declining stops
+the whole document: nobody else can sign it, every link stops working, and the sender is
+told by email with the reason.
+
+## When a link does not open
+
+| The page says | Because |
+| --- | --- |
+| Not your turn yet | In a signing order, someone signs first. The signer is sent their link when it is their turn |
+| This link no longer works | A newer link was made for them, for example by a reminder. They should use the newest message |
+| You have already signed | They finished. The finished document arrives by email when everyone has signed |
+| This request was cancelled, has expired, or was stopped | The sender cancelled it, the sign-by date passed, or someone declined |

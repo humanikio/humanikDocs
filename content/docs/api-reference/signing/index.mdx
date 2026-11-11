@@ -1,0 +1,86 @@
+---
+title: HumaDocs
+description: Upload templates, send documents for signature, follow who has signed, and download the sealed result.
+---
+
+{/* DRAFT, p_36 (2026-11-11). For Tyler's review before publishing. */}
+
+These endpoints send PDFs for signature and track them to the finished, sealed document.
+The signer's own page has no API here: a signer only ever uses the private link they were
+sent.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [HumaDocs](/docs/signing) covers templates, documents, signing order and
+  what signers see. [Security and the audit record](/docs/signing/security-and-audit) covers
+  encryption, links, the audit pages and the seal. This page describes the API surface.
+</Callout>
+
+This reference tells you which permission an endpoint needs. It does not explain how roles,
+policies, and assignments fit together. That model is in
+[Access control](/docs/access-control).
+
+## Sending a document
+
+<Steps>
+
+<Step>
+**Find the template.**
+[List templates](/docs/api-reference/signing/templates/listSigningTemplates) gives you a
+`templateId` and the `roleId` of each role. To make one,
+[upload a PDF](/docs/api-reference/signing/templates/createSigningTemplate), then
+[add roles and fields](/docs/api-reference/signing/templates/updateSigningTemplate).
+</Step>
+
+<Step>
+**Send it.**
+[Send a template](/docs/api-reference/signing/documents/createSigningRequest) with one
+person for each `roleId`. Each person is invited by email, text message, or not at all,
+depending on `delivery`.
+</Step>
+
+<Step>
+**Follow it.**
+[Get a document](/docs/api-reference/signing/documents/getSigningRequest) shows each
+person's status, and
+[List a document's activity](/docs/api-reference/signing/activity/listSigningEvents) shows
+everything that happened.
+</Step>
+
+<Step>
+**Download the result.**
+When `status` is `completed`,
+[download the finished PDF](/docs/api-reference/signing/finished-documents/downloadSigningResult).
+</Step>
+
+</Steps>
+
+## Signing links are secrets
+
+Anyone who has a person's signing link can sign as that person. Three responses carry links:
+
+| Endpoint | Returns |
+| --- | --- |
+| [Send a template](/docs/api-reference/signing/documents/createSigningRequest) and [Send a draft](/docs/api-reference/signing/documents/sendSigningRequest) | The link of each person invited by that send, in `invites[].url` |
+| [Get each person's current signing link](/docs/api-reference/signing/signers/listSignerLinks) | The link each person can use now. Reading it changes nothing |
+| [Make a new signing link](/docs/api-reference/signing/signers/issueSignerLink) | A new link for one person. Their previous link stops working |
+
+Do not log these responses, and send each link only to its person.
+
+## Two things that surprise people
+
+**A document is a copy.** Sending copies the template's PDF, roles and fields into the
+document. Changing the template afterwards never changes it. To change one document's fields,
+change the draft with
+[Change a draft](/docs/api-reference/signing/documents/updateSigningRequestDraft).
+
+**Errors are sentences.** `error` is a plain sentence meant for a person, such as
+`Add a person for "Client".`, and is not a stable code. Sending a draft returns every
+problem at once.
+
+## Checking a finished document
+
+[Check a finished document](/docs/api-reference/signing/finished-documents/verifySignedDocument)
+needs no key. Send the file's SHA-256 fingerprint and it says whether HumanikOS made that
+exact file.

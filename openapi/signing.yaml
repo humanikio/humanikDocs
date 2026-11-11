@@ -1,0 +1,1418 @@
+# DRAFT (p_36, 2026-11-11), for Tyler's review. Wired into src/lib/openapi.ts so the pages render
+# locally. Two things must be true before it is published:
+#   1. hos-api passes `delivery` through on create and on PUT (the controller drops it today, so
+#      every document goes by email over HTTP). The spec below documents the field as intended.
+#   2. The reminder and expiry sweep is registered in production. Until then nothing reminds or
+#      expires on its own, and the `remindEveryDays` and `expiresAt` descriptions overstate it.
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API, HumaDocs
+  version: v1
+  summary: Send PDFs for signature, follow who has signed, and download the sealed result.
+  description: |
+    HumaDocs turns a PDF into something people can sign online. A **template** is a
+    PDF plus the roles who sign it and the fields each role fills in. A **document**
+    (a signing request in the API) is a copy of a template sent to real people. Each
+    person signs on their own private link, with no account. When the last person
+    signs, the finished PDF is stamped, given audit pages and sealed.
+
+    Two things are worth knowing before you call anything.
+
+    **A document never changes when its template changes.** Sending copies the
+    template's PDF, roles and fields into the document. Later template edits do not
+    reach documents already made.
+
+    **A signing link is a secret.** Anyone holding a person's link can sign as that
+    person. The endpoints that return links say so, and they are the only ones that
+    do.
+
+    The guide is [HumaDocs](/docs/signing). Every fact in this document is resolved
+    from `hos-api` source. Endpoints whose shape has not been verified are absent
+    rather than guessed at.
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - ServiceAccountKey: []
+
+tags:
+  - name: Templates
+    description: A PDF, the roles who sign it, and the fields each role fills in.
+  - name: Documents
+    description: Copies of a template sent to real people, from draft to finished.
+  - name: Signers
+    description: One person on a document, their link, and sending it again.
+  - name: Activity
+    description: The record of everything that happened to a document.
+  - name: Finished documents
+    description: Downloading the sealed result, and checking a file is one we made.
+
+components:
+  securitySchemes:
+    ServiceAccountKey:
+      type: http
+      scheme: bearer
+      description: |
+        A service account API key, sent whole as a bearer token:
+        `hsk_<40 hex>.hss_<64 hex>`.
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: query
+      required: true
+      description: |
+        The workspace the template or document belongs to. Send it in the query
+        string on every call, including the PDF upload. IDs come from
+        [List workspaces](/docs/api-reference/workspaces/workspaces/listWorkspaces).
+      schema:
+        type: string
+        examples: [ws_a1b2c3]
+    SigningTemplateId:
+      name: signingTemplateId
+      in: path
+      required: true
+      description: |
+        The template to act on. IDs come from
+        [List templates](/docs/api-reference/signing/templates/listSigningTemplates).
+      schema:
+        type: string
+        examples: [RVeFlYdDGgoESUXespsR]
+    SigningRequestId:
+      name: signingRequestId
+      in: path
+      required: true
+      description: |
+        The document to act on. IDs come from
+        [List documents](/docs/api-reference/signing/documents/listSigningRequests).
+      schema:
+        type: string
+        examples: [sZG0nWcpWKBF7zT8CqcN]
+    SignerId:
+      name: signerId
+      in: path
+      required: true
+      description: |
+        One person on the document. IDs are in the `signers` array returned by
+        [Get a document](/docs/api-reference/signing/documents/getSigningRequest).
+      schema:
+        type: string
+        examples: [Q8m2vLx0TfR1aB3cD4eF]
+
+  responses:
+    BadRequest:
+      description: |
+        A field is missing or not valid. `error` is a plain sentence naming what to
+        fix, and is safe to show to a person.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: The key is missing, unknown, inactive, or expired.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: The caller does not hold the permission at this workspace or resource.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: No such template or document in this workspace.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: |
+        The document is in a state that does not allow this. For example, it has
+        already been sent, it is still out for signing, or everyone has signed.
+        `error` says which.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: Server side failure. Safe to retry with backoff.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, const: false }
+        error: { type: string }
+      required: [success, error]
+
+    Role:
+      type: object
+      description: A part someone plays in signing, such as "Client". Not a person yet.
+      properties:
+        roleId:
+          type: string
+          description: Chosen by you, unique within the template. Fields point at it.
+          examples: [client]
+        label:
+          type: string
+          maxLength: 80
+          examples: [Client]
+        order:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: |
+            Signing order. Roles with the same number sign at the same time. A
+            document whose roles use more than one number is sent in order.
+      required: [roleId, label, order]
+
+    Field:
+      type: object
+      description: |
+        One box on one page. Position and size are fractions (0 to 1) of the page as
+        it is displayed, measured from the top left, so the same box fits any screen
+        and the finished PDF.
+      properties:
+        fieldId:
+          type: string
+          description: Chosen by you, unique within the template.
+          examples: [client_sig]
+        roleId:
+          type: string
+          description: The `roleId` of the role who fills this box.
+          examples: [client]
+        type:
+          type: string
+          enum: [signature, initials, signedDate, text, name, email, checkbox]
+          description: |
+            `signedDate` is filled in when the person finishes, in their own time
+            zone. Nobody types in it.
+        label:
+          type: string
+          maxLength: 80
+        required: { type: boolean }
+        page:
+          type: integer
+          minimum: 0
+          description: 0-based page number.
+        x: { type: number, minimum: 0, maximum: 1 }
+        y: { type: number, minimum: 0, maximum: 1 }
+        w: { type: number, minimum: 0, maximum: 1 }
+        h: { type: number, minimum: 0, maximum: 1 }
+      required: [fieldId, roleId, type, required, page, x, y, w, h]
+
+    TemplatePdf:
+      type: object
+      properties:
+        fileName: { type: string }
+        pageCount: { type: integer }
+        pageSizes:
+          type: array
+          description: Each page's displayed size in PDF points, after rotation.
+          items:
+            type: object
+            properties:
+              w: { type: number }
+              h: { type: number }
+        sha256:
+          type: string
+          description: Hex SHA-256 of the uploaded file.
+        bytes: { type: integer }
+
+    Template:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        pdf: { $ref: '#/components/schemas/TemplatePdf' }
+        roles:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/Role' }
+        fields:
+          type: array
+          maxItems: 500
+          items: { $ref: '#/components/schemas/Field' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, 'null'], format: date-time }
+
+    SignerInput:
+      type: object
+      description: |
+        One person for one role. Give either a typed name and email, or a CRM
+        contact.
+
+        | | Typed person | CRM contact |
+        | --- | --- | --- |
+        | `name` | Required, up to 120 characters | Ignored. Taken from the contact |
+        | `email` | Required | Optional. Picks one of the contact's addresses on file |
+        | `contactId` | Not sent | Required |
+        | `phone` | Optional mobile number, for text message delivery | Ignored. The contact's number on file is used |
+
+        Picking a contact also needs `contact:read` @ `workspace/{workspaceId}`. A
+        contact who has opted out, is archived, or has no usable address is refused.
+      properties:
+        roleId:
+          type: string
+          description: The `roleId` of a role in the template.
+        name: { type: string, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        contactId:
+          type: string
+          description: |
+            A CRM contact in the same workspace. IDs come from
+            [List contacts](/docs/api-reference/crm/contacts/listContacts).
+        phone:
+          type: string
+          description: A mobile number. Stored in international form when it reads as one.
+      required: [roleId]
+
+    Signer:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The `signerId` used by the signer endpoints.
+        roleId: { type: string }
+        name: { type: string }
+        email: { type: string }
+        contactId: { type: [string, 'null'] }
+        phone: { type: [string, 'null'] }
+        order: { type: integer }
+        status:
+          type: string
+          enum: [pending, sent, opened, completed, declined]
+        consentAt: { type: [string, 'null'], format: date-time }
+        openedAt: { type: [string, 'null'], format: date-time }
+        lastEmailAt: { type: [string, 'null'], format: date-time }
+        lastSmsAt: { type: [string, 'null'], format: date-time }
+        lastLinkAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        declinedAt: { type: [string, 'null'], format: date-time }
+        declineReason: { type: [string, 'null'] }
+        ip:
+          type: [string, 'null']
+          description: The address the person signed from.
+        userAgent: { type: [string, 'null'] }
+        timezone:
+          type: [string, 'null']
+          description: The person's time zone when they finished. The signed date uses it.
+        remindersSent: { type: integer }
+        nextReminderAt: { type: [string, 'null'], format: date-time }
+
+    Document:
+      type: object
+      description: A signing request. The console calls it a document.
+      properties:
+        id: { type: string }
+        templateId: { type: string }
+        templateName: { type: string }
+        name: { type: string }
+        message: { type: string }
+        status:
+          type: string
+          enum: [draft, sent, completing, completed, declined, voided, expired, finalizeFailed]
+          description: |
+            `completing` means everyone has signed and the finished PDF is being
+            made. `voided` is a cancelled document. `finalizeFailed` means the
+            finished PDF could not be made; it is retried.
+        order:
+          type: string
+          enum: [parallel, sequential]
+        delivery:
+          type: string
+          enum: [email, sms, both, none]
+          description: How invitations and reminders reach people. `none` sends nothing.
+        snapshot:
+          type: object
+          description: The PDF details, roles and fields this document uses.
+          properties:
+            pdf: { $ref: '#/components/schemas/TemplatePdf' }
+            roles:
+              type: array
+              items: { $ref: '#/components/schemas/Role' }
+            fields:
+              type: array
+              items: { $ref: '#/components/schemas/Field' }
+        signerSummary:
+          type: object
+          properties:
+            total: { type: integer }
+            completed: { type: integer }
+        prefills:
+          type: object
+          description: |
+            Values you filled in before sending, by `fieldId`. Returned by
+            [Get a document](/docs/api-reference/signing/documents/getSigningRequest)
+            only.
+          additionalProperties:
+            oneOf: [{ type: string }, { type: boolean }]
+        prefillEditable:
+          type: array
+          items: { type: string }
+          description: Prefilled `fieldId`s the signer may change. Every other prefilled field is shown read only.
+        expiresAt: { type: [string, 'null'], format: date-time }
+        remindEveryDays: { type: [integer, 'null'], enum: [2, 3, 7, null] }
+        createdAt: { type: string, format: date-time }
+        sentAt: { type: [string, 'null'], format: date-time }
+        allSignedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        declinedAt: { type: [string, 'null'], format: date-time }
+        voidedAt: { type: [string, 'null'], format: date-time }
+        expiredAt: { type: [string, 'null'], format: date-time }
+        result:
+          oneOf:
+            - type: 'null'
+            - type: object
+              description: The finished PDF. Present once `status` is `completed`.
+              properties:
+                sha256:
+                  type: string
+                  description: |
+                    Hex SHA-256 of the finished file, the exact bytes a person
+                    downloads. Use it with
+                    [Check a finished document](/docs/api-reference/signing/finished-documents/verifySignedDocument).
+                bytes: { type: integer }
+                pageCount:
+                  type: integer
+                  description: Pages in the finished file, audit pages included.
+                auditPageCount: { type: integer }
+                completedAt: { type: [string, 'null'], format: date-time }
+                sealed:
+                  type: boolean
+                  description: The file carries a digital seal.
+                certFingerprint:
+                  type: string
+                  description: SHA-256 of the certificate that made the seal.
+                missingGlyphs:
+                  type: boolean
+                  description: Some characters had no font and were drawn as "?". The stored values keep the real text.
+        finalizeError: { type: [string, 'null'] }
+
+    Invite:
+      type: object
+      description: What happened when one person was invited.
+      properties:
+        signerId: { type: string }
+        ok:
+          type: boolean
+          description: |
+            True when at least one message went out (or, with `delivery: none`, a
+            link was made). False leaves the person unsent; use
+            [Send a new link](/docs/api-reference/signing/signers/resendToSigner).
+        error: { type: string }
+        channels:
+          type: object
+          properties:
+            email:
+              type: object
+              properties:
+                ok: { type: boolean }
+                error: { type: string }
+            sms:
+              type: object
+              properties:
+                ok: { type: boolean }
+                error: { type: string }
+        url:
+          type: string
+          description: |
+            This person's signing link. **A secret**: anyone holding it can sign as
+            them. Present only in the response to a send.
+
+    Event:
+      type: object
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          description: |
+            What happened. Common values: `created`, `sent`, `email_sent`,
+            `sms_sent`, `link_issued`, `opened`, `consented`, `completed`,
+            `all_signed`, `declined`, `voided`, `resent`, `reminded`, `expired`,
+            `finalized`, `finalize_failed`, `result_downloaded`.
+        at: { type: string, format: date-time }
+        signerId: { type: string }
+        actorUid:
+          type: string
+          description: The member or service account that acted, when one did.
+        ip: { type: string }
+        userAgent: { type: string }
+        data:
+          type: object
+          description: Details for this event type, such as the channel used or a decline reason.
+
+paths:
+  # ── Templates ──────────────────────────────────────────────────────────────
+
+  /signing/templates:
+    get:
+      operationId: listSigningTemplates
+      summary: List templates
+      tags: [Templates]
+      description: |
+        Templates in the workspace, without archived ones unless you ask.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: includeArchived
+          in: query
+          description: Send `true` to include archived templates.
+          schema: { type: string, enum: ['true'] }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  templates:
+                    type: array
+                    items: { $ref: '#/components/schemas/Template' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createSigningTemplate
+      summary: Upload a PDF as a new template
+      tags: [Templates]
+      description: |
+        Makes a template from one PDF, with no roles or fields yet. Add them with
+        [Change a template](/docs/api-reference/signing/templates/updateSigningTemplate).
+
+        The PDF can be up to 25 MB and 200 pages. A password protected PDF is
+        refused. The PDF of a template never changes: to use a different file,
+        make a new template.
+
+        Send `workspaceId` in the query string. A `workspaceId` placed only in the
+        form fields is not read.
+
+        **Permission:** `signing:manage` @ `workspace/{workspaceId}`
+
+        #### Request
+
+        ```bash
+        curl -X POST "$HOS_API/signing/templates?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -F "file=@service-agreement.pdf" \
+          -F "name=Service agreement"
+        ```
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The PDF.
+                name: { type: string, maxLength: 120 }
+                description: { type: string, maxLength: 500 }
+              required: [file, name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  template: { $ref: '#/components/schemas/Template' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413':
+          description: The PDF is larger than 25 MB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/templates/{signingTemplateId}:
+    parameters:
+      - $ref: '#/components/parameters/SigningTemplateId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: getSigningTemplate
+      summary: Get a template
+      tags: [Templates]
+      description: |
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  template: { $ref: '#/components/schemas/Template' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateSigningTemplate
+      summary: Change a template
+      tags: [Templates]
+      description: |
+        Changes the name, description, roles or fields. Send only what changes;
+        `roles` and `fields` each replace the whole list.
+
+        A template has 1 to 10 roles and up to 500 fields. Every field must point
+        at a role in the template, sit on a page that exists, and fit inside the
+        page. Documents already made from this template do not change.
+
+        **Permission:** `signing:manage` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+                description: { type: string, maxLength: 500 }
+                roles:
+                  type: array
+                  items: { $ref: '#/components/schemas/Role' }
+                fields:
+                  type: array
+                  items: { $ref: '#/components/schemas/Field' }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  template: { $ref: '#/components/schemas/Template' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: archiveSigningTemplate
+      summary: Archive a template
+      tags: [Templates]
+      description: |
+        Hides the template from the list. It is not deleted, and documents already
+        made from it are not affected.
+
+        **Permission:** `signing:manage` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      responses:
+        '200':
+          description: Archived.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/templates/{signingTemplateId}/pdf:
+    get:
+      operationId: getSigningTemplatePdf
+      summary: Download a template's PDF
+      tags: [Templates]
+      description: |
+        The original PDF, as uploaded.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningTemplateId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The PDF bytes.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  # ── Documents ──────────────────────────────────────────────────────────────
+
+  /signing/requests:
+    get:
+      operationId: listSigningRequests
+      summary: List documents
+      tags: [Documents]
+      description: |
+        Documents in the workspace, newest first, at most 200. There is no paging yet.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: status
+          in: query
+          description: Only documents with this status.
+          schema:
+            type: string
+            enum: [draft, sent, completing, completed, declined, voided, expired, finalizeFailed]
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  requests:
+                    type: array
+                    items: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: createSigningRequest
+      summary: Send a template, or save it as a draft
+      tags: [Documents]
+      description: |
+        Makes a document from a template, with one person for each role, and sends
+        it. With `send: false` it is saved as a draft instead; a draft may leave
+        roles empty, and is sent later with
+        [Send a draft](/docs/api-reference/signing/documents/sendSigningRequest).
+
+        In signing order, only the first group is invited now. The next group is
+        invited when the group before them has finished.
+
+        The response carries each invited person's signing link in `invites`. **A
+        link is a secret**: anyone holding it can sign as that person.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}`, plus
+        `contact:read` @ `workspace/{workspaceId}` when any signer is a CRM contact.
+
+        ## Get the template ID first
+
+        ```bash
+        curl "$HOS_API/signing/templates?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        #### Request
+
+        ```bash
+        curl -X POST "$HOS_API/signing/requests?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "templateId": "RVeFlYdDGgoESUXespsR", "name": "Service agreement, Acme", "signers": [{ "roleId": "client", "name": "Ana Silva", "email": "ana@example.com" }] }'
+        ```
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                templateId:
+                  type: string
+                  description: |
+                    The template to send. IDs come from
+                    [List templates](/docs/api-reference/signing/templates/listSigningTemplates).
+                name:
+                  type: string
+                  maxLength: 120
+                  description: Defaults to the template's name.
+                message:
+                  type: string
+                  maxLength: 1000
+                  description: A note shown in the invitation and on the signing page.
+                signers:
+                  type: array
+                  description: One entry per role. Required unless `send` is false.
+                  items: { $ref: '#/components/schemas/SignerInput' }
+                expiresAt:
+                  type: string
+                  format: date-time
+                  description: Sign-by date. Optional, at most 365 days ahead.
+                remindEveryDays:
+                  description: |
+                    Days between reminders: 2, 3 or 7, or `null` for none. Omitted
+                    means every 3 days. At most three reminders per person, and
+                    never after the sign-by date.
+                  oneOf: [{ type: integer, enum: [2, 3, 7] }, { type: 'null' }]
+                delivery:
+                  type: string
+                  enum: [email, sms, both, none]
+                  description: |
+                    How people get their link. `email` is the default. `sms` and
+                    `both` need a workspace number that can send text messages and
+                    a mobile number for every person. `none` sends nothing; hand
+                    each person their link yourself.
+                send:
+                  type: boolean
+                  description: Send `false` to save a draft. Default `true`.
+              required: [templateId]
+      responses:
+        '201':
+          description: Created, and sent unless `send` was false.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  request: { $ref: '#/components/schemas/Document' }
+                  signers:
+                    type: array
+                    items: { $ref: '#/components/schemas/Signer' }
+                  invites:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invite' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/summary:
+    get:
+      operationId: getSigningSummary
+      summary: Count documents by stage
+      tags: [Documents]
+      description: |
+        Counts for the HumaDocs home page: drafts, documents waiting for others,
+        finished documents, and documents waiting for the caller. The last count
+        matches the caller's own email, so it is usually 0 for a service account.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  summary:
+                    type: object
+                    properties:
+                      drafts: { type: integer }
+                      waiting: { type: integer }
+                      finalized: { type: integer }
+                      actionsRequired: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/delivery-senders:
+    get:
+      operationId: getSigningDeliverySenders
+      summary: See how this workspace sends invitations
+      tags: [Documents]
+      description: |
+        The email address and phone number invitations would come from. With no
+        workspace address, email comes from the HumanikOS address. With no number
+        that can send text messages, `sms` is null and `smsMissingReason` says why.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  senders:
+                    type: object
+                    properties:
+                      email:
+                        type: [object, 'null']
+                        properties:
+                          address: { type: string }
+                          displayName: { type: [string, 'null'] }
+                      sms:
+                        type: [object, 'null']
+                        properties:
+                          phoneNumber: { type: string }
+                      smsMissingReason: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}:
+    parameters:
+      - $ref: '#/components/parameters/SigningRequestId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: getSigningRequest
+      summary: Get a document
+      tags: [Documents]
+      description: |
+        The document, everyone on it, and the values you filled in before sending.
+        Signer links are never part of this response.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  request: { $ref: '#/components/schemas/Document' }
+                  signers:
+                    type: array
+                    items: { $ref: '#/components/schemas/Signer' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    put:
+      operationId: updateSigningRequestDraft
+      summary: Change a draft
+      tags: [Documents]
+      description: |
+        Changes a document that has not been sent. A draft saves what you send even
+        when it is incomplete; every check runs when it is sent.
+
+        `roles` and `fields` change this document only, never its template, and
+        must be sent together. `prefills` are values you fill in for the signer, by
+        `fieldId`; the signer sees them filled and read only, unless the field is
+        in `prefillEditable`.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`,
+        plus `contact:read` @ `workspace/{workspaceId}` when any signer is a CRM contact.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+                message: { type: string, maxLength: 1000 }
+                signers:
+                  type: array
+                  items: { $ref: '#/components/schemas/SignerInput' }
+                expiresAt: { type: [string, 'null'], format: date-time }
+                remindEveryDays:
+                  oneOf: [{ type: integer, enum: [2, 3, 7] }, { type: 'null' }]
+                delivery:
+                  type: string
+                  enum: [email, sms, both, none]
+                roles:
+                  type: array
+                  items: { $ref: '#/components/schemas/Role' }
+                fields:
+                  type: array
+                  items: { $ref: '#/components/schemas/Field' }
+                order:
+                  type: string
+                  enum: [parallel, sequential]
+                prefills:
+                  type: object
+                  additionalProperties:
+                    oneOf: [{ type: string, maxLength: 500 }, { type: boolean }]
+                prefillEditable:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  request: { $ref: '#/components/schemas/Document' }
+                  signers:
+                    type: array
+                    items: { $ref: '#/components/schemas/Signer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      operationId: deleteSigningRequest
+      summary: Delete a document
+      tags: [Documents]
+      description: |
+        Removes the document, its files, the people on it and its activity record.
+        Refused while it is out for signing or while its finished PDF is being
+        made; cancel it first.
+
+        A finished document still verifies after it is deleted:
+        [Check a finished document](/docs/api-reference/signing/finished-documents/verifySignedDocument)
+        answers `found: true` with `deleted: true`.
+
+        **Permission:** `signing:manage` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/send:
+    post:
+      operationId: sendSigningRequest
+      summary: Send a draft
+      tags: [Documents]
+      description: |
+        Sends a draft. Every role needs a person and at least one field, the name
+        must be set, and the sign-by date must be more than an hour away. All
+        problems are returned in one sentence list.
+
+        CRM contacts are read again now, so a changed address is used and a contact
+        who opted out since the draft was saved is refused. The response carries
+        each invited person's link in `invites`; **a link is a secret**.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  request: { $ref: '#/components/schemas/Document' }
+                  signers:
+                    type: array
+                    items: { $ref: '#/components/schemas/Signer' }
+                  invites:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invite' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/void:
+    post:
+      operationId: cancelSigningRequest
+      summary: Cancel a document
+      tags: [Documents]
+      description: |
+        Stops a document that is out for signing, or a draft. Every link stops
+        working. Refused once everyone has signed.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+                  description: Kept in the activity record.
+      responses:
+        '200':
+          description: Cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/pdf:
+    get:
+      operationId: getSigningRequestPdf
+      summary: Download a document's PDF
+      tags: [Documents]
+      description: |
+        The document's own copy of the PDF, before signing. For the signed result use
+        [Download the finished PDF](/docs/api-reference/signing/finished-documents/downloadSigningResult).
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The PDF bytes.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/duplicate:
+    post:
+      operationId: duplicateSigningRequest
+      summary: Copy a document as a new draft
+      tags: [Documents]
+      description: |
+        A new draft named "(copy)", with this document's PDF, roles, fields, order,
+        message and reminder setting. It does not copy the people, the values you
+        filled in, or the sign-by date.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+        and `signing:send` @ `workspace/{workspaceId}`. Both are checked.
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  request: { $ref: '#/components/schemas/Document' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/save-as-template:
+    post:
+      operationId: saveSigningRequestAsTemplate
+      summary: Save a document as a new template
+      tags: [Documents]
+      description: |
+        A new template from this document's PDF, roles and fields. It never
+        changes an existing template.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+        and `signing:manage` @ `workspace/{workspaceId}`. Both are checked.
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+              required: [name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  template: { $ref: '#/components/schemas/Template' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  # ── Signers ────────────────────────────────────────────────────────────────
+
+  /signing/requests/{signingRequestId}/links:
+    get:
+      operationId: listSignerLinks
+      summary: Get each person's current signing link
+      tags: [Signers]
+      description: |
+        The link each person can use right now. Reading them changes nothing: the
+        link a person was sent keeps working.
+
+        A person is left out when the document is not out for signing, when they
+        have finished or declined, when it is not their turn yet, or when no
+        current link is held for them. For those, make one with
+        [Make a new signing link](/docs/api-reference/signing/signers/issueSignerLink).
+
+        **Each link is a secret.** Anyone holding it can sign as that person. Every
+        read is recorded.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  links:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        signerId: { type: string }
+                        url: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/signers/{signerId}/link:
+    post:
+      operationId: issueSignerLink
+      summary: Make a new signing link
+      tags: [Signers]
+      description: |
+        A new link for one person, returned to you. Nothing is sent. **The link
+        they had before stops working.**
+
+        Refused before the person's turn, after they finished, and when the
+        document is not out for signing.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/SignerId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  signerId: { type: string }
+                  url:
+                    type: string
+                    description: The new link. A secret.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/signers/{signerId}/resend:
+    post:
+      operationId: resendToSigner
+      summary: Send a new link
+      tags: [Signers]
+      description: |
+        Sends one person a new link by the document's delivery choice. **The link
+        they had before stops working.** Refused before their turn and after they
+        finished.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/SignerId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+        '502':
+          description: No message could be sent. The person keeps their status; try again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ── Activity ───────────────────────────────────────────────────────────────
+
+  /signing/requests/{signingRequestId}/events:
+    get:
+      operationId: listSigningEvents
+      summary: List a document's activity
+      tags: [Activity]
+      description: |
+        Everything that happened to the document, oldest first, up to 1000 entries: sent, opened,
+        agreed to sign electronically, signed, declined, reminded, finished. The
+        same record is printed on the audit pages of the finished PDF.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  # ── Finished documents ─────────────────────────────────────────────────────
+
+  /signing/requests/{signingRequestId}/download:
+    get:
+      operationId: downloadSigningResult
+      summary: Download the finished PDF
+      tags: [Finished documents]
+      description: |
+        The signed, sealed PDF with its audit pages. Before sending it, the file is
+        checked against the SHA-256 recorded when it was made, and the same value is
+        returned in the `X-Content-SHA256` header.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The finished PDF.
+          headers:
+            X-Content-SHA256:
+              description: Hex SHA-256 of the file.
+              schema: { type: string }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The finished document is not ready yet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /public/signing/verify/{sha256}:
+    get:
+      operationId: verifySignedDocument
+      summary: Check a finished document
+      tags: [Finished documents]
+      security: []
+      description: |
+        Answers one question: did HumanikOS make this exact file? No key is needed.
+
+        Hash the file yourself and send only the fingerprint. The file never leaves
+        your computer. Any change to the file, even one byte, gives a different
+        fingerprint, so a changed file answers `found: false`.
+
+        The answer names the document and the sender. It never contains signer
+        details or internal IDs. Rate limited per caller address.
+
+        #### Request
+
+        ```bash
+        curl "$HOS_API/public/signing/verify/$(shasum -a 256 signed.pdf | cut -d' ' -f1)"
+        ```
+      parameters:
+        - name: sha256
+          in: path
+          required: true
+          description: Lowercase hex SHA-256 of the file, 64 characters.
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{64}$'
+            examples: [3f7a9c2e5b1d4f60a8e7c9b2d1f0e3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0]
+      responses:
+        '200':
+          description: The answer. Not found is still a 200.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success: { type: boolean, const: true }
+                      found: { type: boolean, const: false }
+                  - type: object
+                    properties:
+                      success: { type: boolean, const: true }
+                      found: { type: boolean, const: true }
+                      documentName: { type: string }
+                      senderName: { type: string }
+                      completedAt: { type: [string, 'null'], format: date-time }
+                      sealed: { type: boolean }
+                      deleted:
+                        type: boolean
+                        description: The sender has since deleted the document. The file is still ours.
+        '400':
+          description: That is not a SHA-256 fingerprint.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: Too many checks from this address. `Retry-After` carries the wait in seconds.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }

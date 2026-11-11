@@ -359,7 +359,8 @@ granted at the workspace above it to cover every office in it.
 | `contact:manage` | Create, update, archive, import and delete contacts, and curate the tag registry. | `workspace` |
 
 <Accordions>
-<Accordion title="Endpoints that need `contact:read` (12)">
+<Accordion title="Endpoints that need `contact:read` (14)">
+- [Send a template, or save it as a draft](/docs/api-reference/signing/documents/createSigningRequest)
 - [Duplicate a workspace](/docs/api-reference/workspaces/workspaces/duplicateWorkspace)
 - [Find a contact by phone](/docs/api-reference/crm/contacts/findContactByPhone)
 - [Get a contact](/docs/api-reference/crm/contacts/getContact)
@@ -372,6 +373,7 @@ granted at the workspace above it to cover every office in it.
 - [List custom field definitions](/docs/api-reference/crm/custom-fields/listCustomFields)
 - [List the tag registry](/docs/api-reference/crm/tags/listTags)
 - [Mark a conversation read](/docs/api-reference/crm/contacts/markContactRead)
+- [Change a draft](/docs/api-reference/signing/documents/updateSigningRequestDraft)
 </Accordion>
 <Accordion title="Endpoints that need `contact:tag` (2)">
 - [Tag a contact](/docs/api-reference/crm/tags/addContactTag)
@@ -876,6 +878,48 @@ granted at the workspace above it to cover every office in it.
 - [Update a booking link](/docs/api-reference/calendars/booking-links/updateBookingLink)
 - [Update a calendar](/docs/api-reference/calendars/calendars/updateCalendar)
 - [Set display preferences](/docs/api-reference/calendars/preferences/updateCalendarPreferences)
+</Accordion>
+</Accordions>
+
+## Signing
+
+| Action | Allows | Usually written at |
+| --- | --- | --- |
+| `signing:read` | See signing templates and documents, who has signed, the activity record, and download finished documents. | `workspace` |
+| `signing:send` | Send a template to people for signing, change and send drafts, send a new link, see each person's current signing link, and cancel a document. | `workspace` |
+| `signing:manage` | Create, change and archive signing templates, save a document as a new template, and delete documents. | `workspace` |
+
+<Accordions>
+<Accordion title="Endpoints that need `signing:read` (11)">
+- [Download the finished PDF](/docs/api-reference/signing/finished-documents/downloadSigningResult)
+- [Copy a document as a new draft](/docs/api-reference/signing/documents/duplicateSigningRequest)
+- [Get a document](/docs/api-reference/signing/documents/getSigningRequest)
+- [Download a document's PDF](/docs/api-reference/signing/documents/getSigningRequestPdf)
+- [Count documents by stage](/docs/api-reference/signing/documents/getSigningSummary)
+- [Get a template](/docs/api-reference/signing/templates/getSigningTemplate)
+- [Download a template's PDF](/docs/api-reference/signing/templates/getSigningTemplatePdf)
+- [List a document's activity](/docs/api-reference/signing/activity/listSigningEvents)
+- [List documents](/docs/api-reference/signing/documents/listSigningRequests)
+- [List templates](/docs/api-reference/signing/templates/listSigningTemplates)
+- [Save a document as a new template](/docs/api-reference/signing/documents/saveSigningRequestAsTemplate)
+</Accordion>
+<Accordion title="Endpoints that need `signing:send` (9)">
+- [Cancel a document](/docs/api-reference/signing/documents/cancelSigningRequest)
+- [Send a template, or save it as a draft](/docs/api-reference/signing/documents/createSigningRequest)
+- [Copy a document as a new draft](/docs/api-reference/signing/documents/duplicateSigningRequest)
+- [See how this workspace sends invitations](/docs/api-reference/signing/documents/getSigningDeliverySenders)
+- [Make a new signing link](/docs/api-reference/signing/signers/issueSignerLink)
+- [Get each person's current signing link](/docs/api-reference/signing/signers/listSignerLinks)
+- [Send a new link](/docs/api-reference/signing/signers/resendToSigner)
+- [Send a draft](/docs/api-reference/signing/documents/sendSigningRequest)
+- [Change a draft](/docs/api-reference/signing/documents/updateSigningRequestDraft)
+</Accordion>
+<Accordion title="Endpoints that need `signing:manage` (5)">
+- [Archive a template](/docs/api-reference/signing/templates/archiveSigningTemplate)
+- [Upload a PDF as a new template](/docs/api-reference/signing/templates/createSigningTemplate)
+- [Delete a document](/docs/api-reference/signing/documents/deleteSigningRequest)
+- [Save a document as a new template](/docs/api-reference/signing/documents/saveSigningRequestAsTemplate)
+- [Change a template](/docs/api-reference/signing/templates/updateSigningTemplate)
 </Accordion>
 </Accordions>
 

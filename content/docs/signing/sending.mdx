@@ -1,0 +1,80 @@
+---
+title: Sending
+description: How people get their signing link, reminders, sign-by dates, and each person's link on the document page.
+---
+
+{/* DRAFT, p_36 (2026-11-11). Before publishing: confirm reminders and expiry run on their own
+in production, and that the delivery choice is applied when sending through the API. */}
+
+Select **Send** in the document editor. The send dialog shows the people again, so you can
+make a last change, and asks how they should get their link.
+
+## How people get their link
+
+| Choice | What happens |
+| --- | --- |
+| **Email** | Each person gets an email with their own link. This is the default |
+| **Text message** | Each person gets a text message with their own link |
+| **Email and text message** | Both. One that arrives is enough |
+| **Links only** | Nothing is sent. You hand each person their link yourself |
+
+**Email** comes from the workspace's own email address when it has one, and from the
+HumanikOS address when it does not.
+
+**Text messages** come from a phone number in the workspace that can send text messages.
+Every person needs a mobile number. The same checks apply as for any text message from the
+workspace: a contact who has asked not to be contacted, or a number that has replied STOP, is
+not sent to.
+
+The send dialog shows, for each person, whether the chosen way can reach them, and says why
+not when it cannot. If a message cannot be sent, that person stays unsent and you can try
+again from the document page.
+
+## Each person's link
+
+A signing link is a secret. Anyone who has it can sign as that person.
+
+- After sending, the dialog shows each person's link, with **Copy**.
+- On the document page, each person's row shows their current link, with **Copy**. Looking
+  at it does not change it, so the link they were sent keeps working.
+- **New link** makes a fresh link for one person and nothing is sent. The link they had
+  before stops working.
+- **Resend** sends a fresh link the same way the document was sent (with **Links only**,
+  nothing is sent). The link they had before stops working.
+
+A link stops working when the person finishes or declines, when the document is cancelled or
+expires, and when a newer link is made for that person.
+
+In a signing order, people who sign later have no link until it is their turn.
+
+## Sign-by date
+
+You can set a date after which the document can no longer be signed. It must be more than
+an hour ahead when you send, and at most a year ahead. When it passes, the document
+**expires** and every link stops working.
+
+## Reminders
+
+People who have not signed yet are reminded every 2, 3 or 7 days, or not at all. The
+default is every 3 days. Each person gets at most 3 reminders, none after the sign-by date,
+and none before it is their turn. With **Links only**, no reminders are sent.
+
+<Callout type="info">
+  **Each reminder has a new link, and the old link stops working.** A person who opens an
+  older message sees that the link no longer works. They should use the newest one.
+</Callout>
+
+## Signers from the CRM
+
+A person can be a [contact](/docs/crm) instead of a typed name. Their name, email address
+and mobile number come from the contact, and are read again when a draft is sent, so a
+change in the CRM is used. A contact who is archived, has asked not to be contacted, or has
+no usable address is refused.
+
+Choosing a contact needs `contact:read` in the workspace, as well as `signing:send`.
+
+## Sending from your own code
+
+The same send is available through the API:
+[Send a template, or save it as a draft](/docs/api-reference/signing/documents/createSigningRequest).
+Nova can also send a template for you after you approve it. See [HumaDocs](/docs/signing).

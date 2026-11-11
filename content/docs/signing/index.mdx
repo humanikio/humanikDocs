@@ -1,0 +1,80 @@
+---
+title: HumaDocs
+description: Send a PDF to people for signature. They sign on a private link, with no account, and everyone gets a sealed copy.
+---
+
+{/* DRAFT, p_36 (2026-11-11). For Tyler's review before publishing. Publish only after sending
+and signing are live and one real document has been signed end to end. The consent text is not
+quoted on any page until it is approved. */}
+
+HumaDocs turns a PDF into something people can sign online. You prepare the PDF once as a
+**template**, then send it as a **document** to the people who need to sign. Each person gets
+their own private link. They do not need an account.
+
+When the last person has signed, HumanikOS makes the finished document: every answer and
+signature drawn onto the PDF, audit pages added at the end, and a digital seal that shows if
+anyone changes the file later. Everyone receives a copy.
+
+<SigningLifecycle />
+
+## Where to start
+
+<Cards>
+  <Card title="Templates and documents" href="/docs/signing/templates-and-documents">
+    Roles, fields, values you fill in yourself, and signing order.
+  </Card>
+  <Card title="Sending" href="/docs/signing/sending">
+    Email, text message or links only, reminders, sign-by dates, and each person's link.
+  </Card>
+  <Card title="What signers see" href="/docs/signing/signing-experience">
+    The guided page a signer fills in, on a computer or a phone.
+  </Card>
+  <Card title="Security and the audit record" href="/docs/signing/security-and-audit">
+    Encryption, private links, the audit pages and the digital seal.
+  </Card>
+  <Card title="Checking a finished document" href="/docs/signing/verify">
+    Confirm a copy is exactly the file HumanikOS made.
+  </Card>
+  <Card title="API reference" href="/docs/api-reference/signing">
+    Every endpoint, for sending and tracking documents from your own code.
+  </Card>
+</Cards>
+
+## Who can do what
+
+Three actions control HumaDocs in a workspace:
+
+| Action | Lets someone |
+| --- | --- |
+| `signing:read` | See templates and documents, who has signed, the activity, and download finished documents |
+| `signing:send` | Send a template, change and send drafts, send a new link, see each person's link, and cancel a document |
+| `signing:manage` | Create, change and archive templates, and delete documents |
+
+The built-in [`workspaceAdmin`](/docs/access-control/roles) role holds all three.
+`officeOperator` holds `signing:read` and `signing:send`. `viewer` holds `signing:read`.
+Choosing a CRM contact as a signer also needs `contact:read`.
+
+Signers need none of these. Their link is their access. See
+[Access control](/docs/access-control) for how actions are granted, and
+[Actions](/docs/access-control/actions) for every endpoint each one allows.
+
+## With other parts of HumanikOS
+
+- **CRM.** A signer can be a [contact](/docs/crm). Their name, email address and mobile
+  number come from the contact, and a contact who has asked not to be contacted is refused.
+- **Nova.** [Nova](/docs/nova) can list your templates and send one for you. The send is
+  held until you approve it in the chat, the same way as Nova's other
+  [approvals](/docs/nova/approvals). Nova never shows signing links.
+- **API.** Everything on these pages can be done with a
+  [service account](/docs/access-control/service-accounts) key. See the
+  [API reference](/docs/api-reference/signing).
+
+## Limits
+
+- A PDF can be up to 25 MB and 200 pages. A password protected PDF cannot be used.
+- A template has 1 to 10 roles and up to 500 fields.
+- HumaDocs places fields on a PDF. It does not edit the PDF's own text. To change the
+  wording, change the PDF and upload it as a new template.
+- Chinese, Japanese and Korean characters are not drawn onto the finished document yet.
+  They appear as question marks, and the audit pages say so. The answers themselves are
+  kept as typed.
