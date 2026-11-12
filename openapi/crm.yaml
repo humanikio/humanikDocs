@@ -1247,10 +1247,21 @@ paths:
             type: string
         - name: category
           in: query
-          description: Only entries in this category.
+          description: Only entries in this category. Not with `subjectId`.
           schema:
             type: string
             enum: [manual, document, contact, consent, opportunity, booking]
+        - name: subjectId
+          in: query
+          description: |
+            Only entries about this record: the `subject.id` of the entries you want. For one
+            opportunity's history, pass its ID from
+            [List opportunities](/docs/api-reference/crm/opportunities/listOpportunities).
+            Not with `category`. An opportunity's entries are on the contact it was linked to
+            when they were written.
+          schema:
+            type: string
+            maxLength: 200
       responses:
         '200':
           description: One page of entries.
@@ -1285,7 +1296,7 @@ paths:
                         origin: system
                         editedBy: null
         '400':
-          description: '`workspaceId` is missing, `category` is not one of the listed values, or `cursor` is not valid.'
+          description: '`workspaceId` is missing, `category` is not one of the listed values, `category` and `subjectId` are both set, or `cursor` is not valid.'
           content:
             application/json:
               schema:
