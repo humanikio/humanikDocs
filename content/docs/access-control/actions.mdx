@@ -886,7 +886,7 @@ granted at the workspace above it to cover every office in it.
 | Action | Allows | Usually written at |
 | --- | --- | --- |
 | `signing:read` | See signing templates and documents, who has signed, the activity record, and download finished documents. | `workspace` |
-| `signing:send` | Send a template to people for signing, change and send drafts, send a new link, see each person's current signing link, and cancel a document. | `workspace` |
+| `signing:send` | Send a template to people for signing, change and send drafts, send a new link, see each person's current signing link, and cancel a document. Sending from a workspace email address also needs `email:send`, and sending text messages needs `phone:send`. | `workspace` |
 | `signing:manage` | Create, change and archive signing templates, save a document as a new template, and delete documents. | `workspace` |
 
 <Accordions>
@@ -907,7 +907,7 @@ granted at the workspace above it to cover every office in it.
 - [Cancel a document](/docs/api-reference/signing/documents/cancelSigningRequest)
 - [Send a template, or save it as a draft](/docs/api-reference/signing/documents/createSigningRequest)
 - [Copy a document as a new draft](/docs/api-reference/signing/documents/duplicateSigningRequest)
-- [See how this workspace sends invitations](/docs/api-reference/signing/documents/getSigningDeliverySenders)
+- [See what you can send a document from](/docs/api-reference/signing/documents/listSigningSenders)
 - [Make a new signing link](/docs/api-reference/signing/signers/issueSignerLink)
 - [Get each person's current signing link](/docs/api-reference/signing/signers/listSignerLinks)
 - [Send a new link](/docs/api-reference/signing/signers/resendToSigner)

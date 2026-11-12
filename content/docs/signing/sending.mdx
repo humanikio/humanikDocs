@@ -18,11 +18,30 @@ make a last change, and asks how they should get their link.
 | **Email and text message** | Both. One that arrives is enough |
 | **Links only** | Nothing is sent. You hand each person their link yourself |
 
-**Email** comes from the workspace's own email address when it has one, and from the
-HumanikOS address when it does not.
+## Where it is sent from
 
-**Text messages** come from a phone number in the workspace that can send text messages.
-Every person needs a mobile number. The same checks apply as for any text message from the
+The send dialog asks which email address and which phone number to send from.
+
+**Email** can come from any email address in the workspace, or from the HumaDocs address,
+`noreply@mail.humanik.io`. The HumaDocs address is always there, and it is used when the
+workspace has no email address of its own. Emails from it show the workspace name, for example
+"Acme Plumbing via HumaDocs". Replies to it are not read.
+
+**Text messages** come from a phone number in the workspace that can send text messages. If
+the workspace has none, text messages cannot be sent. The dialog says so and, if you can add
+one, links to the console where you can.
+
+Reminders and the next person in a signing order get their link from the same address and
+number. If that address or number is no longer in the workspace, emails come from the HumaDocs
+address and texts from another number in the workspace.
+
+**Permissions.** Sending a document needs `signing:send`. Sending from one of the workspace's
+own email addresses also needs `email:send`, or `email:me:use` when the address is assigned to
+you. Sending text messages also needs `phone:send`. The HumaDocs address needs nothing more.
+Addresses and numbers you cannot use are shown in the dialog but cannot be picked. See
+[actions](/docs/access-control/actions).
+
+Every person needs a mobile number for text messages. The same checks apply as for any text message from the
 workspace: a contact who has asked not to be contacted, or a number that has replied STOP, is
 not sent to.
 

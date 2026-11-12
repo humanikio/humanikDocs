@@ -50,8 +50,8 @@ anything else looks at the message.
 
 | Someone texts | What happens |
 | --- | --- |
-| `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END`, `REVOKE`, `OPTOUT` | They are marked opted out, and get a confirmation saying so |
-| `START` or `UNSTOP`, when they are opted out | The opt out is cleared, and they get a confirmation |
+| `STOP`, `STOPALL`, `UNSUBSCRIBE`, `QUIT`, `CANCEL`, `END`, `REVOKE`, `OPTOUT` | They are marked opted out, and get a confirmation saying so. Their CRM contact is marked opted out too, which also stops email |
+| `START` or `UNSTOP`, when they are opted out | The opt out is cleared, and they get a confirmation. Their contact is cleared too, unless it was opted out some other way ([Opting out](/docs/crm#opting-out)) |
 | `HELP` or `INFO` | They get your help text, or a default that names STOP |
 
 **A keyword counts only when it is the whole message.** Case and punctuation are

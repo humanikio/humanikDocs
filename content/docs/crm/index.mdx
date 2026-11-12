@@ -135,8 +135,27 @@ One flag per contact covers **every** channel. Marking someone opted out stops
 texts, emails and calls together, and it is checked in four separate places
 before anything leaves.
 
-Someone replying STOP to a text sets it themselves, and that flows back to the
-contact record.
+Someone replying STOP to a text sets it themselves. Their contact is marked opted
+out, so STOP stops email to them as well as texts.
+
+**Every contact says why it is opted out.** The contact page shows the reason next
+to the flag, for example "Opted out · texted STOP", and the API returns it:
+
+| `optedOutVia` | What happened |
+| --- | --- |
+| `sms_keyword` | They texted STOP. `optedOutPhone` is the number they texted from |
+| `edit` | A person, Nova or an AI employee marked them opted out |
+| `conversation` | They asked to stop in a conversation, and an AI employee recorded it |
+
+`optedOutAt` is when. The three fields are present only while the contact is opted
+out. A contact opted out before November 12, 2026 may have no reason recorded.
+Each change also adds an entry to the contact's
+[activity](/docs/api-reference/crm/activity/listContactActivities).
+
+**Texting START undoes only a STOP.** If the contact was opted out by texting STOP
+from that number, START clears it, and texts and email are allowed again. If it was
+set any other way, START allows texts to that number again at the carrier level,
+but the contact stays opted out, so nothing is sent until someone clears it.
 
 <Callout type="warn">
   **There is no email unsubscribe.** STOP works on text messages. Nothing
@@ -215,8 +234,8 @@ Two things to know before you build on them:
 name, and neither is checked. The name is a snapshot that never refreshes, and
 deleting a contact leaves their deals behind pointing at nothing.
 
-**Deleting a pipeline deletes its deals.** There is no soft delete and no restore
-window. Removing a stage from a pipeline, on the other hand, leaves deals sitting
+**Deleting a pipeline deletes its deals**, and each deal's notes. There is no soft
+delete and no restore window. Removing a stage from a pipeline, on the other hand, leaves deals sitting
 in a stage that no longer exists.
 
 <Callout>
@@ -225,9 +244,37 @@ in a stage that no longer exists.
   the change itself rather than expecting an event.
 </Callout>
 
+## Activity
+
+Every contact has an **activity record**: a list of what happened to or with them,
+other than messages, newest first. Messages stay in the conversation.
+
+| Category | What is recorded |
+| --- | --- |
+| `contact` | Created, owner changed, archived or restored, tags added or removed, details changed, a phone or email added |
+| `consent` | Texted STOP or START, marked or cleared do not contact |
+| `document` | A document sent, reminded, opened, signed, declined, completed, cancelled or expired |
+| `opportunity` | A linked deal created, moved, won, lost, reopened, linked, unlinked or deleted |
+| `booking` | An appointment booked, and one moved or cancelled through the link in its confirmation |
+| `manual` | An entry someone wrote by hand |
+
+Each entry says who did it: a person, Nova, an AI employee, a workflow, the
+contact themselves, or the system. Names in an entry, such as a tag or a stage, are
+kept as they were at the time, so renaming something later does not change old
+entries.
+
+**Only hand-written entries can be changed.** You can add, edit and delete `manual`
+entries. Everything else is the record of what happened, and stays until the contact
+is deleted.
+
+Read and write it through the API:
+[List activity](/docs/api-reference/crm/activity/listContactActivities) and
+[Add an activity entry](/docs/api-reference/crm/activity/createContactActivity).
+It is not shown on the contact page in the console yet.
+
 ## What this is not
 
-It is contacts, conversations, notes, tags, custom fields and a deal board.
+It is contacts, conversations, notes, tags, custom fields, an activity record and a deal board.
 
 There is **no reporting or forecasting**, no email campaign tooling, and no
 metering on messaging: nothing counts or caps what is sent, so a

@@ -30,6 +30,8 @@ tags:
     description: Sending SMS and email from an allocated number or address.
   - name: Notes
     description: Free text attached to a contact.
+  - name: Activity
+    description: The record of what happened to or with a contact, other than messages.
   - name: Tags
     description: The workspace tag registry, and applying tags to a contact.
   - name: Opportunities
@@ -68,6 +70,15 @@ components:
       schema:
         type: string
         examples: [con_7f3b2a]
+
+    ActivityId:
+      name: activityId
+      in: path
+      required: true
+      description: 'The activity entry. From [List activity](/docs/api-reference/crm/activity/listContactActivities), or the `activity.id` returned by [Add an activity entry](/docs/api-reference/crm/activity/createContactActivity).'
+      schema:
+        type: string
+        examples: [Hk3v9QmXr2LpT0aYb7cD]
 
   schemas:
     Error:
@@ -157,8 +168,33 @@ components:
           type: boolean
           default: false
           description: |
-            Do not contact. Writable with `contact:manage`, the same grant needed
-            for ordinary edits.
+            Do not contact. Blocks texts and email to the contact. Writable with
+            `contact:manage`, the same grant needed for ordinary edits. Texting
+            STOP sets it; texting START clears it only when STOP set it.
+        optedOutVia:
+          type: string
+          enum: [sms_keyword, edit, conversation]
+          readOnly: true
+          description: |
+            Why `optedOut` is true. Present only while it is true, and absent on
+            contacts opted out before November 12, 2026 with no record of how.
+
+            | Value | What happened |
+            | --- | --- |
+            | `sms_keyword` | The contact texted STOP. See `optedOutPhone` |
+            | `edit` | A person, Nova or an AI employee set `optedOut` |
+            | `conversation` | An AI employee recorded that the contact asked to stop in a conversation |
+        optedOutAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When `optedOut` turned on. Present only while it is true.
+        optedOutPhone:
+          type: string
+          readOnly: true
+          description: |
+            `optedOutVia: sms_keyword` only. The number, in E.164, that texted STOP.
+            START from this number clears the opt out.
         tags:
           type: array
           items:
@@ -171,6 +207,148 @@ components:
         firstSeenAt:
           type: string
       required: [id, displayName]
+
+    ContactActivity:
+      type: object
+      description: |
+        One thing that happened to or with a contact: a document signed, a tag
+        added, an opt-out. Messages are not activity; they are in the contact's
+        conversation thread.
+
+        Entries with `origin: system` are written by the platform when the event
+        happens, and cannot be edited or deleted through the API. Entries with
+        `origin: manual` were written by a person or an AI employee through
+        [Add an activity entry](/docs/api-reference/crm/activity/createContactActivity).
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          description: |
+            `category.event`. New types are added over time, so treat an unknown
+            type as a plain row: show its `summary`. Current types:
+
+            | Category | Types |
+            | --- | --- |
+            | `manual` | `manual.entry` |
+            | `document` | `document.sent`, `document.reminded`, `document.opened`, `document.signed`, `document.declined`, `document.completed`, `document.cancelled`, `document.expired` |
+            | `contact` | `contact.created`, `contact.owner_changed`, `contact.archived`, `contact.restored`, `contact.tag_added`, `contact.tag_removed`, `contact.details_changed`, `contact.identity_added` |
+            | `consent` | `consent.sms_opted_out`, `consent.sms_opted_in`, `consent.do_not_contact_set`, `consent.do_not_contact_cleared` |
+            | `opportunity` | `opportunity.created`, `opportunity.stage_changed`, `opportunity.won`, `opportunity.lost`, `opportunity.reopened`, `opportunity.linked`, `opportunity.unlinked`, `opportunity.deleted` |
+            | `booking` | `booking.booked`, `booking.rescheduled`, `booking.cancelled` |
+
+            Opportunity entries go on the contact the opportunity is linked to. When the
+            link moves to another contact, the old contact gets `opportunity.unlinked` and
+            the new one gets `opportunity.linked`. Changes to an opportunity's value, owner
+            or other details write no entry.
+
+            `booking.booked` is written for an appointment booked through a booking link,
+            and for a new event on the calendar whose guest matches a contact.
+            `booking.rescheduled` and `booking.cancelled` are written when the guest uses
+            the link in their confirmation. An event moved or cancelled in the calendar
+            provider directly writes no entry.
+          examples: [document.signed]
+        category:
+          type: string
+          description: The part of `type` before the dot. This is what `?category=` filters on.
+          examples: [document]
+        summary:
+          type: string
+          maxLength: 300
+          description: |
+            One line in plain words, ready to show. Names (a document, a tag, an
+            owner) are stored as they were when it happened, so a later rename
+            does not change old entries.
+          examples: ['Signed "NDA"']
+        occurredAt:
+          type: string
+          format: date-time
+          description: When it happened. The list is sorted on this, newest first.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          description: Manual entries only. Null until the entry is edited.
+        actor:
+          type: object
+          description: |
+            Who did it.
+
+            | `kind` | `id` is |
+            | --- | --- |
+            | `user` | The person's user ID |
+            | `nova` | The user ID of the person Nova acted for |
+            | `office` | The office ID. From [List offices](/docs/api-reference/offices/offices/listOffices) |
+            | `workflow` | The workflow ID. From [Get a workflow](/docs/api-reference/workflows/workflows/getWorkflow) |
+            | `contact` | Absent. The contact did it themselves, for example signed a document or texted STOP |
+            | `system` | The service account ID when one made the call, otherwise absent |
+          properties:
+            kind:
+              type: string
+              enum: [user, nova, office, workflow, contact, system]
+            id:
+              type: string
+          required: [kind]
+        subject:
+          oneOf:
+            - type: object
+              properties:
+                kind:
+                  type: string
+                  enum: [signingRequest, opportunity, calendar]
+                  description: |
+                    | `kind` | `id` is |
+                    | --- | --- |
+                    | `signingRequest` | A document. Read it with [Get a document](/docs/api-reference/signing/documents/getSigningRequest) |
+                    | `opportunity` | An opportunity. Read it with [Get an opportunity](/docs/api-reference/crm/opportunities/getOpportunity) |
+                    | `calendar` | A calendar. Read it with [Get a calendar](/docs/api-reference/calendars/calendars/getCalendar) |
+                id:
+                  type: string
+                  description: |
+                    The record the entry is about. The `kind` table says which operation reads it.
+                    The record can be deleted after the entry is written; the read then answers 404.
+                label:
+                  type: string
+                  description: The record's name when the entry was written.
+              required: [kind, id]
+            - type: 'null'
+          description: |
+            What the entry is about, or null when it is about the contact itself.
+            `opportunity.deleted` has no subject, because the opportunity is gone. Its
+            `data.opportunityId` keeps the ID.
+        data:
+          oneOf:
+            - type: object
+              additionalProperties:
+                oneOf:
+                  - type: string
+                  - type: number
+                  - type: boolean
+                  - type: 'null'
+            - type: 'null'
+          description: |
+            Small flat details, at most 20 keys. Keys depend on the type and may be
+            added over time. Never holds a link, token or message body.
+        origin:
+          type: string
+          enum: [system, manual]
+        editedBy:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: Manual entries only. The user ID of the last person to edit it.
+      required: [id, type, category, summary, occurredAt, createdAt, actor, origin]
+
+    ActivityResult:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        activity:
+          $ref: '#/components/schemas/ContactActivity'
 
     CustomFieldOption:
       type: object
@@ -1027,6 +1205,351 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
+  /contacts/{contactId}/activities:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+    get:
+      tags: [Activity]
+      summary: List activity
+      operationId: listContactActivities
+      description: |
+        Requires `contact:read`.
+
+        Everything recorded for the contact other than messages, newest first:
+        documents sent and signed, tags, owner changes, archiving, and opt-outs.
+        Messages are in the contact's conversation thread.
+
+        **The record starts when each event type was added.** Nothing was
+        backfilled, so an older contact can have a short or empty list even with
+        a long history. An empty response does not mean nothing ever happened.
+
+        Workflow runs are not copied here. Read them with
+        [List a contact's workflow runs](/docs/api-reference/crm/contacts/listContactRuns).
+        The changes a workflow makes, such as a tag it adds, do appear here,
+        with `actor.kind: workflow`.
+
+        To page, pass the `nextCursor` from one response as `cursor` on the next.
+        There is no `nextCursor` on the last page.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: limit
+          in: query
+          description: Entries per page. Default 50, at most 200. A larger value is lowered to 200 without an error.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `nextCursor` from the previous page. A cursor that no longer exists answers 400.
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: Only entries in this category.
+          schema:
+            type: string
+            enum: [manual, document, contact, consent, opportunity, booking]
+      responses:
+        '200':
+          description: One page of entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  activities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContactActivity'
+                  nextCursor:
+                    type: string
+                    description: Present when there is another page.
+              examples:
+                signed:
+                  value:
+                    success: true
+                    activities:
+                      - id: d_4f1c0e9a7b3d2c18e5a6f0b9c4d7e2a1b8c3f6d0
+                        type: document.signed
+                        category: document
+                        summary: 'Signed "NDA"'
+                        occurredAt: '2026-11-11T15:04:12.000Z'
+                        createdAt: '2026-11-11T15:04:12.000Z'
+                        updatedAt: null
+                        actor: { kind: contact }
+                        subject: { kind: signingRequest, id: sr_8b2d41, label: NDA }
+                        data: { signerId: sg_1 }
+                        origin: system
+                        editedBy: null
+        '400':
+          description: '`workspaceId` is missing, `category` is not one of the listed values, or `cursor` is not valid.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                badCursor:
+                  value:
+                    success: false
+                    error: The cursor is not valid. Start from the first page.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The contact does not exist in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noContact:
+                  value:
+                    success: false
+                    error: Contact not found
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Activity]
+      summary: Add an activity entry
+      operationId: createContactActivity
+      description: |
+        Requires `contact:manage`.
+
+        Adds a manual entry, such as a phone call made outside the platform or
+        an in person meeting. The caller is recorded as the actor: an AI
+        employee's key records `office`, another service account key records
+        `system` with the service account ID, and a person signed in to the
+        console records `user`. Only `manual.entry` can be created; every other
+        type is written by the platform.
+
+        `occurredAt` may be in the past, for something that happened earlier. It
+        cannot be in the future.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [manual.entry]
+                  default: manual.entry
+                summary:
+                  type: string
+                  description: What happened, in one line. Spaces are collapsed and the text is cut to 300 characters without an error.
+                occurredAt:
+                  type: string
+                  format: date-time
+                  description: When it happened. Default now. Not in the future.
+                subject:
+                  type: object
+                  description: |
+                    Optional. Same shape as `subject` in the
+                    [List activity](/docs/api-reference/crm/activity/listContactActivities)
+                    response. An unknown `kind` or an empty `id` is dropped
+                    without an error.
+                  properties:
+                    kind:
+                      type: string
+                      enum: [signingRequest, opportunity, calendar]
+                    id:
+                      type: string
+                      description: The record, read through the operation the `kind` table names.
+                    label:
+                      type: string
+                data:
+                  type: object
+                  description: |
+                    Optional flat details: strings, numbers, booleans or null, at
+                    most 20 keys. Keys must start with a letter. Any other value or
+                    key is dropped without an error.
+                  additionalProperties: true
+              required: [summary]
+            examples:
+              call:
+                value:
+                  summary: Called about the roof quote. Will decide by Friday.
+                  occurredAt: '2026-11-10T16:30:00.000Z'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityResult'
+        '400':
+          description: A field is missing or not valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noSummary:
+                  value:
+                    success: false
+                    error: Write what happened.
+                future:
+                  value:
+                    success: false
+                    error: The time cannot be in the future.
+                wrongType:
+                  value:
+                    success: false
+                    error: 'type must be one of: manual.entry'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The contact does not exist in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /contacts/{contactId}/activities/{activityId}:
+    parameters:
+      - $ref: '#/components/parameters/ContactId'
+      - $ref: '#/components/parameters/ActivityId'
+    get:
+      tags: [Activity]
+      summary: Get an activity entry
+      operationId: getContactActivity
+      description: Requires `contact:read`.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: The entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No entry with this ID on this contact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing:
+                  value:
+                    success: false
+                    error: Activity not found
+        '500': { $ref: '#/components/responses/ServerError' }
+    patch:
+      tags: [Activity]
+      summary: Edit an activity entry
+      operationId: updateContactActivity
+      description: |
+        Requires `contact:manage`.
+
+        Manual entries only. An entry the platform wrote (`origin: system`)
+        answers 409, because it is the record of what happened. `type`, `actor`
+        and `origin` never change. Any user with `contact:manage` can edit any
+        manual entry, including one someone else wrote; `editedBy` records who
+        edited it last.
+
+        Send at least one field. `data` replaces the whole `data` object.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary:
+                  type: string
+                occurredAt:
+                  type: string
+                  format: date-time
+                  description: Not in the future.
+                data:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityResult'
+        '400':
+          description: No field was sent, or a field is not valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                nothing:
+                  value:
+                    success: false
+                    error: Nothing to change.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No entry with this ID on this contact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The entry was written by the platform and cannot be changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                system:
+                  value:
+                    success: false
+                    error: This entry was written by the system and cannot be changed.
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      tags: [Activity]
+      summary: Delete an activity entry
+      operationId: deleteContactActivity
+      description: |
+        Requires `contact:manage`.
+
+        Manual entries only. An entry the platform wrote answers 409. Deleting the
+        contact deletes all of its activity.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No entry with this ID on this contact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The entry was written by the platform and cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /contacts/tags:
     get:
       tags: [Tags]
@@ -1423,6 +1946,17 @@ paths:
       tags: [Opportunities]
       summary: Delete a pipeline
       operationId: deletePipeline
+      description: |
+        Deletes every opportunity in the pipeline, with each opportunity's notes,
+        then the pipeline itself. This cannot be undone. To keep a deal's history,
+        mark it lost with [Update an opportunity](/docs/api-reference/crm/opportunities/updateOpportunity)
+        or move it to another pipeline first.
+
+        Each contact linked to a deleted opportunity gets an `opportunity.deleted`
+        entry in its [activity](/docs/api-reference/crm/activity/listContactActivities).
+
+        The deletes are not one transaction. If the call fails partway, some
+        opportunities may already be gone. Calling it again deletes the rest.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:

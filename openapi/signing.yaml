@@ -239,6 +239,18 @@ components:
         updatedAt: { type: string, format: date-time }
         archivedAt: { type: [string, 'null'], format: date-time }
 
+    SendFrom:
+      type: object
+      description: |
+        The email address and phone number the document is sent from. Reminders and
+        the next person in a signing order use the same ones. `email` is an address
+        in the workspace or the HumaDocs address `noreply@mail.humanik.io` (the
+        default). `phone` is a workspace number that can send text messages, in
+        E.164 form; omitted means the first one. List the choices with
+        [See what you can send a document from](/docs/api-reference/signing/documents/listSigningSenders).
+      properties:
+        email: { type: string, format: email }
+        phone: { type: string, example: '+15551234567' }
     SignerInput:
       type: object
       description: |
@@ -326,6 +338,7 @@ components:
           type: string
           enum: [email, sms, both, none]
           description: How invitations and reminders reach people. `none` sends nothing.
+        sendFrom: { $ref: '#/components/schemas/SendFrom' }
         snapshot:
           type: object
           description: The PDF details, roles and fields this document uses.
@@ -710,6 +723,10 @@ paths:
 
         **Permission:** `signing:send` @ `workspace/{workspaceId}`, plus
         `contact:read` @ `workspace/{workspaceId}` when any signer is a CRM contact.
+        When sending now, also `email:send` @ `workspace/{workspaceId}` (or `email:me:use` with the
+        address assigned to you) to send from a workspace email address, and
+        `phone:send` @ `workspace/{workspaceId}` to send text messages. The HumaDocs
+        address (`noreply@mail.humanik.io`) needs nothing more.
 
         ## Get the template ID first
 
@@ -770,6 +787,7 @@ paths:
                     `both` need a workspace number that can send text messages and
                     a mobile number for every person. `none` sends nothing; hand
                     each person their link yourself.
+                sendFrom: { $ref: '#/components/schemas/SendFrom' }
                 send:
                   type: boolean
                   description: Send `false` to save a draft. Default `true`.
@@ -829,17 +847,32 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /signing/requests/delivery-senders:
+  /signing/requests/senders:
     get:
-      operationId: getSigningDeliverySenders
-      summary: See how this workspace sends invitations
+      operationId: listSigningSenders
+      summary: See what you can send a document from
       tags: [Documents]
       description: |
-        The email address and phone number invitations would come from. With no
-        workspace address, email comes from the HumanikOS address. With no number
-        that can send text messages, `sms` is null and `smsMissingReason` says why.
+        Every email address and phone number a document in this workspace can be
+        sent from, and whether **you** may use each one. The HumaDocs address
+        `noreply@mail.humanik.io` is always first and always usable. A workspace
+        address needs `email:send`, or `email:me:use` with the address assigned to
+        you. A number needs `phone:send`.
+
+        `defaults` are what the send dialog picks first: your first usable workspace
+        address, else the HumaDocs address, and your first usable number. With no
+        number that can send text messages, `numbers` is empty and
+        `smsMissingReason` says why. `canAllocate` says whether you may add an
+        address (`email:manage`) or a number (`phone:manage`) in the console.
 
         **Permission:** `signing:send` @ `workspace/{workspaceId}`
+
+        #### Request
+
+        ```bash
+        curl "$HOS_API/signing/requests/senders?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -854,16 +887,49 @@ paths:
                   senders:
                     type: object
                     properties:
-                      email:
-                        type: [object, 'null']
+                      emails:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            email: { type: string, format: email }
+                            displayName: { type: [string, 'null'] }
+                            platform: { type: boolean, description: True for the HumaDocs address. }
+                            usable: { type: boolean }
+                            reason: { type: [string, 'null'], description: Why you cannot use it. }
+                      numbers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            phoneNumber: { type: string }
+                            friendlyName: { type: [string, 'null'] }
+                            usable: { type: boolean }
+                            reason: { type: [string, 'null'] }
+                      defaults:
+                        type: object
                         properties:
-                          address: { type: string }
-                          displayName: { type: [string, 'null'] }
-                      sms:
-                        type: [object, 'null']
-                        properties:
-                          phoneNumber: { type: string }
+                          email: { type: string, format: email }
+                          phone: { type: [string, 'null'] }
                       smsMissingReason: { type: [string, 'null'] }
+                      hasWorkspaceEmail: { type: boolean }
+                      canAllocate:
+                        type: object
+                        properties:
+                          email: { type: boolean }
+                          phone: { type: boolean }
+              example:
+                success: true
+                senders:
+                  emails:
+                    - { email: noreply@mail.humanik.io, displayName: HumaDocs, platform: true, usable: true, reason: null }
+                    - { email: office@acmeplumbing.com, displayName: Acme Plumbing, platform: false, usable: true, reason: null }
+                  numbers:
+                    - { phoneNumber: '+15551234567', friendlyName: Main line, usable: true, reason: null }
+                  defaults: { email: office@acmeplumbing.com, phone: '+15551234567' }
+                  smsMissingReason: null
+                  hasWorkspaceEmail: true
+                  canAllocate: { email: false, phone: true }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -932,6 +998,7 @@ paths:
                 delivery:
                   type: string
                   enum: [email, sms, both, none]
+                sendFrom: { $ref: '#/components/schemas/SendFrom' }
                 roles:
                   type: array
                   items: { $ref: '#/components/schemas/Role' }
@@ -1011,7 +1078,11 @@ paths:
         who opted out since the draft was saved is refused. The response carries
         each invited person's link in `invites`; **a link is a secret**.
 
-        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`,
+        plus `email:send` @ `workspace/{workspaceId}` (or `email:me:use` with the
+        address assigned to you) to send from a workspace email address, and
+        `phone:send` @ `workspace/{workspaceId}` to send text messages. The HumaDocs
+        address (`noreply@mail.humanik.io`) needs nothing more.
       parameters:
         - $ref: '#/components/parameters/SigningRequestId'
         - $ref: '#/components/parameters/WorkspaceId'
@@ -1259,7 +1330,11 @@ paths:
         they had before stops working.** Refused before their turn and after they
         finished.
 
-        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`,
+        plus `email:send` @ `workspace/{workspaceId}` (or `email:me:use` with the
+        address assigned to you) to send from a workspace email address, and
+        `phone:send` @ `workspace/{workspaceId}` to send text messages. The HumaDocs
+        address (`noreply@mail.humanik.io`) needs nothing more.
       parameters:
         - $ref: '#/components/parameters/SigningRequestId'
         - $ref: '#/components/parameters/SignerId'
