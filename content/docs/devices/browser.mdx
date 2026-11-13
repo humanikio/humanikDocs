@@ -48,6 +48,22 @@ trustworthy does not apply here.
 
 ## Turning it on
 
+### In the Humanik OS app
+
+1. Open **Frameworks**, then the **Claude Code** tab.
+2. Find the **Browser (Claude in Chrome)** section and turn on **Let jobs use
+   Chrome**.
+3. Press **Save and restart** at the bottom of the page. humanikd restarts with
+   the browser on.
+4. Under **What Chrome needs**, each line shows a tick when that step is done. Do
+   the ones that are not ticked (see [What you have to do by hand](#what-you-have-to-do-by-hand)).
+5. Link this computer's Chrome (see [Link this computer's Chrome](#link-this-computers-chrome)
+   below). Until you do, browser jobs on this computer are refused.
+
+The switch writes the two lines below for you.
+
+### In config.yaml
+
 Two lines, and they do different jobs. **Both are required.**
 
 ```yaml
@@ -118,25 +134,48 @@ both browsers. Chrome also remembers the browser that was picked last on the
 account, and a browser action that does not pick a browser goes to that one, even
 when it is on another computer.
 
-So humanikd ties browser jobs to the Chrome on the computer the job runs on:
+So humanikd ties browser jobs to the Chrome on the computer the job runs on. We
+call this linking the computer's Chrome.
 
-1. **Link this computer's Chrome.** In the Humanik OS app, open Frameworks, then
-   Claude Code, then Browser, and press **Link this computer's Chrome**. Or run
-   `humanikd chrome link`. humanikd asks the Claude extension which browser is on
-   this computer and saves it. Nobody is asked anything, on this computer or any
-   other.
-2. **Every browser action is checked before it runs.** A job must first select
+### Link this computer's Chrome
+
+In the Humanik OS app:
+
+1. Open Chrome on this computer, in the profile you want jobs to use. Check that
+   the Claude extension is signed in there.
+2. Open **Frameworks**, then the **Claude Code** tab, and find **Browser (Claude
+   in Chrome)**.
+3. Press **Link this computer's Chrome**. It takes a few seconds. humanikd asks
+   the Claude extension which browser is on this computer and saves it. Nobody is
+   asked anything, on this computer or any other.
+4. If more than one Chrome profile on this computer is signed in, the page lists
+   them as Profile 1, Profile 2 and so on. Press **Use this profile** on the one
+   jobs should use. Each row shows when that profile connected, because Chrome
+   does not say the profile's name: the profile you opened last connected last.
+5. When it is linked, the page says that jobs here use only this computer's
+   Chrome, and the line **This computer's Chrome is linked** shows a tick.
+
+In a terminal, the same steps are:
+
+```bash
+humanikd chrome link            # link, or list the profiles when there are several
+humanikd chrome link --pick     # choose a profile by its number
+humanikd chrome status          # show what is linked
+humanikd chrome unlink          # remove the link (browser jobs are then refused)
+```
+
+You do not need to restart humanikd. Each job reads the link when it starts.
+
+### What happens in a job
+
+1. **Every browser action is checked before it runs.** A job must first select
    this computer's Chrome. Until it does, every other browser action is refused,
    and the job is told which browser to select. Listing browsers, switching
    browsers and selecting another computer's browser are always refused.
-3. **Until a link exists, browser actions are refused.** This holds even when the
+2. **Until a link exists, browser actions are refused.** This holds even when the
    account has only one browser, because that browser can be on another computer.
 
-If more than one Chrome profile on this computer is signed in to the Claude
-extension, each profile counts as its own browser. The app lists them and you
-choose the one jobs should use with **Use this profile**. In a terminal, run
-`humanikd chrome link --pick`. Chrome does not say which profile is which, so
-each one shows when it connected: the profile you opened last connected last.
+Each Chrome profile signed in to the Claude extension counts as its own browser.
 Only profiles on this computer can be chosen, and jobs never use the others.
 
 Link again after you reinstall the extension or change your Chrome profile.
@@ -144,6 +183,17 @@ Link again after you reinstall the extension or change your Chrome profile.
 Each link attempt, and why one failed, is recorded. Each browser job's choice,
 and each refused action, is written to humanikd's log. You can read both in the
 app under This machine, then Logs, with the Browser filter.
+
+### When linking or a browser job fails
+
+| What you see | What to do |
+| --- | --- |
+| `None of the browsers on your Claude account is on this computer` | Chrome is not open on this computer, or the Claude extension there is signed out or signed in to another Claude account. Open Chrome, check the extension, and link again |
+| A list of Chrome profiles to choose from | More than one Chrome profile on this computer is signed in. Press **Use this profile** on the one jobs should use, or run `humanikd chrome link --pick` |
+| `The list of Chrome profiles is out of date` | More than 10 minutes passed since the list was made. Press **Link this computer's Chrome** again |
+| A job says `this computer's Chrome is not linked` | Link it, as above. No restart is needed |
+| A job says `call select_browser with deviceId …` | The agent tried a browser action before selecting this computer's Chrome. It is told which browser to select and normally goes on by itself |
+| A job keeps being refused after selecting | The linked Chrome may be closed, or its extension was reinstalled and has a new id. Open Chrome and link again |
 
 ## Requirements and traps
 
