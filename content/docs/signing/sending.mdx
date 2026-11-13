@@ -53,9 +53,10 @@ again from the document page.
 
 A signing link is a secret. Anyone who has it can sign as that person.
 
-- After sending, the dialog shows each person's link, with **Copy**.
-- On the document page, each person's row shows their current link, with **Copy**. Looking
-  at it does not change it, so the link they were sent keeps working.
+- After sending, the dialog shows every person's link, with **Copy**. In a signing order the
+  links are grouped by turn, including the people who sign later.
+- On the document page, each person's row shows their current link, with **Copy**, for everyone
+  who has not finished. Looking at it does not change it, so the link they were sent keeps working.
 - **New link** makes a fresh link for one person and nothing is sent. The link they had
   before stops working.
 - **Resend** sends a fresh link the same way the document was sent (with **Links only**,
@@ -64,7 +65,9 @@ A signing link is a secret. Anyone who has it can sign as that person.
 A link stops working when the person finishes or declines, when the document is cancelled or
 expires, and when a newer link is made for that person.
 
-In a signing order, people who sign later have no link until it is their turn.
+In a signing order, every person has a link as soon as the document is sent. People who sign
+later get their message when it is their turn, and it carries the same link. If they open their
+link before their turn, the page tells them who signs first.
 
 ## Sign-by date
 
@@ -79,8 +82,8 @@ default is every 3 days. Each person gets at most 3 reminders, none after the si
 and none before it is their turn. With **Links only**, no reminders are sent.
 
 <Callout type="info">
-  **Each reminder has a new link, and the old link stops working.** A person who opens an
-  older message sees that the link no longer works. They should use the newest one.
+  **A reminder sends the same link.** A link you handed over keeps working when a reminder goes
+  out. Only **Resend** and **New link** make a new link and stop the old one.
 </Callout>
 
 ## Signers from the CRM

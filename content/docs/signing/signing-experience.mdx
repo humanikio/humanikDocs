@@ -47,6 +47,7 @@ How fields look:
 | The one being filled | A soft pulsing ring, with its name above it |
 | Filled | A green check |
 | Filled in by the sender | Shown with its value. It cannot be changed unless the sender allowed it |
+| Date signed | Grey, with a lock. It shows today's date as soon as the signer signs, and it cannot be changed |
 
 Signers see only their own fields. They see the names of other people signing and whether
 each has signed, never their email addresses. Answers are saved as they go, so a signer can
@@ -64,6 +65,10 @@ The first signature is adopted. Every other signature field then signs with one 
 the signer can still change any of them. Initials work the same way, separately from the
 signature. Each field is something the signer chose to sign: nothing is filled in on their
 behalf.
+
+As soon as the first signature or initials is in place, every date signed field shows today's
+date, in the signer's own time zone. The signer cannot change it. It is the same date that
+appears in the finished document.
 
 ## 4. Finish
 
@@ -87,7 +92,7 @@ told by email with the reason.
 
 | The page says | Because |
 | --- | --- |
-| Not your turn yet | In a signing order, someone signs first. The signer is sent their link when it is their turn |
-| This link no longer works | A newer link was made for them, for example by a reminder. They should use the newest message |
+| Not your turn yet | In a signing order, someone signs first. The page names who. The link works, and the signer can sign with it once those people have signed |
+| This link no longer works | A newer link was made for them with **Resend** or **New link**. They should use the newest message |
 | You have already signed | They finished. The finished document arrives by email when everyone has signed |
 | This request was cancelled, has expired, or was stopped | The sender cancelled it, the sign-by date passed, or someone declined |

@@ -405,6 +405,18 @@ components:
                   description: Some characters had no font and were drawn as "?". The stored values keep the real text.
         finalizeError: { type: [string, 'null'] }
 
+    LaterLink:
+      type: object
+      description: |
+        A person in a later turn of a signing order. Their link is made when the
+        document is sent, but nothing is sent to them until their turn. Their message
+        then carries this same link. Until then the link opens on a page that says
+        who signs first. **A link is a secret.**
+      properties:
+        signerId: { type: string }
+        order: { type: integer, description: 'Their turn number.' }
+        url: { type: string }
+
     Invite:
       type: object
       description: What happened when one person was invited.
@@ -716,10 +728,13 @@ paths:
         [Send a draft](/docs/api-reference/signing/documents/sendSigningRequest).
 
         In signing order, only the first group is invited now. The next group is
-        invited when the group before them has finished.
+        invited when the group before them has finished. Every person still gets a
+        link now: the people in later turns are in `laterLinks`, and their message
+        carries the same link when their turn comes.
 
-        The response carries each invited person's signing link in `invites`. **A
-        link is a secret**: anyone holding it can sign as that person.
+        The response carries each invited person's signing link in `invites`, and
+        each later person's link in `laterLinks`. **A link is a secret**: anyone
+        holding it can sign as that person.
 
         **Permission:** `signing:send` @ `workspace/{workspaceId}`, plus
         `contact:read` @ `workspace/{workspaceId}` when any signer is a CRM contact.
@@ -808,6 +823,9 @@ paths:
                   invites:
                     type: array
                     items: { $ref: '#/components/schemas/Invite' }
+                  laterLinks:
+                    type: array
+                    items: { $ref: '#/components/schemas/LaterLink' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1076,7 +1094,8 @@ paths:
 
         CRM contacts are read again now, so a changed address is used and a contact
         who opted out since the draft was saved is refused. The response carries
-        each invited person's link in `invites`; **a link is a secret**.
+        each invited person's link in `invites`, and the link of each person in a
+        later turn in `laterLinks` (made now, sent on their turn); **a link is a secret**.
 
         **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`,
         plus `email:send` @ `workspace/{workspaceId}` (or `email:me:use` with the
@@ -1102,6 +1121,9 @@ paths:
                   invites:
                     type: array
                     items: { $ref: '#/components/schemas/Invite' }
+                  laterLinks:
+                    type: array
+                    items: { $ref: '#/components/schemas/LaterLink' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1251,9 +1273,10 @@ paths:
         The link each person can use right now. Reading them changes nothing: the
         link a person was sent keeps working.
 
-        A person is left out when the document is not out for signing, when they
-        have finished or declined, when it is not their turn yet, or when no
-        current link is held for them. For those, make one with
+        Every person who has not finished is listed, in any turn. A person in a
+        later turn can open their link, but it shows who signs first until their
+        turn. A person is left out when the document is not out for signing, when
+        they have finished or declined, or when no current link is held for them. For those, make one with
         [Make a new signing link](/docs/api-reference/signing/signers/issueSignerLink).
 
         **Each link is a secret.** Anyone holding it can sign as that person. Every
@@ -1293,8 +1316,9 @@ paths:
         A new link for one person, returned to you. Nothing is sent. **The link
         they had before stops working.**
 
-        Refused before the person's turn, after they finished, and when the
-        document is not out for signing.
+        Works in any turn: a person in a later turn can sign with it once their
+        turn comes, and is still sent their message then. Refused after they
+        finished and when the document is not out for signing.
 
         **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
       parameters:

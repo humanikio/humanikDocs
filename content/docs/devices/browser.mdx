@@ -168,12 +168,31 @@ You do not need to restart humanikd. Each job reads the link when it starts.
 
 ### What happens in a job
 
-1. **Every browser action is checked before it runs.** A job must first select
-   this computer's Chrome. Until it does, every other browser action is refused,
-   and the job is told which browser to select. Listing browsers, switching
-   browsers and selecting another computer's browser are always refused.
-2. **Until a link exists, browser actions are refused.** This holds even when the
-   account has only one browser, because that browser can be on another computer.
+Chrome remembers the browser picked last on your Claude account, and a browser
+action that does not choose a browser goes to that one, even when it is on
+another computer. So humanikd adds a check (a Claude Code hook) to every browser
+job. Claude Code runs it before each browser action, outside the agent, so the
+agent cannot skip it.
+
+| The job tries to | Not linked | Linked, before it selects | Linked, after it selects |
+| --- | --- | --- | --- |
+| Select this computer's linked Chrome | Refused | **Approved by humanikd** | **Approved by humanikd** |
+| Select any other browser | Refused | Refused | Refused |
+| List or switch browsers | Refused | Refused | Refused |
+| Any other browser action (open a page, click, type, read) | Refused | Refused | Allowed, and Claude Code's own checks still apply |
+
+- **Selecting the linked Chrome is approved by humanikd.** Claude Code's safety
+  check can refuse a select that nobody in the chat asked for. You already chose
+  this browser when you linked it, so humanikd tells Claude Code the select is
+  approved. This is the only call humanikd approves. It does not approve what a
+  job does on a web page.
+- **A refused action does not end the job.** The agent is told why and which
+  browser to select, and normally selects this computer's Chrome and goes on.
+- **Each job selects again.** The selection belongs to one job, because another
+  computer may have become the browser picked last in between.
+- **Until this computer's Chrome is linked, every browser action is refused,**
+  even when the account has only one browser, because that browser can be on
+  another computer.
 
 Each Chrome profile signed in to the Claude extension counts as its own browser.
 Only profiles on this computer can be chosen, and jobs never use the others.
