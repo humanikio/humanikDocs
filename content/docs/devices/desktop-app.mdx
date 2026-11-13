@@ -18,8 +18,8 @@ humanikd, and humanikd does not need the app. The app is a window onto it.
 | Area | What it shows |
 | --- | --- |
 | **Chats** | Chats with the employees in a workspace, split into the ones that run on this machine and the ones that run in the cloud |
-| **This machine** | Whether humanikd is running and connected, and its tabs: Overview, Agent, Access, Sleep, Service, Link and key, Settings file, Logs, Updates |
-| **Frameworks** | Claude Code and OpenClaw, the agent programs that can run whole jobs here |
+| **This machine** | Whether humanikd is running and connected, and its tabs: Overview, Run mode, Access, Sleep, Service, Link and key, Settings file, Logs, Updates |
+| **Frameworks** | Claude Code and OpenClaw, the agent programs that can run whole jobs here. The one this computer does not run is greyed, and **Change run mode** opens **This machine › Run mode** |
 | **Models** | Ollama, a model on this computer that answers with text |
 | **Profile** | Your account, the app's notifications, and opening at login |
 
@@ -31,7 +31,9 @@ button, and only that button opens the browser.
 
 - **Overview** lists what needs you, such as humanikd not running, a framework that
   is too old, or a Claude Code that cannot be found.
-- **Agent** chooses which kind of work this computer serves. **Access** sets what
+- **Run mode** is the main setting for this computer. It chooses the one program
+  that every job goes to: Claude Code or OpenClaw (frameworks, which run the whole
+  job with tools) or Ollama (a model, which answers with text only). **Access** sets what
   jobs may do here: the same [ceiling](/docs/devices#the-rule-that-makes-this-safe)
   as the config file, in a form.
 - **Sleep** decides when humanikd keeps the computer awake: never, while a job runs

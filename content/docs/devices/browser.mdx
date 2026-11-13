@@ -110,16 +110,33 @@ Its browser-running check is **local only**. `verify` looks at this machine and
 cannot see a browser paired on another one, so "no Chromium browser running on this
 machine" means *not observed here*, not *nothing is reachable*.
 
-## Pair one browser per account on an unattended device
+## Which Chrome jobs use
 
-When two or more browsers are paired to the same account, Claude Code asks which
-one to use before it acts. A headless device has nobody to answer that.
+Browsers belong to your Claude account, not to a computer. If the same Claude
+account is signed in to Chrome on two computers, a job on either computer can see
+both browsers. Chrome also remembers the browser that was picked last on the
+account, and a browser action that does not pick a browser goes to that one, even
+when it is on another computer.
 
-This is the second thing on this page that cannot be automated, and it has the same
-shape as site permissions: a decision that belongs to a person, on a device where
-no person is present. What a headless job does on reaching it is not yet
-established — it may wait until the job times out. Keep one browser paired to the
-account a device serves from.
+So humanikd ties browser jobs to the Chrome on the computer the job runs on:
+
+1. **Link this computer's Chrome.** In the Humanik OS app, open Frameworks, then
+   Claude Code, then Browser, and press **Link this computer's Chrome**. Or run
+   `humanikd chrome link`. humanikd asks the Claude extension which browser is on
+   this computer and saves it. Nobody is asked anything, on this computer or any
+   other.
+2. **Every browser action is checked before it runs.** A job must first select
+   this computer's Chrome. Until it does, every other browser action is refused,
+   and the job is told which browser to select. Listing browsers, switching
+   browsers and selecting another computer's browser are always refused.
+3. **Until a link exists, browser actions are refused.** This holds even when the
+   account has only one browser, because that browser can be on another computer.
+
+Link again after you reinstall the extension or change your Chrome profile.
+
+Each link attempt, and why one failed, is recorded. Each browser job's choice,
+and each refused action, is written to humanikd's log. You can read both in the
+app under This machine, then Logs, with the Browser filter.
 
 ## Requirements and traps
 
