@@ -132,6 +132,13 @@ So humanikd ties browser jobs to the Chrome on the computer the job runs on:
 3. **Until a link exists, browser actions are refused.** This holds even when the
    account has only one browser, because that browser can be on another computer.
 
+If more than one Chrome profile on this computer is signed in to the Claude
+extension, each profile counts as its own browser. The app lists them and you
+choose the one jobs should use with **Use this profile**. In a terminal, run
+`humanikd chrome link --pick`. Chrome does not say which profile is which, so
+each one shows when it connected: the profile you opened last connected last.
+Only profiles on this computer can be chosen, and jobs never use the others.
+
 Link again after you reinstall the extension or change your Chrome profile.
 
 Each link attempt, and why one failed, is recorded. Each browser job's choice,
