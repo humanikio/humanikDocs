@@ -65,6 +65,9 @@ Naming a model is the act of consent. It is also the thing to check first when
 your own account looks like it is not being used: almost always, the people using
 that workspace never left Auto.
 
+Auto is not one fixed model. For each request it picks a model that fits the
+work, so simple turns run on cheaper models. See [How Auto works](/docs/models/auto).
+
 ## What decides who pays
 
 The model identifier carries the answer. You do not set billing separately, and
@@ -75,7 +78,7 @@ there is no switch for it: choosing a model is choosing who pays.
 | A model under **Local machine** | That exact machine | Nobody. There is no per-token cost |
 | A model under **Your key** | Your vendor account | Your vendor invoice |
 | A model under **Platform models** | Our account | Your credit |
-| **Auto** | Our account | Your credit |
+| **Auto** | Our account, on a model picked for each request | Your credit, at the price of the model that answered |
 
 The same model can appear in two sections at once, which looks redundant and is
 not: one row spends your account and the other spends your credit. That is why
@@ -121,6 +124,11 @@ worth holding onto: **Nova asks every time, an office asks once.**
 ## Where to go next
 
 <Cards>
+  <Card
+    title="How Auto works"
+    href="/docs/models/auto"
+    description="How the default picks a model for each request to keep cost down."
+  />
   <Card
     title="Bring your own key"
     href="/docs/models/your-own-key"

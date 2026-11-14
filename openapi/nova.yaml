@@ -1699,7 +1699,9 @@ paths:
         Chooses which model Nova runs on for this caller in this workspace.
 
         Pass `auto` to let the platform choose, which is the default and usually
-        right. Otherwise pass an `id` from
+        right. Auto picks a model for each request and bills the price of the
+        model that answered; see [How Auto works](/docs/models/auto). Otherwise
+        pass an `id` from
         [List models](/docs/api-reference/nova/preferences/listNovaModels).
 
         **The value is not checked against the catalogue on save.** An id that
