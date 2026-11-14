@@ -76,6 +76,15 @@ Before you replace, HumaDocs compares the new pages with the old ones:
 | A page is a different size | The fields keep their place on that page but may stretch. Check them after the swap |
 | The new PDF has fewer pages, with fields on the missing pages | You choose: **delete** those fields, or **move** them to the last page at the same place. Replace stays off until you choose |
 
+After the swap, the editor shows the new pages under the same fields and a notice that says
+what changed: how many fields moved or were deleted, and which pages changed size. Fields that
+moved to the last page are selected, so you can drag them off other boxes together. Anyone
+else with the editor open sees the new version within a few seconds, the same as any other
+change to the fields.
+
+An archived template can be duplicated, which brings an old layout back, but its PDF cannot be
+replaced.
+
 The new file replaces the old one. HumaDocs keeps a note of the old file's name and
 fingerprint, not the file. Documents already made from the template keep their own copy and do
 not change. HumaDocs never edits the text inside a PDF: change the file elsewhere, then replace it.
@@ -134,15 +143,21 @@ draft document and opens it in the document editor. In the draft you can:
 - **Set the signing order.** See below.
 - **Replace the PDF.** Select **Replace PDF** (at the top, or on the **PDF** card in the left
   panel), or drop a PDF onto the editor, to put a new file behind this draft's fields, with the
-  same checks as a template. Only the draft changes, not its template. Once a document
-  is sent, its PDF can no longer be replaced.
+  same checks as a template. Only the draft changes, not its template. A value you filled in
+  stays with its field when the field moves and goes with it when the field is deleted. The
+  replace is listed in the document's activity and in the audit pages of the finished
+  document. Once a document is sent, its PDF can no longer be replaced.
 
 A draft saves even when it is incomplete. Every check runs when you send it: each role needs
 a person and at least one field, and every required value you filled in must be valid.
 
 **Save as template** makes a new template from the document's PDF, roles and fields. It never
-changes the template the document came from. **Duplicate** makes a new draft from any
-document, without its people, values or sign-by date. The original keeps its state.
+changes the template the document came from. A draft whose PDF you replaced becomes a template
+with the new file.
+
+**Duplicate** makes a new draft from any document, in any status, without its people, values or
+sign-by date. The original keeps its state. To change the PDF of a document that was already
+sent, duplicate it and replace the PDF of the new draft.
 
 ## Signing order
 

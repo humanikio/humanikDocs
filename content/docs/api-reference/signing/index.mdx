@@ -82,6 +82,55 @@ the version stored now: read again and make your change on that.
   and [find the blanks to fill in](/docs/api-reference/signing/fields/detectTemplateFields)
   help you place fields where a person writes. Every box uses the same units as fields.
 - Each has a document version under **Fields** as well.
+- Replacing the PDF also raises `layoutVersion` (below).
+
+## Copying, and putting in a new version of the PDF
+
+When a document's wording changes but its layout does not, keep the fields and swap the file
+behind them. Positions are fractions of the page, so every field keeps its place.
+
+| To | Call | What it changes |
+| --- | --- | --- |
+| Copy a template | [Copy a template](/docs/api-reference/signing/templates/duplicateSigningTemplate) | A new template with its own copy of the PDF. The original is not changed |
+| Put a new PDF behind a template | [Replace a template's PDF](/docs/api-reference/signing/templates/replaceSigningTemplatePdf) | That template only. Documents already made from it keep their own copy |
+| Copy a document | [Copy a document as a new draft](/docs/api-reference/signing/documents/duplicateSigningRequest) | A new draft from a document in any status, with no people on it |
+| Put a new PDF behind a draft | [Replace a draft's PDF](/docs/api-reference/signing/documents/replaceSigningRequestPdf) | That draft only. A sent document cannot change |
+| Turn a document into a template | [Save a document as a new template](/docs/api-reference/signing/documents/saveSigningRequestAsTemplate) | A new template. No existing template changes |
+
+To keep the old template and make a new one with the new file, copy it, then replace the
+copy's PDF:
+
+```bash
+curl -X POST "$HOS_API/signing/templates/tpl_a1b2c3/duplicate?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+```bash
+curl -X POST "$HOS_API/signing/templates/tpl_d4e5f6/pdf?workspaceId=ws_a1b2c3" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -F "file=@service-agreement-2027.pdf"
+```
+
+Four things to know about a replace:
+
+- **Fewer pages needs a choice.** If fields sit on pages the new file does not have, the
+  answer is 409 with `needsChoice` and a `report`, and nothing changes. Send the file again
+  with `missingPageFields` set to `delete` or `lastPage`. Moved fields keep their place on the
+  page and may overlap boxes already there; `report.movedFieldIds` names them.
+- **A page of a different size is not refused.** It is listed in `report.resizedPages`. The
+  fields there keep their place on the page but may stretch.
+- **It counts as a change.** `layoutVersion` goes up by one, so a save made with the old
+  `baseVersion` answers 409. Read the template or draft again after a replace.
+- **The old file is not kept.** The new file overwrites it at the same place, and
+  `previousPdfs` keeps a note of the old one: its SHA-256, name and page count.
+
+HumaDocs never edits the text inside a PDF. Change the file elsewhere, then replace it.
+
+## What needs you
+
+[List what needs you](/docs/api-reference/signing/documents/listSigningActions) returns the
+documents waiting for the caller: their turn to sign (matched by account email, so never for an
+API key), and documents they sent that were declined, expired or could not be finished.
 
 ## Two things that surprise people
 

@@ -1,9 +1,8 @@
 # DRAFT (p_36, 2026-11-11), for Tyler's review. Wired into src/lib/openapi.ts so the pages render
-# locally. Two things must be true before it is published:
-#   1. hos-api passes `delivery` through on create and on PUT (the controller drops it today, so
-#      every document goes by email over HTTP). The spec below documents the field as intended.
-#   2. The reminder and expiry sweep is registered in production. Until then nothing reminds or
-#      expires on its own, and the `remindEveryDays` and `expiresAt` descriptions overstate it.
+# locally. One thing must be true before it is published (the `delivery` pass-through, once item 1,
+# is done: create and PUT both take it):
+#   - The reminder and expiry sweep is registered in production. Until then nothing reminds or
+#     expires on its own, and the `remindEveryDays` and `expiresAt` descriptions overstate it.
 openapi: 3.1.0
 
 info:
@@ -22,6 +21,11 @@ info:
     **A document never changes when its template changes.** Sending copies the
     template's PDF, roles and fields into the document. Later template edits do not
     reach documents already made.
+
+    **Copying and replacing never reach back.** Copying a template or a document
+    makes a new one with its own copy of the PDF. Replacing a template's PDF does
+    not change documents already made from it, and only a draft's PDF can be
+    replaced.
 
     **A signing link is a secret.** Anyone holding a person's link can sign as that
     person. The endpoints that return links say so, and they are the only ones that
@@ -131,8 +135,8 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     StaleLayout:
       description: |
-        Someone saved the roles or fields after the `baseVersion` you sent.
-        Nothing was saved. `layoutVersion` is the version stored now: read the
+        Someone saved the roles or fields after the `baseVersion` you sent, or
+        replaced the PDF (a replace also counts as a change). Nothing was saved. `layoutVersion` is the version stored now: read the
         template or document again, make your change on it, and send that
         version as `baseVersion`.
       content:
@@ -160,6 +164,52 @@ components:
                 type: array
                 items: { $ref: '#/components/schemas/LayoutIssue' }
             required: [success, error]
+    ReplaceRejected:
+      description: |
+        The file or the request was not usable. Nothing was changed. `error` is one of:
+
+        - `missingPageFields must be "delete" or "lastPage".`
+        - The file is not a usable PDF: `The file is empty.`, `This file is not a
+          PDF.`, `This PDF is password protected. ...`, `This PDF could not be
+          read. It may be damaged.`, `This PDF has no pages.`, or `This PDF has
+          more than 200 pages.`
+        - `This is the same file as the one already in use.` (same SHA-256)
+        - `The fields do not fit the new PDF: ...`, when a field would not fit the
+          new pages after your choice.
+        - `The upload could not be read.` or `Choose a PDF file to upload.`
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ReplaceConflict:
+      description: |
+        Nothing was changed. One of:
+
+        - **A choice is needed.** Fields sit on pages the new file does not have
+          and `missingPageFields` was not sent. `needsChoice` is `true` and
+          `report` lists the pages and the field ids. Send the file again with
+          `missingPageFields`.
+        - **Another replace is running** on the same template or draft
+          (`The PDF is already being replaced. Try again in a minute.`), or took
+          over while yours ran (`Another replace took over. Try again.`).
+        - **It cannot change.** An archived template; a document that has been
+          sent; a document being deleted.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  needsChoice: { type: boolean, const: true }
+                  report: { $ref: '#/components/schemas/PageReport' }
+    CopyFailed:
+      description: |
+        The copy was not made. When the source's PDF was replaced at the same
+        moment, `error` is `The file changed while it was being copied (someone
+        replaced the PDF at the same moment). Try again.` Trying again is safe.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
     Conflict:
       description: |
         The document is in a state that does not allow this. For example, it has
@@ -349,6 +399,11 @@ components:
         sha256:
           type: string
           description: Hex SHA-256 of the uploaded file.
+        md5:
+          type: string
+          description: |
+            Base64 MD5 of the file. Set on files uploaded or replaced from
+            2026-11-13 on; older templates do not have it.
         bytes: { type: integer }
 
     Template:
@@ -373,15 +428,39 @@ components:
           type: integer
           minimum: 0
           description: |
-            Goes up by one every time the roles or fields change. Send it back as
-            `baseVersion` when you change them.
+            Goes up by one every time the roles or fields change, and when the PDF
+            is replaced. Send it back as `baseVersion` when you change them.
+        layoutChangedBy:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/LayoutActor'
         duplicatedFrom:
           type: [string, 'null']
-          description: The template this one was copied from, when it was made by Duplicate.
+          description: |
+            The `id` of the template this one was copied from by
+            [Copy a template](/docs/api-reference/signing/templates/duplicateSigningTemplate).
+            `null` otherwise.
         previousPdfs:
           type: array
-          description: The files this template had before, newest last. Only a note is kept; the old file itself is replaced.
+          maxItems: 20
+          description: |
+            The files this template had before, newest last, at most 20. Only a
+            note is kept; the old file itself is overwritten. A copy starts with
+            an empty list.
           items: { $ref: '#/components/schemas/PreviousPdf' }
+
+    LayoutActor:
+      type: object
+      description: Who made the last change to the roles, the fields or the PDF.
+      properties:
+        kind:
+          type: string
+          enum: [person, agent]
+          description: '`agent` is Nova or an office working through HumaDocs.'
+        uid:
+          type: string
+          description: The member's user id, or the service account id for an API key.
+        name: { type: string, description: A display name, when one is known. }
 
     PreviousPdf:
       type: object
@@ -531,8 +610,21 @@ components:
           type: integer
           minimum: 0
           description: |
-            Goes up by one every time this document's roles or fields change. Send
-            it back as `baseVersion` when you change them.
+            Goes up by one every time this document's roles or fields change, and
+            when its PDF is replaced. Send it back as `baseVersion` when you change
+            them.
+        layoutChangedBy:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/LayoutActor'
+        previousPdfs:
+          type: array
+          maxItems: 20
+          description: |
+            The files this draft had before
+            [Replace a draft's PDF](/docs/api-reference/signing/documents/replaceSigningRequestPdf),
+            newest last. Only a note is kept.
+          items: { $ref: '#/components/schemas/PreviousPdf' }
         snapshot:
           type: object
           description: The PDF details, roles and fields this document uses.
@@ -652,7 +744,17 @@ components:
             What happened. Common values: `created`, `sent`, `email_sent`,
             `sms_sent`, `link_issued`, `opened`, `consented`, `completed`,
             `all_signed`, `declined`, `voided`, `resent`, `reminded`, `expired`,
-            `finalized`, `finalize_failed`, `result_downloaded`.
+            `finalized`, `finalize_failed`, `result_downloaded`, `pdf_replaced`.
+
+            `pdf_replaced`: a draft's PDF was replaced before sending. `data` has
+            `from` and `to` (the old and new SHA-256), `fileName`, `pageCount`,
+            and `moved` and `deleted` (how many fields were moved to the last page
+            or deleted). The finished document's audit
+            pages list it as "Document file replaced before sending".
+
+            `created` on a copy made by
+            [Copy a document as a new draft](/docs/api-reference/signing/documents/duplicateSigningRequest)
+            has `data.duplicatedFrom`, the id of the document it was copied from.
         at: { type: string, format: date-time }
         signerId: { type: string }
         actorUid:
@@ -1076,9 +1178,39 @@ paths:
         Documents already made from this template keep their own copy and do not
         change.
 
+        **What changes.** The file is overwritten at the same place, so the
+        template's `id` and download link stay the same. `pdf` describes the new
+        file. `layoutVersion` goes up by one, so an editor holding the old
+        version gets a 409 on its next save and must read the template again.
+        `previousPdfs` gains a note of the old file. Fields keep their `fieldId`,
+        moved ones included.
+
+        **Do it in this order.** Save your field changes first: the replace works
+        on the saved fields. One replace runs at a time per template.
+
+        HumaDocs never edits the text inside a PDF. Change the file elsewhere,
+        then replace it.
+
         **Permission:** `signing:manage` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
 
+        #### Get the template ID first
+
+        ```bash
+        curl "$HOS_API/signing/templates?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
         #### Request
+
+        ```bash
+        curl -X POST "$HOS_API/signing/templates/tpl_a1b2c3/pdf?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -F "file=@service-agreement-v2.pdf"
+        ```
+
+        #### When the answer is 409 with `needsChoice`
+
+        Send the same file again with the choice. Nothing changed the first time.
 
         ```bash
         curl -X POST "$HOS_API/signing/templates/tpl_a1b2c3/pdf?workspaceId=ws_a1b2c3" \
@@ -1086,6 +1218,9 @@ paths:
           -F "file=@service-agreement-v2.pdf" \
           -F "missingPageFields=lastPage"
         ```
+
+        After `lastPage`, `report.movedFieldIds` lists the fields to move off
+        anything they now overlap.
       parameters:
         - $ref: '#/components/parameters/SigningTemplateId'
         - $ref: '#/components/parameters/WorkspaceId'
@@ -1116,31 +1251,27 @@ paths:
                   success: { type: boolean, const: true }
                   template: { $ref: '#/components/schemas/Template' }
                   report: { $ref: '#/components/schemas/ReplaceReport' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400': { $ref: '#/components/responses/ReplaceRejected' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409':
-          description: |
-            Fields sit on pages the new file does not have and `missingPageFields`
-            was not sent (`needsChoice: true`, with `report`), another replace of
-            the same item is running, or the item cannot change (an archived
-            template, a document that has been sent).
+        '404':
+          description: Not found, or deleted while the PDF was being replaced.
           content:
             application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/Error'
-                  - type: object
-                    properties:
-                      needsChoice: { type: boolean, const: true }
-                      report: { $ref: '#/components/schemas/PageReport' }
+              schema: { $ref: '#/components/schemas/Error' }
+        '409': { $ref: '#/components/responses/ReplaceConflict' }
         '413':
           description: The PDF is larger than 25 MB.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-        '500': { $ref: '#/components/responses/ServerError' }
+        '500':
+          description: |
+            The replace failed part way. The old file is put back, so the file and
+            the record still agree, and trying again is safe.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /signing/templates/{signingTemplateId}/duplicate:
     post:
@@ -1148,13 +1279,52 @@ paths:
       summary: Copy a template
       tags: [Templates]
       description: |
-        A new template named "(copy)" with the same PDF, roles, fields and
-        description. An archived template can be copied; the copy is not archived.
-        To put a new file behind the copied fields, follow with
-        [Replace a template's PDF](/docs/api-reference/signing/templates/replaceSigningTemplatePdf).
+        A new template with the same PDF, roles, fields and description. The PDF
+        is copied file to file, so the copy has its own file. The original is not
+        changed.
+
+        | | The copy |
+        | --- | --- |
+        | `name` | Your `name`, or the original's name with " (copy)" |
+        | `duplicatedFrom` | The original's `id` |
+        | `layoutVersion` | Starts at 0 |
+        | `previousPdfs` | Empty: that history belongs to the original |
+        | `archivedAt` | `null`, even when the original is archived |
+
+        An archived template can be copied, which is how an old layout comes back.
+
+        **New wording, same layout, keep the old template.** Copy it, then
+        [replace the copy's PDF](/docs/api-reference/signing/templates/replaceSigningTemplatePdf).
+        The console's **Duplicate and replace** does exactly these two calls.
 
         **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
         and `signing:manage` @ `workspace/{workspaceId}`. Both are checked.
+
+        #### Get the template ID first
+
+        ```bash
+        curl "$HOS_API/signing/templates?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        #### Copy it
+
+        ```bash
+        curl -X POST "$HOS_API/signing/templates/tpl_a1b2c3/duplicate?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{ "name": "Service agreement 2027" }'
+        ```
+
+        #### Replace the copy's PDF
+
+        Use the `template.id` from the answer.
+
+        ```bash
+        curl -X POST "$HOS_API/signing/templates/tpl_d4e5f6/pdf?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -F "file=@service-agreement-2027.pdf"
+        ```
       parameters:
         - $ref: '#/components/parameters/SigningTemplateId'
         - $ref: '#/components/parameters/WorkspaceId'
@@ -1165,7 +1335,12 @@ paths:
             schema:
               type: object
               properties:
-                name: { type: string, maxLength: 120, description: 'Defaults to the template name with " (copy)".' }
+                name:
+                  type: string
+                  maxLength: 120
+                  description: |
+                    Defaults to the original's name with " (copy)", shortened to fit
+                    120 characters. Blank counts as not sent. Longer than 120 is a 400.
       responses:
         '201':
           description: Created.
@@ -1180,7 +1355,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/ServerError' }
+        '500': { $ref: '#/components/responses/CopyFailed' }
 
   # ── Documents ──────────────────────────────────────────────────────────────
 
@@ -1340,8 +1515,9 @@ paths:
       tags: [Documents]
       description: |
         Counts for the HumaDocs home page: drafts, documents waiting for others,
-        finished documents, and documents waiting for the caller. The last count
-        matches the caller's own email, so it is usually 0 for a service account.
+        finished documents, and `actionsRequired`, the number of items
+        [List what needs you](/docs/api-reference/signing/documents/listSigningActions)
+        returns for the caller.
 
         **Permission:** `signing:read` @ `workspace/{workspaceId}`
       parameters:
@@ -1362,6 +1538,58 @@ paths:
                       waiting: { type: integer }
                       finalized: { type: integer }
                       actionsRequired: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/actions:
+    get:
+      operationId: listSigningActions
+      summary: List what needs you
+      tags: [Documents]
+      description: |
+        The HumaDocs home page's **Actions required**: documents waiting for the
+        caller, newest activity first. Each item has a `reason`:
+
+        | `reason` | The document |
+        | --- | --- |
+        | `your_turn` | Is out for signing and it is the caller's turn, matched by the caller's account email. `signerId` is the caller's signer |
+        | `declined`, `expired`, `finalizeFailed` | Was sent by the caller and needs the sender to look at it. It stays listed until it is deleted |
+
+        **With an API key.** A service account has no email, so `your_turn` never
+        appears. The other three list documents the service account itself sent.
+
+        At most 100 of each kind. A document that is both is listed once, as
+        `your_turn`.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}`
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        reason:
+                          type: string
+                          enum: [your_turn, declined, expired, finalizeFailed]
+                        signerId:
+                          type: string
+                          description: Set for `your_turn` only. The caller's signer on this document.
+                        request:
+                          description: The document, without `snapshot`.
+                          allOf:
+                            - $ref: '#/components/schemas/Document'
+                      required: [reason, request]
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -1906,18 +2134,43 @@ paths:
 
         The template the draft came from is not changed. A value you filled in
         goes with its field: it is removed with a deleted field and kept with a
-        moved one. The replace is listed in the document's events and in the audit
-        pages of the finished document.
+        moved one. The replace is listed in the document's events (`pdf_replaced`)
+        and in the audit pages of the finished document.
+
+        **What changes.** The draft's file is overwritten at the same place.
+        `snapshot.pdf` describes the new file, `layoutVersion` goes up by one (an
+        editor holding the old version gets a 409 on its next save), and
+        `previousPdfs` gains a note of the old file. People, the message and the
+        other settings stay as they are.
+
+        **Do it in this order.** Save your changes to the draft first: the replace
+        works on the saved fields. One replace runs at a time per draft.
+
+        To change a sent document, make a new draft with
+        [Copy a document as a new draft](/docs/api-reference/signing/documents/duplicateSigningRequest)
+        and replace that draft's PDF.
 
         **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+
+        #### Get the document ID first
+
+        ```bash
+        curl "$HOS_API/signing/requests?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
 
         #### Request
 
         ```bash
         curl -X POST "$HOS_API/signing/requests/req_a1b2c3/pdf?workspaceId=ws_a1b2c3" \
           -H "Authorization: Bearer $HOS_KEY" \
-          -F "file=@service-agreement-v2.pdf"
+          -F "file=@service-agreement-v2.pdf" \
+          -F "missingPageFields=delete"
         ```
+
+        `missingPageFields` is needed only when fields sit on pages the new file
+        does not have. Without it, that case answers 409 with `needsChoice` and
+        changes nothing.
       parameters:
         - $ref: '#/components/parameters/SigningRequestId'
         - $ref: '#/components/parameters/WorkspaceId'
@@ -1951,31 +2204,27 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Signer' }
                   report: { $ref: '#/components/schemas/ReplaceReport' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400': { $ref: '#/components/responses/ReplaceRejected' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409':
-          description: |
-            Fields sit on pages the new file does not have and `missingPageFields`
-            was not sent (`needsChoice: true`, with `report`), another replace of
-            the same item is running, or the item cannot change (an archived
-            template, a document that has been sent).
+        '404':
+          description: Not found, or deleted while the PDF was being replaced.
           content:
             application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/Error'
-                  - type: object
-                    properties:
-                      needsChoice: { type: boolean, const: true }
-                      report: { $ref: '#/components/schemas/PageReport' }
+              schema: { $ref: '#/components/schemas/Error' }
+        '409': { $ref: '#/components/responses/ReplaceConflict' }
         '413':
           description: The PDF is larger than 25 MB.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-        '500': { $ref: '#/components/responses/ServerError' }
+        '500':
+          description: |
+            The replace failed part way. The old file is put back, so the file and
+            the record still agree, and trying again is safe.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /signing/requests/{signingRequestId}/duplicate:
     post:
@@ -1983,12 +2232,37 @@ paths:
       summary: Copy a document as a new draft
       tags: [Documents]
       description: |
-        A new draft named "(copy)", with this document's PDF, roles, fields, order,
-        message and reminder setting. It does not copy the people, the values you
-        filled in, or the sign-by date.
+        A new draft from any document, in any status: draft, sent, finished,
+        declined, expired or cancelled. The original keeps its state; only the
+        copy is new. The PDF is copied file to file from this document's own copy,
+        so field changes made on this document come along.
+
+        | Copied | Not copied |
+        | --- | --- |
+        | The PDF, roles, fields, signing order, message, reminder setting, the template it came from | The people (every role starts empty), the values you filled in, the sign-by date, `delivery` (the copy uses `email`) and the send-from address and number |
+
+        The copy is named after the original with " (copy)" and starts with a
+        `created` event whose `data.duplicatedFrom` is this document's id.
+
+        To change a sent document's PDF, copy it, then
+        [replace the copy's PDF](/docs/api-reference/signing/documents/replaceSigningRequestPdf).
 
         **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
         and `signing:send` @ `workspace/{workspaceId}`. Both are checked.
+
+        #### Get the document ID first
+
+        ```bash
+        curl "$HOS_API/signing/requests?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
+
+        #### Copy it
+
+        ```bash
+        curl -X POST "$HOS_API/signing/requests/req_a1b2c3/duplicate?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY"
+        ```
       parameters:
         - $ref: '#/components/parameters/SigningRequestId'
         - $ref: '#/components/parameters/WorkspaceId'
@@ -2005,7 +2279,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/ServerError' }
+        '500': { $ref: '#/components/responses/CopyFailed' }
 
   /signing/requests/{signingRequestId}/save-as-template:
     post:
@@ -2013,8 +2287,15 @@ paths:
       summary: Save a document as a new template
       tags: [Documents]
       description: |
-        A new template from this document's PDF, roles and fields. It never
-        changes an existing template.
+        A new template from this document's PDF, roles and fields, in any status.
+        It never changes an existing template, including the one the document
+        came from. The PDF is copied file to file from this document's own copy,
+        so a draft whose PDF was replaced becomes a template with the new file.
+
+        Not copied: the people, the values you filled in, the message, the sign-by
+        date, reminders and the signing order. The roles and fields go through the
+        same check as a template save, so a document whose fields would not pass
+        that check answers 400.
 
         **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
         and `signing:manage` @ `workspace/{workspaceId}`. Both are checked.
@@ -2028,7 +2309,7 @@ paths:
             schema:
               type: object
               properties:
-                name: { type: string, maxLength: 120 }
+                name: { type: string, minLength: 1, maxLength: 120, description: The new template's name. }
               required: [name]
       responses:
         '201':
@@ -2044,7 +2325,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/ServerError' }
+        '500': { $ref: '#/components/responses/CopyFailed' }
 
   # ── Signers ────────────────────────────────────────────────────────────────
 
