@@ -33,18 +33,76 @@ person yet. A template has between 1 and 10 roles.
 
 <Step>
 **Place the fields.** Drag fields onto the pages and give each one to a role. Select several
-fields to move, copy or delete them together.
+fields to move, copy or delete them together. To give the pages more room, hide the panel on
+either side with the button at its top. A hidden panel stays as a narrow strip with its name on
+it: select the strip to open the panel again.
 </Step>
 
 <Step>
 **Save.** The editor shows whether your changes are saved, and asks before you leave with
-changes that are not.
+changes that are not. If something is wrong, such as a field past the edge of the page or a
+field for a role that no longer exists, nothing is saved and the editor lists every problem.
+It also lists things worth a look that do not stop the save: two fields on top of each other,
+a role with no signature, or a field over printed words. Select one to select its field.
 </Step>
 
 </Steps>
 
-The PDF of a template never changes. To use a different PDF, make a new template. Archiving
-a template hides it from the list; documents already made from it are not affected.
+Archiving a template hides it from the list; documents already made from it are not affected.
+
+### Duplicate a template, and replace its PDF
+
+When the wording of a document changes but its layout does not, keep the fields and swap the
+file behind them.
+
+- **Duplicate.** In **Templates**, open the menu on a template's row and select **Duplicate**, or
+  select **Duplicate** at the top of the template editor. A copy named "(copy)" opens in the
+  editor with the same PDF, roles and fields.
+- **Replace PDF.** In the template editor, select **Replace PDF** at the top or on the **PDF**
+  card in the left panel, and choose the new file. Every field keeps its place on the page.
+- **Drop a file.** Drag a PDF onto the editor and drop it on **Replace this PDF**, or on
+  **Duplicate, then replace** to make a copy of the template with the new file. The template you
+  started from does not change.
+- **Duplicate and replace.** The same copy is on the **PDF** card. The copy opens with the new
+  file in place.
+
+Save your changes first: these buttons are off while there are unsaved changes.
+
+Before you replace, HumaDocs compares the new pages with the old ones:
+
+| What it finds | What happens |
+| --- | --- |
+| The pages line up | Every field stays where it is |
+| A page is a different size | The fields keep their place on that page but may stretch. Check them after the swap |
+| The new PDF has fewer pages, with fields on the missing pages | You choose: **delete** those fields, or **move** them to the last page at the same place. Replace stays off until you choose |
+
+The new file replaces the old one. HumaDocs keeps a note of the old file's name and
+fingerprint, not the file. Documents already made from the template keep their own copy and do
+not change. HumaDocs never edits the text inside a PDF: change the file elsewhere, then replace it.
+
+### Let Nova place and review the fields
+
+Both editors have an **Auto place and review document fields** card at the top of the left
+panel. Select it and Nova opens on the right. Nova finds the blanks on the pages (lines to
+write on, answer boxes and checkboxes), reads the words around each one, and decides the field
+type, the role it belongs to, and whether it is required. If the document already has fields,
+Nova also checks them and suggests fixes.
+
+Nova shows every change on one card, grouped by page. Nothing is saved until you select
+**Approve**. The fields then appear in the editor within a few seconds. Save your own changes
+before you start, so Nova works on what you see. The card is shown only to people who can
+change the fields.
+
+Nova places fields on top of the PDF and never changes its text. A scanned PDF has no text
+Nova can read, so its fields must be placed by hand. See
+[Nova and HumaDocs](/docs/signing/nova-and-humadocs).
+
+### When someone else changes the fields
+
+If Nova or a teammate saves the fields while you have the editor open, the editor shows their
+version within a few seconds. If you have unsaved changes, it asks first: **Load their
+version**, or **Keep mine** and save over theirs. A save made from an older version is never
+applied without asking, so nobody's work is lost without warning.
 
 ### Fields
 
@@ -52,7 +110,7 @@ a template hides it from the list; documents already made from it are not affect
 | --- | --- |
 | Signature | Draws, types or uploads a signature |
 | Initials | Draws, types or uploads initials |
-| Date signed | Nothing. The date is filled in when they finish, in their own time zone |
+| Date signed | Nothing. Today's date appears, locked, as soon as they sign, in their own time zone |
 | Text | Types a short answer |
 | Name | Types their name |
 | Email | Types an email address |
@@ -74,13 +132,17 @@ draft document and opens it in the document editor. In the draft you can:
   or a start date. The signer sees it filled in and cannot change it, unless you tick
   **Signer can change it**.
 - **Set the signing order.** See below.
+- **Replace the PDF.** Select **Replace PDF** (at the top, or on the **PDF** card in the left
+  panel), or drop a PDF onto the editor, to put a new file behind this draft's fields, with the
+  same checks as a template. Only the draft changes, not its template. Once a document
+  is sent, its PDF can no longer be replaced.
 
 A draft saves even when it is incomplete. Every check runs when you send it: each role needs
 a person and at least one field, and every required value you filled in must be valid.
 
 **Save as template** makes a new template from the document's PDF, roles and fields. It never
-changes the template the document came from. **Duplicate** makes a new draft from a
-document, without its people, values or sign-by date.
+changes the template the document came from. **Duplicate** makes a new draft from any
+document, without its people, values or sign-by date. The original keeps its state.
 
 ## Signing order
 

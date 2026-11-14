@@ -68,6 +68,21 @@ Anyone who has a person's signing link can sign as that person. Three responses 
 
 Do not log these responses, and send each link only to its person.
 
+## Changing roles and fields safely
+
+A template, and a document that is still a draft, carries a `layoutVersion` that goes up by
+one every time its roles or fields change. When you change them, send the version you read
+as `baseVersion`. If someone saved in between, nothing is saved and the answer is 409 with
+the version stored now: read again and make your change on that.
+
+- [Check a template's roles and fields](/docs/api-reference/signing/fields/checkTemplateLayout)
+  runs the same check a save runs, without saving. A failed save returns the same list as
+  `issues`.
+- [Read the printed words on a page](/docs/api-reference/signing/fields/getTemplatePageText)
+  and [find the blanks to fill in](/docs/api-reference/signing/fields/detectTemplateFields)
+  help you place fields where a person writes. Every box uses the same units as fields.
+- Each has a document version under **Fields** as well.
+
 ## Two things that surprise people
 
 **A document is a copy.** Sending copies the template's PDF, roles and fields into the

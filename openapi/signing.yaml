@@ -42,6 +42,11 @@ tags:
     description: A PDF, the roles who sign it, and the fields each role fills in.
   - name: Documents
     description: Copies of a template sent to real people, from draft to finished.
+  - name: Fields
+    description: |
+      Checking roles and fields before saving, the layout version that keeps two
+      editors from overwriting each other, the printed words on a page, and the
+      blanks a person is meant to fill in. The same for a template and a document.
   - name: Signers
     description: One person on a document, their link, and sending it again.
   - name: Activity
@@ -124,6 +129,37 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+    StaleLayout:
+      description: |
+        Someone saved the roles or fields after the `baseVersion` you sent.
+        Nothing was saved. `layoutVersion` is the version stored now: read the
+        template or document again, make your change on it, and send that
+        version as `baseVersion`.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, const: false }
+              error: { type: string }
+              layoutVersion: { type: integer, minimum: 0 }
+            required: [success, error, layoutVersion]
+    LayoutRejected:
+      description: |
+        A field is missing or not valid. When the roles or fields fail the check,
+        `issues` lists every problem, each with the field or role it is on, and
+        nothing is saved. Otherwise `error` names what to fix.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, const: false }
+              error: { type: string }
+              issues:
+                type: array
+                items: { $ref: '#/components/schemas/LayoutIssue' }
+            required: [success, error]
     Conflict:
       description: |
         The document is in a state that does not allow this. For example, it has
@@ -139,6 +175,101 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
+    LayoutIssue:
+      type: object
+      description: |
+        One problem found by the roles and fields check. `level` is fixed per
+        code: an `error` stops a save, a `warning` never does.
+      properties:
+        code:
+          type: string
+          description: |
+            Errors: `no-roles`, `too-many-roles`, `bad-role-id`, `duplicate-role-id`,
+            `role-no-name`, `role-name-too-long`, `bad-role-order`, `fields-not-list`,
+            `too-many-fields`, `bad-field-id`, `duplicate-field-id`, `unknown-type`,
+            `unknown-role`, `label-too-long`, `required-not-set`, `bad-read-only`,
+            `page-out-of-range`, `bad-position`, `no-size`, `past-page-edge`.
+            Warnings: `overlap`, `role-never-signs`, `date-without-signature`,
+            `covers-text`, `too-small`.
+        level: { type: string, enum: [error, warning] }
+        fieldId: { type: string }
+        roleId: { type: string }
+        otherFieldId: { type: string, description: The second field, for `overlap`. }
+        message: { type: string, description: A plain sentence, safe to show to a person. }
+      required: [code, level, message]
+
+    FieldCandidate:
+      type: object
+      description: |
+        A place on the page where a person is meant to write, found from the PDF's
+        own text and drawn lines. It describes the spot only; it does not say which
+        field type or role it is for.
+      properties:
+        candidateId:
+          type: string
+          description: '`c_<page number>_<n>`. Stable for this PDF.'
+          examples: [c_3_2]
+        page: { type: integer, minimum: 0, description: 0-based. }
+        x: { type: number, minimum: 0, maximum: 1 }
+        y: { type: number, minimum: 0, maximum: 1 }
+        w: { type: number, minimum: 0, maximum: 1 }
+        h: { type: number, minimum: 0, maximum: 1 }
+        kind:
+          type: string
+          enum: [underscores, line, box, checkboxChar]
+          description: |
+            `underscores` a typed blank line, `line` a drawn line to write on,
+            `box` an empty answer box, `checkboxChar` a checkbox.
+        before: { type: string, description: Printed words just before it on the same line. }
+        above: { type: string, description: Printed words on the line just above it. }
+        after: { type: string, description: Printed words just after it on the same line. }
+        coveredBy:
+          type: array
+          items: { type: string }
+          description: Ids of fields already placed on this spot.
+      required: [candidateId, page, x, y, w, h, kind, before, above, after, coveredBy]
+
+    PageText:
+      type: object
+      description: |
+        What is printed on one page. Every box uses the same units as fields:
+        fractions of the page as displayed, from the top left.
+      properties:
+        page: { type: integer, minimum: 0 }
+        size:
+          type: object
+          description: The page size in PDF points, as displayed.
+          properties: { w: { type: number }, h: { type: number } }
+        words:
+          type: array
+          items:
+            type: object
+            properties:
+              text: { type: string }
+              x: { type: number }
+              y: { type: number }
+              w: { type: number }
+              h: { type: number }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              dir: { type: string, enum: [h, v] }
+              x: { type: number }
+              y: { type: number }
+              w: { type: number }
+              h: { type: number }
+        rects:
+          type: array
+          items:
+            type: object
+            properties:
+              x: { type: number }
+              y: { type: number }
+              w: { type: number }
+              h: { type: number }
+
     Error:
       type: object
       properties:
@@ -238,6 +369,63 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         archivedAt: { type: [string, 'null'], format: date-time }
+        layoutVersion:
+          type: integer
+          minimum: 0
+          description: |
+            Goes up by one every time the roles or fields change. Send it back as
+            `baseVersion` when you change them.
+        duplicatedFrom:
+          type: [string, 'null']
+          description: The template this one was copied from, when it was made by Duplicate.
+        previousPdfs:
+          type: array
+          description: The files this template had before, newest last. Only a note is kept; the old file itself is replaced.
+          items: { $ref: '#/components/schemas/PreviousPdf' }
+
+    PreviousPdf:
+      type: object
+      properties:
+        sha256: { type: string, description: Hex SHA-256 of the old file. }
+        fileName: { type: string }
+        pageCount: { type: integer }
+        replacedAt: { type: [string, 'null'], format: date-time }
+        replacedBy: { type: [string, 'null'], description: The user id of the person who replaced it. }
+
+    PageReport:
+      type: object
+      description: How the new PDF's pages compare with the old one's. Page numbers start at 0.
+      properties:
+        oldPageCount: { type: integer }
+        newPageCount: { type: integer }
+        removedPages:
+          type: array
+          description: Pages the new file does not have.
+          items: { type: integer }
+        resizedPages:
+          type: array
+          description: Pages in both files whose size changed by more than 1 point. Fields there keep their place on the page but may stretch.
+          items: { type: integer }
+        fieldsOnMissingPages:
+          type: array
+          description: Ids of the fields on removed pages.
+          items: { type: string }
+
+    ReplaceReport:
+      allOf:
+        - $ref: '#/components/schemas/PageReport'
+        - type: object
+          properties:
+            movedFieldIds:
+              type: array
+              description: Fields moved to the last page.
+              items: { type: string }
+            deletedFieldIds:
+              type: array
+              items: { type: string }
+            fileName: { type: string }
+            sha256: { type: string, description: Hex SHA-256 of the new file. }
+            previousSha256: { type: string }
 
     SendFrom:
       type: object
@@ -339,6 +527,12 @@ components:
           enum: [email, sms, both, none]
           description: How invitations and reminders reach people. `none` sends nothing.
         sendFrom: { $ref: '#/components/schemas/SendFrom' }
+        layoutVersion:
+          type: integer
+          minimum: 0
+          description: |
+            Goes up by one every time this document's roles or fields change. Send
+            it back as `baseVersion` when you change them.
         snapshot:
           type: object
           description: The PDF details, roles and fields this document uses.
@@ -514,8 +708,8 @@ paths:
         [Change a template](/docs/api-reference/signing/templates/updateSigningTemplate).
 
         The PDF can be up to 25 MB and 200 pages. A password protected PDF is
-        refused. The PDF of a template never changes: to use a different file,
-        make a new template.
+        refused. To put a different file behind the same fields later, use
+        [Replace a template's PDF](/docs/api-reference/signing/templates/replaceSigningTemplatePdf).
 
         Send `workspaceId` in the query string. A `workspaceId` placed only in the
         form fields is not read.
@@ -603,6 +797,11 @@ paths:
         at a role in the template, sit on a page that exists, and fit inside the
         page. Documents already made from this template do not change.
 
+        Send `baseVersion` (the template's `layoutVersion` when you read it) with
+        `roles` or `fields`. If someone saved them since, nothing is saved and the
+        answer is 409. A successful save returns `warnings`: things worth a look
+        that did not stop the save.
+
         **Permission:** `signing:manage` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
       requestBody:
         required: true
@@ -619,6 +818,10 @@ paths:
                 fields:
                   type: array
                   items: { $ref: '#/components/schemas/Field' }
+                baseVersion:
+                  type: integer
+                  minimum: 0
+                  description: The `layoutVersion` you read. Optional, but without it a newer save can be overwritten.
       responses:
         '200':
           description: OK.
@@ -629,10 +832,14 @@ paths:
                 properties:
                   success: { type: boolean, const: true }
                   template: { $ref: '#/components/schemas/Template' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+                  warnings:
+                    type: array
+                    items: { $ref: '#/components/schemas/LayoutIssue' }
+        '400': { $ref: '#/components/responses/LayoutRejected' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaleLayout' }
         '500': { $ref: '#/components/responses/ServerError' }
 
     delete:
@@ -658,6 +865,170 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /signing/templates/{signingTemplateId}/check-layout:
+    parameters:
+      - $ref: '#/components/parameters/SigningTemplateId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: checkTemplateLayout
+      summary: Check a template's roles and fields
+      tags: [Fields]
+      description: |
+        Runs the same check a save runs, and saves nothing. Send `roles` and
+        `fields` to check a change; leave either out to use what is stored.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roles:
+                  type: array
+                  items: { $ref: '#/components/schemas/Role' }
+                fields:
+                  type: array
+                  items: { $ref: '#/components/schemas/Field' }
+      responses:
+        '200':
+          description: OK. `ok` is false when there is at least one error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  ok: { type: boolean }
+                  errors:
+                    type: array
+                    items: { $ref: '#/components/schemas/LayoutIssue' }
+                  warnings:
+                    type: array
+                    items: { $ref: '#/components/schemas/LayoutIssue' }
+                  layoutVersion: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/templates/{signingTemplateId}/layout-version:
+    parameters:
+      - $ref: '#/components/parameters/SigningTemplateId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: getTemplateLayoutVersion
+      summary: Get a template's layout version
+      tags: [Fields]
+      description: |
+        The current `layoutVersion` and who made the last change, without the
+        roles and fields. Ask it to learn that someone else saved.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  layoutVersion: { type: integer, minimum: 0 }
+                  layoutChangedBy:
+                    type: [object, 'null']
+                    properties:
+                      kind: { type: string, enum: [person, agent] }
+                      name: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/templates/{signingTemplateId}/pages/{page}/text:
+    parameters:
+      - $ref: '#/components/parameters/SigningTemplateId'
+      - $ref: '#/components/parameters/WorkspaceId'
+      - name: page
+        in: path
+        required: true
+        description: 0-based page number.
+        schema: { type: integer, minimum: 0 }
+    get:
+      operationId: getTemplatePageText
+      summary: Read the printed words on a page
+      tags: [Fields]
+      description: |
+        The words, drawn lines and boxes printed on one page of the template's PDF,
+        read from the PDF's own text. A scanned PDF has no text: `hasText` is
+        false and `words` is empty.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  hasText: { type: boolean }
+                  page: { $ref: '#/components/schemas/PageText' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/templates/{signingTemplateId}/detect-fields:
+    parameters:
+      - $ref: '#/components/parameters/SigningTemplateId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: detectTemplateFields
+      summary: Find the blanks to fill in
+      tags: [Fields]
+      description: |
+        Finds the places on the template's pages where a person is meant to write:
+        typed blank lines, drawn lines, empty answer boxes and checkboxes, with
+        the printed words around each. It does not decide field types or roles,
+        and it saves nothing.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pages:
+                  type: array
+                  items: { type: integer, minimum: 0 }
+                  description: 0-based pages to look at. Default every page.
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  hasText: { type: boolean }
+                  pagesRead:
+                    type: array
+                    items: { type: integer }
+                  candidates:
+                    type: array
+                    items: { $ref: '#/components/schemas/FieldCandidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /signing/templates/{signingTemplateId}/pdf:
     get:
       operationId: getSigningTemplatePdf
@@ -676,6 +1047,136 @@ paths:
           content:
             application/pdf:
               schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: replaceSigningTemplatePdf
+      summary: Replace a template's PDF
+      tags: [Templates]
+      description: |
+        Puts a new PDF behind the same fields. Every field keeps its place on the
+        page: positions are fractions of the page, so nothing is converted. The new
+        file replaces the old one; only a note of the old file is kept
+        (`previousPdfs`). The usual limits apply: 25 MB, 200 pages, no password.
+
+        **Fields on pages the new file does not have.** If the new PDF has fewer
+        pages and fields sit on the missing pages, send `missingPageFields`:
+        `delete` removes them, `lastPage` moves them to the new last page at the same
+        position (they can overlap boxes already there). Without it the answer is
+        `409` with `needsChoice: true` and the `report`, and nothing is changed.
+
+        A page that exists in both files but changed size is not refused. It is
+        listed in `report.resizedPages`: check the fields there.
+
+        Send `workspaceId` in the query string.
+
+        Documents already made from this template keep their own copy and do not
+        change.
+
+        **Permission:** `signing:manage` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+
+        #### Request
+
+        ```bash
+        curl -X POST "$HOS_API/signing/templates/tpl_a1b2c3/pdf?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -F "file=@service-agreement-v2.pdf" \
+          -F "missingPageFields=lastPage"
+        ```
+      parameters:
+        - $ref: '#/components/parameters/SigningTemplateId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The new PDF.
+                missingPageFields:
+                  type: string
+                  enum: [delete, lastPage]
+                  description: What to do with fields on pages the new file does not have. Needed only when there are any.
+              required: [file]
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  template: { $ref: '#/components/schemas/Template' }
+                  report: { $ref: '#/components/schemas/ReplaceReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Fields sit on pages the new file does not have and `missingPageFields`
+            was not sent (`needsChoice: true`, with `report`), another replace of
+            the same item is running, or the item cannot change (an archived
+            template, a document that has been sent).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      needsChoice: { type: boolean, const: true }
+                      report: { $ref: '#/components/schemas/PageReport' }
+        '413':
+          description: The PDF is larger than 25 MB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/templates/{signingTemplateId}/duplicate:
+    post:
+      operationId: duplicateSigningTemplate
+      summary: Copy a template
+      tags: [Templates]
+      description: |
+        A new template named "(copy)" with the same PDF, roles, fields and
+        description. An archived template can be copied; the copy is not archived.
+        To put a new file behind the copied fields, follow with
+        [Replace a template's PDF](/docs/api-reference/signing/templates/replaceSigningTemplatePdf).
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingTemplate/{signingTemplateId}`
+        and `signing:manage` @ `workspace/{workspaceId}`. Both are checked.
+      parameters:
+        - $ref: '#/components/parameters/SigningTemplateId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120, description: 'Defaults to the template name with " (copy)".' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  template: { $ref: '#/components/schemas/Template' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -992,7 +1493,10 @@ paths:
         when it is incomplete; every check runs when it is sent.
 
         `roles` and `fields` change this document only, never its template, and
-        must be sent together. `prefills` are values you fill in for the signer, by
+        must be sent together, with `baseVersion` (the document's `layoutVersion`
+        when you read it). If someone saved them since, the answer is 409 and
+        nothing is saved. When they fail the check, the 400 lists every problem in
+        `issues`. `prefills` are values you fill in for the signer, by
         `fieldId`; the signer sees them filled and read only, unless the field is
         in `prefillEditable`.
 
@@ -1033,6 +1537,10 @@ paths:
                 prefillEditable:
                   type: array
                   items: { type: string }
+                baseVersion:
+                  type: integer
+                  minimum: 0
+                  description: The `layoutVersion` you read. Optional, but without it a newer save can be overwritten.
       responses:
         '200':
           description: OK.
@@ -1046,11 +1554,27 @@ paths:
                   signers:
                     type: array
                     items: { $ref: '#/components/schemas/Signer' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+                  warnings:
+                    type: array
+                    items: { $ref: '#/components/schemas/LayoutIssue' }
+        '400': { $ref: '#/components/responses/LayoutRejected' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: |
+            The document has been sent, so it cannot change (see `error`), or
+            someone saved the roles or fields after your `baseVersion` (then
+            `layoutVersion` is the version stored now).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: false }
+                  error: { type: string }
+                  layoutVersion: { type: integer, minimum: 0 }
+                required: [success, error]
         '500': { $ref: '#/components/responses/ServerError' }
 
     delete:
@@ -1169,6 +1693,170 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /signing/requests/{signingRequestId}/check-layout:
+    parameters:
+      - $ref: '#/components/parameters/SigningRequestId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: checkDocumentLayout
+      summary: Check a document's roles and fields
+      tags: [Fields]
+      description: |
+        Runs the same check a save runs, and saves nothing. Send `roles` and
+        `fields` to check a change; leave either out to use what is stored.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roles:
+                  type: array
+                  items: { $ref: '#/components/schemas/Role' }
+                fields:
+                  type: array
+                  items: { $ref: '#/components/schemas/Field' }
+      responses:
+        '200':
+          description: OK. `ok` is false when there is at least one error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  ok: { type: boolean }
+                  errors:
+                    type: array
+                    items: { $ref: '#/components/schemas/LayoutIssue' }
+                  warnings:
+                    type: array
+                    items: { $ref: '#/components/schemas/LayoutIssue' }
+                  layoutVersion: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/layout-version:
+    parameters:
+      - $ref: '#/components/parameters/SigningRequestId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: getDocumentLayoutVersion
+      summary: Get a document's layout version
+      tags: [Fields]
+      description: |
+        The current `layoutVersion` and who made the last change, without the
+        roles and fields. Ask it to learn that someone else saved.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  layoutVersion: { type: integer, minimum: 0 }
+                  layoutChangedBy:
+                    type: [object, 'null']
+                    properties:
+                      kind: { type: string, enum: [person, agent] }
+                      name: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/pages/{page}/text:
+    parameters:
+      - $ref: '#/components/parameters/SigningRequestId'
+      - $ref: '#/components/parameters/WorkspaceId'
+      - name: page
+        in: path
+        required: true
+        description: 0-based page number.
+        schema: { type: integer, minimum: 0 }
+    get:
+      operationId: getDocumentPageText
+      summary: Read the printed words on a page
+      tags: [Fields]
+      description: |
+        The words, drawn lines and boxes printed on one page of the document's PDF,
+        read from the PDF's own text. A scanned PDF has no text: `hasText` is
+        false and `words` is empty.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  hasText: { type: boolean }
+                  page: { $ref: '#/components/schemas/PageText' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /signing/requests/{signingRequestId}/detect-fields:
+    parameters:
+      - $ref: '#/components/parameters/SigningRequestId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: detectDocumentFields
+      summary: Find the blanks to fill in
+      tags: [Fields]
+      description: |
+        Finds the places on the document's pages where a person is meant to write:
+        typed blank lines, drawn lines, empty answer boxes and checkboxes, with
+        the printed words around each. It does not decide field types or roles,
+        and it saves nothing.
+
+        **Permission:** `signing:read` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pages:
+                  type: array
+                  items: { type: integer, minimum: 0 }
+                  description: 0-based pages to look at. Default every page.
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  hasText: { type: boolean }
+                  pagesRead:
+                    type: array
+                    items: { type: integer }
+                  candidates:
+                    type: array
+                    items: { $ref: '#/components/schemas/FieldCandidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /signing/requests/{signingRequestId}/pdf:
     get:
       operationId: getSigningRequestPdf
@@ -1191,6 +1879,102 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      operationId: replaceSigningRequestPdf
+      summary: Replace a draft's PDF
+      tags: [Documents]
+      description: |
+        Drafts only. A document that has been sent never changes.
+
+        Puts a new PDF behind the same fields. Every field keeps its place on the
+        page: positions are fractions of the page, so nothing is converted. The new
+        file replaces the old one; only a note of the old file is kept
+        (`previousPdfs`). The usual limits apply: 25 MB, 200 pages, no password.
+
+        **Fields on pages the new file does not have.** If the new PDF has fewer
+        pages and fields sit on the missing pages, send `missingPageFields`:
+        `delete` removes them, `lastPage` moves them to the new last page at the same
+        position (they can overlap boxes already there). Without it the answer is
+        `409` with `needsChoice: true` and the `report`, and nothing is changed.
+
+        A page that exists in both files but changed size is not refused. It is
+        listed in `report.resizedPages`: check the fields there.
+
+        Send `workspaceId` in the query string.
+
+        The template the draft came from is not changed. A value you filled in
+        goes with its field: it is removed with a deleted field and kept with a
+        moved one. The replace is listed in the document's events and in the audit
+        pages of the finished document.
+
+        **Permission:** `signing:send` @ `workspace/{workspaceId}/signingRequest/{signingRequestId}`
+
+        #### Request
+
+        ```bash
+        curl -X POST "$HOS_API/signing/requests/req_a1b2c3/pdf?workspaceId=ws_a1b2c3" \
+          -H "Authorization: Bearer $HOS_KEY" \
+          -F "file=@service-agreement-v2.pdf"
+        ```
+      parameters:
+        - $ref: '#/components/parameters/SigningRequestId'
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The new PDF.
+                missingPageFields:
+                  type: string
+                  enum: [delete, lastPage]
+                  description: What to do with fields on pages the new file does not have. Needed only when there are any.
+              required: [file]
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  request: { $ref: '#/components/schemas/Document' }
+                  signers:
+                    type: array
+                    items: { $ref: '#/components/schemas/Signer' }
+                  report: { $ref: '#/components/schemas/ReplaceReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Fields sit on pages the new file does not have and `missingPageFields`
+            was not sent (`needsChoice: true`, with `report`), another replace of
+            the same item is running, or the item cannot change (an archived
+            template, a document that has been sent).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      needsChoice: { type: boolean, const: true }
+                      report: { $ref: '#/components/schemas/PageReport' }
+        '413':
+          description: The PDF is larger than 25 MB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '500': { $ref: '#/components/responses/ServerError' }
 
   /signing/requests/{signingRequestId}/duplicate:

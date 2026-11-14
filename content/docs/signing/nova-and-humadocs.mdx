@@ -1,0 +1,72 @@
+---
+title: Nova and HumaDocs
+description: What Nova can do in HumaDocs, placing and reviewing fields and sending templates, and how every change waits for your approval.
+---
+
+{/* DRAFT, p_36 s_17 to s_21 (2026-11-13). Before publishing: try Auto place and review on real
+PDFs, and confirm the card and the live update in the editor in production. */}
+
+[Nova](/docs/nova) can work in HumaDocs for you. It can place and review the fields on a
+template or a draft document, and send a template to people for signing. Nova never changes
+anything on its own: every change and every send is shown to you on a card first, and happens
+only when you select **Approve**.
+
+## Auto place and review document fields
+
+In the template editor or the document editor, select **Auto place and review document
+fields** at the top of the left panel. Nova opens on the right with a new chat about that
+template or document. Then Nova:
+
+1. Reads the roles and the fields already placed.
+2. Finds the blanks on the pages: typed lines (`____`), drawn lines to write on, empty answer
+   boxes and checkboxes, together with the words printed around each one.
+3. Decides each field from those words: a signature, initials, the date signed, a name, an
+   email address, a checkbox or a text answer, which role it belongs to, and whether it is
+   required.
+4. Checks the result for problems, such as two fields on top of each other or a role with no
+   signature.
+5. Shows you one card with every change, grouped by page, and anything it was not sure of.
+
+When you approve, the fields are saved and appear in the editor within a few seconds. While
+Nova is open, the editor folds its right panel so you can watch the pages.
+
+If the document already has fields, Nova reviews them in the same pass and suggests fixes,
+such as a field given to the wrong role. It does not move fields that are fine.
+
+You can also ask Nova in your own words from any HumaDocs page, for example "add a signature
+and date for the tenant on the last page". Nova knows which template or document you have
+open.
+
+## What Nova places, and what it does not
+
+- Nova places fields next to words that are printed on the page or on blanks it found. It does
+  not guess positions.
+- Nova never changes the text of the PDF. To change the wording of a document, edit the PDF
+  first, then upload it as a new template.
+- A scanned PDF has no text Nova can read. Place its fields by hand.
+- A document that has been sent cannot change. Nova can change its template or a copy instead.
+
+## Who can approve
+
+The card can be approved only by someone who could make the same change in the editor:
+
+| Change | Needs |
+| --- | --- |
+| Fields on a template | Permission to manage signing templates |
+| Fields on a draft document | Permission to send signing documents |
+| Sending a template | Permission to send signing documents |
+
+If you or a teammate save the fields after Nova read them, the card is refused when you
+approve it, and Nova reads the fields again. Nobody's changes are overwritten without warning.
+
+## AI employees
+
+When one of your AI employees asks Nova for help with a document, Nova can read the fields
+and find the blanks, and any change it proposes still waits on a card for you. AI employees
+cannot send documents for signing through Nova.
+
+## Sending
+
+Nova can list your templates and send one, with one person for each role. The card names
+every person and how they get their link, and nothing is sent until you approve. Nova never
+shows signing links. See [Sending](/docs/signing/sending).
