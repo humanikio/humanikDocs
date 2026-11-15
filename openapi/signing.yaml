@@ -240,7 +240,7 @@ components:
             `unknown-role`, `label-too-long`, `required-not-set`, `bad-read-only`,
             `page-out-of-range`, `bad-position`, `no-size`, `past-page-edge`.
             Warnings: `overlap`, `role-never-signs`, `date-without-signature`,
-            `covers-text`, `too-small`.
+            `covers-text`, `too-small`, `same-label`.
         level: { type: string, enum: [error, warning] }
         fieldId: { type: string }
         roleId: { type: string }

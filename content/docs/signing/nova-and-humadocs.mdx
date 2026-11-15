@@ -1,15 +1,42 @@
 ---
 title: Nova and HumaDocs
-description: What Nova can do in HumaDocs, placing and reviewing fields and sending templates, and how every change waits for your approval.
+description: What Nova can do in HumaDocs, from making a template from a PDF to sending a document to the right people, and which steps wait for your approval.
 ---
 
-{/* DRAFT, p_36 s_17 to s_21 (2026-11-13). Before publishing: try Auto place and review on real
-PDFs, and confirm the card and the live update in the editor in production. */}
+{/* DRAFT, p_36 s_17 to s_26 (2026-11-13, 2026-11-14). Tested through Nova on a local stack
+2026-11-14/15: fields, templates, documents, people and email sends. Before publishing: confirm
+the same in production after the push, and a send by text to someone typed in by hand. */}
 
-[Nova](/docs/nova) can work in HumaDocs for you. It can place and review the fields on a
-template or a draft document, and send a template to people for signing. Nova never changes
-anything on its own: every change and every send is shown to you on a card first, and happens
-only when you select **Approve**.
+[Nova](/docs/nova) can work in HumaDocs for you, from start to finish. It can make a template or
+a document from a PDF, copy one, put a new PDF behind its fields, place and review the fields,
+name the people who sign, and send it. Anything that changes what you already have, or contacts
+anyone, is shown to you on a card first and happens only when you select **Approve**.
+
+## A whole job
+
+You can ask for everything at once, for example: "Here's our lease. Send it to Sam Rivera from
+the CRM as the tenant, and to Jo Park, jo@example.com, 555 0100, as the guarantor, by text."
+Nova then:
+
+1. Takes the PDF you attached.
+2. Makes a draft document from it. A PDF you send once does not become a template, so your
+   templates list stays tidy. Ask for a template if you will use it again.
+3. Places the fields for each person and shows you **the first card: the fields**.
+4. Finds Sam Rivera in your CRM. If two contacts match, Nova asks which one.
+5. Adds both people to the draft, and tells you if anything is still missing.
+6. Shows you **the second card: the send**, with every person, their email and phone, the order
+   they sign in, and who it is sent from. The messages go out when you approve.
+
+## Where the PDF can come from
+
+- **Attached to your chat with Nova.** Nova can use a PDF from any earlier message in the same
+  chat, not only the last one. Only you can use the files in your own chats.
+- **A bucket in your workspace.** Files your AI employees save, such as a PDF they edited, are
+  found by name or folder. Nova needs your permission to read that bucket.
+
+Files in Google Drive, email attachments and files posted in HumaChat cannot be used yet:
+attach the PDF to your chat with Nova, or save it in a bucket. HumaDocs takes PDFs up to 25 MB
+and 200 pages, with no password.
 
 ## Auto place and review document fields
 
@@ -41,32 +68,60 @@ open.
 
 - Nova places fields next to words that are printed on the page or on blanks it found. It does
   not guess positions.
-- Nova never changes the text of the PDF. To change the wording of a document, edit the PDF
-  first, then upload it as a new template.
+- Nova never changes the text of the PDF. To change the wording, the PDF is edited first (by you,
+  or by an AI employee with PDF tools that saves it in a bucket). Nova then puts the new PDF
+  behind the template's fields with **Replace PDF**, and the fields stay where they were.
 - A scanned PDF has no text Nova can read. Place its fields by hand.
-- A document that has been sent cannot change. Nova can change its template or a copy instead.
+- A document that has been sent cannot change. Nova can make a copy as a new draft, change it,
+  and send that.
 
-## Who can approve
+## What waits for a card
 
-The card can be approved only by someone who could make the same change in the editor:
+| Nova does | Card first? | Needs |
+| --- | --- | --- |
+| Lists and reads templates and documents | No | Permission to view signing |
+| Makes a template, or copies one | No | Permission to manage signing templates |
+| Makes a draft document, or copies a document | No | Permission to send signing documents |
+| Names the people on a draft | No | Permission to send signing documents, and to view CRM contacts for a contact |
+| Puts a new PDF behind a template's fields | Yes | Permission to manage signing templates |
+| Puts a new PDF behind a draft's fields | Yes | Permission to send signing documents |
+| Changes fields on a template | Yes | Permission to manage signing templates |
+| Changes fields on a draft | Yes | Permission to send signing documents |
+| Sends a document or a template | Yes | Permission to send signing documents |
 
-| Change | Needs |
-| --- | --- |
-| Fields on a template | Permission to manage signing templates |
-| Fields on a draft document | Permission to send signing documents |
-| Sending a template | Permission to send signing documents |
+New templates and drafts are private to your workspace, and nobody is contacted until you approve
+the send card, which lists everyone again. A card can be approved only by someone who has the
+permission in the last column. A PDF from a bucket also needs permission to read that bucket.
 
-If you or a teammate save the fields after Nova read them, the card is refused when you
-approve it, and Nova reads the fields again. Nobody's changes are overwritten without warning.
+When Nova puts a new PDF behind the fields, the card shows the page count before and after. If
+the new PDF has fewer pages and fields sit on the missing pages, Nova asks you whether to delete
+those fields or move them to the last page.
+
+Nova only shows you a card that can work. If something would stop it, for example the fields
+were saved by you or a teammate after Nova read them, the new PDF is the same file, or a person
+is missing for a send, Nova is told why straight away, fixes it or asks you, and then shows the
+card. If the fields change between the card and your approval, the change is refused and the card
+closes, and Nova reads the fields again. Nobody's changes are overwritten without warning.
 
 ## AI employees
 
-When one of your AI employees asks Nova for help with a document, Nova can read the fields
-and find the blanks, and any change it proposes still waits on a card for you. AI employees
-cannot send documents for signing through Nova.
+When one of your AI employees asks Nova for help with a document, Nova can read templates,
+documents and fields and find the blanks. Anything it would make or change waits on a card for
+you, including a new template or draft. AI employees cannot send documents for signing through
+Nova.
+
+## The people who sign
+
+Each role gets one person, in one of two ways:
+
+- **A contact in your CRM.** The name, email and phone come from the contact record.
+- **Details you give Nova**, or that are part of the job: a name and email, and a mobile number
+  if they should get a text.
+
+Nova never guesses an email address or a phone number. If something is missing, it asks.
 
 ## Sending
 
-Nova can list your templates and send one, with one person for each role. The card names
-every person and how they get their link, and nothing is sent until you approve. Nova never
-shows signing links. See [Sending](/docs/signing/sending).
+Nova sends by email, text message, both, or links only. The send card names every person and
+how they get their link, and nothing is sent until you approve. Nova never shows signing links:
+with links only, copy each one from the document page. See [Sending](/docs/signing/sending).

@@ -531,6 +531,24 @@ paths:
           required: false
           schema:
             type: integer
+        - name: search
+          in: query
+          required: false
+          description: |
+            Finds contacts by the start of what you type, with case ignored. It is
+            not a search inside words: `jan` finds "Jane Doe", `doe` does not.
+
+            - Text with `@` matches an email address: a whole address, or the start
+              of one (`info@`). A whole address also finds a contact by one of its
+              other addresses.
+            - 3 or more digits match the start of the phone number, with or without
+              the country code (`416` finds +1 416 555 0100).
+            - Anything else matches the start of the contact's name.
+
+            Email and phone searches return one page, with no cursor for more.
+          schema:
+            type: string
+            examples: [info@, jan, '416']
         - name: tag
           in: query
           required: false
