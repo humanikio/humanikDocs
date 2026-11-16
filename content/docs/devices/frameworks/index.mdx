@@ -43,9 +43,11 @@ cheaper one, or centralized billing. The concept is the same on both:
 2. Give it the gateway's credential.
 3. Tell it which model to actually use.
 
-[Connecting a third-party provider](/docs/devices/frameworks/third-party-providers)
+[Connecting a third-party provider](/docs/devices/frameworks/claude-code/third-party-providers)
 walks through it once, in full, using OpenRouter as the worked example — follow
-the same shape for any other Anthropic-compatible gateway.
+the same shape for any other Anthropic-compatible gateway. It lives under Claude
+Code since that is where it is available today; the same concept applies to
+OpenClaw's own `model` / `api_key_file` settings.
 
 <Callout>
   **This is additive, not a replacement.** A machine not routed through a
@@ -64,7 +66,7 @@ the same shape for any other Anthropic-compatible gateway.
   />
   <Card
     title="Connecting a third-party provider"
-    href="/docs/devices/frameworks/third-party-providers"
+    href="/docs/devices/frameworks/claude-code/third-party-providers"
     description="Routing a framework through OpenRouter or a similar gateway."
   />
   <Card

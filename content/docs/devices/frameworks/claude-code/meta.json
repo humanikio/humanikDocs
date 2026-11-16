@@ -1,0 +1,6 @@
+{
+  "title": "Claude Code",
+  "defaultOpen": true,
+  "collapsible": false,
+  "pages": ["index", "third-party-providers"]
+}
