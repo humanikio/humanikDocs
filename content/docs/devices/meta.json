@@ -1,12 +1,15 @@
 {
-  "title": "Devices",
+  "title": "Your Machines",
   "root": true,
   "pages": [
     "---Get started---",
     "index",
     "install",
+    "run-modes",
     "humanikd",
     "desktop-app",
+    "---Frameworks---",
+    "frameworks",
     "---How it works---",
     "trust",
     "how-work-reaches-it",

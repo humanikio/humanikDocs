@@ -1,0 +1,152 @@
+---
+title: Connecting a third-party provider
+description: Routing a Claude Code setup through OpenRouter (or any Anthropic-compatible gateway) instead of its own default.
+---
+
+By default, Claude Code on your machine resolves its own model against your own
+account. This page is for the deliberate exception: pointing a setup at a
+different model or endpoint entirely — most often an OpenRouter-style gateway,
+for cost, a specific model, or centralized billing across a team.
+
+<Callout>
+  **Available on the separate Claude Code setup only.** [My Claude Code](/docs/devices/frameworks/claude-code#which-claude-code-setup-jobs-use)
+  always behaves exactly as `claude` does for you in Terminal — nothing on this
+  page can change that. Switch to a separate setup first if you have not already.
+</Callout>
+
+The worked example below is OpenRouter, because it is the most common one. **The
+underlying concept is the same for any Anthropic-compatible gateway** — read that
+provider's own Claude Code integration guide for its exact variable names rather
+than assuming OpenRouter's translate literally, and skip to
+[the same concept, for other providers](#the-same-concept-for-other-providers) at
+the end.
+
+## Where this lives in the app
+
+**Frameworks › Claude Code**, under the separate setup, two things:
+
+- **Model** — the model to request, passed straight through to Claude Code.
+- **Environment for this setup's jobs** — a list of environment variables merged
+  into every `claude` run for this setup, on top of what this computer already
+  has set. Add, edit or remove rows here; **Save and restart** writes them.
+
+Nothing below needs a hand-edited config file — this is what that page writes
+for you.
+
+## Worked example: OpenRouter
+
+You will need an [OpenRouter API key](https://openrouter.ai/settings/keys) first.
+Then, five values:
+
+| Variable | Value | Why |
+| --- | --- | --- |
+| `ANTHROPIC_BASE_URL` | `https://openrouter.ai/api` | Where to send requests. Claude Code speaks its native protocol straight to this URL — no local proxy needed. |
+| `ANTHROPIC_AUTH_TOKEN` | Your OpenRouter API key | Sent as a bearer token. This is the credential variable Claude Code expects for a gateway. |
+| `ANTHROPIC_API_KEY` | *(leave the value empty)* | **Must be added and explicitly blank, not just left out.** See [the trap below](#the-one-trap-that-catches-everyone). |
+| `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` | `1` | Lets Claude Code accept a model id outside its own built-in list, instead of refusing it outright. |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | e.g. `deepseek/deepseek-v4.1-flash` | Remaps what the "sonnet" class resolves to once routed through the gateway. |
+
+And set **Model** to `sonnet` — that is what *requests* the sonnet class in the
+first place. The environment variable above is what that class then resolves to.
+The two work together; neither replaces the other.
+
+<Callout type="warn">
+  **A secret should not sit in `config.yaml` as plain text.** For `ANTHROPIC_AUTH_TOKEN`,
+  write `file:/path/to/a/file` instead of the key itself — humanikd reads it from
+  that file at each run instead (the file must be readable by you alone; a
+  world-readable one is refused). The app's "Add a variable" help text shows the
+  same thing.
+</Callout>
+
+### Other model classes
+
+`ANTHROPIC_DEFAULT_SONNET_MODEL` is the main dial, but Claude Code resolves
+several model *classes* independently, each with its own variable:
+
+| Class | Variable |
+| --- | --- |
+| Sonnet | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
+| Opus | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
+| Haiku | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
+| Fable | `ANTHROPIC_DEFAULT_FABLE_MODEL` |
+| Sub-agents | `CLAUDE_CODE_SUBAGENT_MODEL` |
+
+**Set the ones a job's class actually uses.** An unset class keeps resolving
+against your real Anthropic account even with everything else above pointed at
+the gateway — a common source of "it half works" reports that are really "one
+class was never remapped."
+
+## The one trap that catches everyone
+
+`ANTHROPIC_API_KEY` being merely *unset* is not the same as being *empty*, and
+the difference matters more than it looks like it should.
+
+Claude Code sends `ANTHROPIC_API_KEY` as a direct Anthropic credential
+(`x-api-key`), separately from the gateway credential
+(`ANTHROPIC_AUTH_TOKEN`, sent as `Authorization: Bearer …`). If a real key is
+still sitting in this computer's own environment, or a cached Anthropic login
+exists on this setup, Claude Code can silently send **some** requests straight to
+Anthropic instead of the gateway — which then has no idea what a gateway-only
+model id is. The symptom reads as "the model is wrong," and the actual problem is
+"half the traffic skipped the gateway entirely."
+
+Adding the row with the key name `ANTHROPIC_API_KEY` and an empty value fixes
+this: an empty value still counts as a value, and because it is added on top of
+whatever this computer already has set, it wins.
+
+## A one-line notice that is not the failure
+
+Even with gateway model discovery on, Claude Code may still print something like:
+
+```
+[claude-code:unrecognized_model] {"model":"deepseek/deepseek-v4-flash","query_source":"sdk"}
+```
+
+**This on its own is not fatal.** It means the model id is outside Claude Code's
+built-in catalog — expected, for a gateway model — and the request still goes
+out. If a job genuinely fails after this, the real reason is almost always on the
+gateway's side: an insufficient balance, a rate limit, or a model id that gateway
+does not actually serve. Check the account behind `ANTHROPIC_AUTH_TOKEN` first
+rather than re-reading this configuration.
+
+## Checking it
+
+```bash
+humanikd verify
+```
+
+Confirms the setup, account and connectors humanikd will resolve for this setup's
+jobs. For a direct check of exactly what reaches Claude Code, the app's **What
+humanikd starts for each job** panel (bottom of the Claude Code page) shows the
+built command line, including the model and every environment variable, as it
+stands right now — unsaved changes included.
+
+## The same concept, for other providers
+
+Every Anthropic-compatible gateway follows the same three-part shape:
+
+1. **Point `ANTHROPIC_BASE_URL` at the gateway's own endpoint.**
+2. **Put its credential in `ANTHROPIC_AUTH_TOKEN`**, and blank `ANTHROPIC_API_KEY`
+   explicitly, for the same reason as above.
+3. **Tell it which model to use**, however that gateway documents — a
+   `ANTHROPIC_DEFAULT_*_MODEL`-style remap, a different environment variable
+   entirely, or just setting **Model** to an id the gateway resolves on its own.
+
+Read that provider's own Claude Code integration guide for its exact variable
+names before assuming OpenRouter's apply unchanged — the shape above is the
+concept to look for, not a literal translation.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Claude Code"
+    href="/docs/devices/frameworks/claude-code"
+    description="Which setup jobs use, accounts, connectors, and the ceiling."
+  />
+  <Card
+    title="Run modes"
+    href="/docs/devices/run-modes"
+    description="What Claude Code run mode is, and when to choose it."
+  />
+</Cards>

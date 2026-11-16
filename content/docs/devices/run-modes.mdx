@@ -1,0 +1,172 @@
+---
+title: Run modes
+description: Ollama, Claude Code or OpenClaw — what each needs, what it can and cannot do, and how to choose, switch and check one.
+---
+
+A machine serves exactly one **run mode**: the one program every job sent to it
+goes to. The shape of the config file is the declaration, not a label next to it,
+so a machine can never advertise one run mode while actually serving another.
+
+In the Humanik OS app this is **This machine › Run mode**. In `config.yaml` it is
+whichever backend has `enabled: true` — there is no separate `kind` field to set,
+because enabling a backend **is** the declaration.
+
+## The three, side by side
+
+| | Ollama | Claude Code | OpenClaw |
+| --- | --- | --- | --- |
+| Serves | Completions from a local model | An agent turn — its output **is** the reply | A full agent framework, sandboxed |
+| Acts on this machine | No. It only thinks | Yes, within the ceiling you set | Yes, inside a container |
+| Needs | Ollama running | Claude Code installed and signed in | Docker |
+| Runs as | A system service | **You** — it reads your `claude` login | Supervised by humanikd |
+| Status | Generally available | Generally available | Not available by default — see below |
+
+**Ollama and Claude Code can both serve an office or a Nova conversation**, so
+either one moves the *thinking* onto your hardware. Only Claude Code can also
+*act* while it is there — read a file, run a command, use a connector — because
+it is an agent rather than a model answering in text. See
+[One turn, two sets of tools](/docs/models/your-own-compute#one-turn-two-sets-of-tools)
+for what that split means for a job.
+
+## Ollama
+
+**Thinking only.** The machine connects to a local Ollama (or Ollama-compatible)
+server, receives a conversation, and returns text. There is no tool list, no
+working directory, and no connectors, because a model has nothing to apply them
+to.
+
+```yaml
+backend:
+  ollama:
+    url: http://localhost:11434
+    request_timeout: 5m
+    models: [qwen2.5:3b]        # empty = every model Ollama has pulled
+```
+
+humanikd **connects** to Ollama; it does not start, stop or manage it. Run
+`ollama serve` (or `brew services start ollama`) yourself, and pull whatever
+models you want to advertise. Only a model that is both listed here *and*
+actually pulled is offered — a listed-but-absent model fails the one job that
+requests it rather than failing at startup.
+
+## Claude Code
+
+**A capable agent.** The machine runs [Claude Code](https://code.claude.com/docs/en/overview) headless
+for each job. Its answer is not generated *from* a model response, it **is** the
+agent's own output after however many tool calls it needed.
+
+```yaml
+backend:
+  claude_agent:
+    enabled: true
+    permission_mode: dontAsk
+    allowed_tools: [Read, Grep, Glob]   # the ceiling — see below
+```
+
+**The default ceiling is read-only.** `Write`, `Edit` and `Bash` all exist and
+none is reachable until you name it. Widening it is a deliberate, local decision:
+see [Frameworks › Claude Code](/docs/devices/frameworks/claude-code) for the
+whole shape of this — accounts, connectors, the browser, the tool ceiling, and
+routing it through a third-party provider.
+
+<Callout>
+  **This is the common run mode**, and most of the rest of this section (the
+  ceiling, the three limits, office tools, the browser) assumes it.
+</Callout>
+
+## OpenClaw
+
+**A sandboxed framework.** A full open-source agent program, supervised by
+humanikd, running inside a Docker container on this machine. Needs Docker;
+humanikd refuses to serve without it.
+
+```yaml
+backend:
+  openclaw:
+    enabled: true
+    allowed_tools: [read, grep]          # ceiling — a job may request a subset, never more
+    binds:                                # what the container can SEE of this machine
+      - ~/projects/acme:/workspace/acme
+      - ~/Documents/notes:/workspace/notes:ro
+```
+
+<Callout type="warn">
+  **Not shown by default.** OpenClaw run mode works end to end on a development
+  machine, but its first-run path is still rough enough that offering it to
+  everyone would hand an unfinished setup to someone enrolling a laptop. `humanikd
+  setup` only lists it when `HUMANIKD_EXPERIMENTAL` is set, and the console does
+  not offer it yet.
+</Callout>
+
+See [Frameworks › OpenClaw](/docs/devices/frameworks/openclaw) for binds, the
+tool ceiling, and pointing it at a model.
+
+## Choosing one
+
+| You want… | Choose |
+| --- | --- |
+| The cheapest, most private way to move inference to your own hardware, with no local acting | **Ollama** |
+| A machine that can read your files, run commands, and use your connectors — a colleague with their own computer | **Claude Code** |
+| A different open-source agent framework than the one offices run on, sandboxed, on hardware you control | **OpenClaw** (once available) |
+
+A machine that should *both* think privately *and* act needs nothing extra —
+that is just Claude Code run mode. There is no mode that is "a model, plus some
+tools"; an agent that can act is a different kind of program, not a model with a
+setting turned on.
+
+## Switching run modes
+
+A machine serves exactly one. Enabling a second backend in `config.yaml` is
+refused outright at startup rather than resolved by picking one quietly —
+`humanikd` treats "I believe this machine does two things" as a config mistake to
+surface, not a preference to guess at.
+
+In the app: **This machine › Run mode**, choose the other program, **Save and
+restart**. On the command line, edit `config.yaml` (disable the old backend,
+enable the new one) and:
+
+```bash
+humanikd service restart
+```
+
+<Callout>
+  **Config is read once, at startup.** There is no hot reload for any of this.
+  Every change here needs the restart above, which the app's save button does for
+  you.
+</Callout>
+
+## Checking what's live
+
+```bash
+humanikd verify     # everything this run mode needs — spends no model quota
+humanikd status     # what this device is advertising right now
+```
+
+`verify` is the one to run after any change: a new ceiling, a new connector, a
+new run mode. It checks the real target the way the daemon will use it, so a
+typo or a missing prerequisite surfaces before a job hits it.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Frameworks"
+    href="/docs/devices/frameworks"
+    description="Setting up the program behind a run mode: accounts, connectors, the browser, and third-party providers."
+  />
+  <Card
+    title="Install humanikd and the app"
+    href="/docs/devices/install"
+    description="One command on macOS, Windows or Linux, then humanikd setup."
+  />
+  <Card
+    title="Bring your own compute"
+    href="/docs/models/your-own-compute"
+    description="Allocating a machine and pointing an employee at it."
+  />
+  <Card
+    title="A worked example"
+    href="/docs/devices/example"
+    description="One machine, one employee, and a team that can send it work."
+  />
+</Cards>

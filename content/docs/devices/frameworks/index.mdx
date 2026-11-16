@@ -1,0 +1,80 @@
+---
+title: Frameworks
+description: Setting up the program your machine's run mode uses — accounts, connectors, the browser, and routing it through a third-party provider.
+---
+
+[Run mode](/docs/devices/run-modes) decides **which** program every job on this
+machine goes to. **Frameworks** is where you set that program up, once it is
+chosen: signing it in, choosing what it may touch, and — if you want — pointing
+it at a different model or API endpoint than its own default.
+
+In the Humanik OS app this is the **Frameworks** section, with its own tab per
+program. The one this machine is not currently running is shown greyed, and
+**Change run mode** jumps back to **This machine › Run mode**.
+
+| | Configures | App tab |
+| --- | --- | --- |
+| [Claude Code](/docs/devices/frameworks/claude-code) | Which Claude Code setup jobs use, your account and connectors, the tool ceiling, the browser, and routing through a third-party provider | **Frameworks › Claude Code** |
+| [OpenClaw](/docs/devices/frameworks/openclaw) | The tool ceiling, which folders the sandbox can see, and the model it runs | **Frameworks › OpenClaw** |
+
+Ollama has no Frameworks page of its own — there is nothing to sign in to or
+configure beyond which models you have pulled, which lives on
+**Models** instead. See [Run modes](/docs/devices/run-modes#ollama).
+
+## Why this is a separate page from Run mode
+
+A run mode answers "what kind of thing is this machine" in one word. Frameworks
+answers everything that follows from the specific program you are running:
+which account it uses, what it is allowed to touch, and — the part most setups
+never need — whether it should think on a model other than the one it reaches by
+default.
+
+Changing a framework's setup does not change the run mode, and changing the run
+mode does not touch a framework's own setup: switch from Claude Code back to it
+later and your account, connectors and ceiling are exactly as you left them.
+
+## Connecting a third-party provider
+
+Both Claude Code and OpenClaw can be routed through something other than their
+own default — most often an OpenRouter-style gateway, for a different model, a
+cheaper one, or centralized billing. The concept is the same on both:
+
+1. Point the framework at the gateway's endpoint.
+2. Give it the gateway's credential.
+3. Tell it which model to actually use.
+
+[Connecting a third-party provider](/docs/devices/frameworks/third-party-providers)
+walks through it once, in full, using OpenRouter as the worked example — follow
+the same shape for any other Anthropic-compatible gateway.
+
+<Callout>
+  **This is additive, not a replacement.** A machine not routed through a
+  third-party provider behaves exactly as it always has: Claude Code resolves its
+  own account, OpenClaw resolves its own model. Nothing here is required reading
+  unless you specifically want to change what a framework thinks on.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Claude Code"
+    href="/docs/devices/frameworks/claude-code"
+    description="Accounts, connectors, the tool ceiling, and the browser."
+  />
+  <Card
+    title="Connecting a third-party provider"
+    href="/docs/devices/frameworks/third-party-providers"
+    description="Routing a framework through OpenRouter or a similar gateway."
+  />
+  <Card
+    title="OpenClaw"
+    href="/docs/devices/frameworks/openclaw"
+    description="Binds, the tool ceiling, and pointing it at a model."
+  />
+  <Card
+    title="Run modes"
+    href="/docs/devices/run-modes"
+    description="Which program a machine serves, and how to switch."
+  />
+</Cards>

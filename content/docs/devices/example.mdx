@@ -27,14 +27,14 @@ office, that computer never has to hold a company credential to be useful. See
 
 ## The setup
 
-A machine that is always on, enrolled as flavor B so it behaves like an agent,
-and an employee pointed at it.
+A machine that is always on, enrolled in **Claude Code run mode** so it behaves
+like an agent, and an employee pointed at it.
 
 <Steps>
 
 <Step>
-**Enrol the machine.** `humanikd setup` on the Mac mini, flavor B, signed into
-the account whose connectors this machine should have. See
+**Enrol the machine.** `humanikd setup` on the Mac mini, Claude Code run mode,
+signed into the account whose connectors this machine should have. See
 [Connect your own machine](/docs/devices).
 </Step>
 
@@ -138,8 +138,9 @@ land.
 
 <Callout>
   **A machine that serves people who are not you should not inherit your
-  connectors.** A flavor B machine passes the MCP servers you configured on it
-  through to whoever is driving the employee. Setting `mcp.scope: isolated` in
+  connectors.** A machine in Claude Code run mode passes the MCP servers you
+  configured on it through to whoever is driving the employee. Setting
+  `mcp.scope: isolated` in
   the device config hides them, so a colleague using this employee gets the
   machine without getting your signed in accounts. It is mutually exclusive with
   the browser, for a reason explained on
@@ -162,20 +163,20 @@ that surprises people.
 
 ## Adding a second machine for a different job
 
-One machine per employee, and the flavor follows the job.
+One machine per employee, and the run mode follows the job.
 
-**A machine that does things.** Flavor B, as above. It reasons on your hardware,
-touches your files, uses your connectors, and reaches company software through
-its office. This is the one that behaves like a colleague with their own
-computer.
+**A machine that does things.** Claude Code run mode, as above. It reasons on
+your hardware, touches your files, uses your connectors, and reaches company
+software through its office. This is the one that behaves like a colleague with
+their own computer.
 
-**A machine that thinks privately.** Flavor A, running a local model. The prompt,
-the context and the answer stay on your hardware and no vendor is in the path at
-all. Its employee is an ordinary one in every other respect.
+**A machine that thinks privately.** Ollama run mode, running a local model. The
+prompt, the context and the answer stay on your hardware and no vendor is in the
+path at all. Its employee is an ordinary one in every other respect.
 
 Both point at their own employee, and both get the credentialed half of their
 work done in the office rather than locally. That part does not change with the
-flavor. What changes is only whether the turn pauses mid way or breaks and
+run mode. What changes is only whether the turn pauses mid way or breaks and
 resumes, which is covered in
 [Tools your machine does not hold](/docs/devices/office-tools).
 
@@ -196,7 +197,7 @@ that matters switched on.
 **No approval prompt.** Nothing asks the machine owner before a job runs. See the
 warning above.
 
-**No sharing one machine between two employees.** A machine serves one flavor,
+**No sharing one machine between two employees.** A machine serves one run mode,
 and pointing two employees at the same one gives up the property this whole
 arrangement rests on: knowing what a job will run on. If two employees need to do
 local work, give each its own machine.

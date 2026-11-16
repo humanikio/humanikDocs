@@ -24,27 +24,27 @@ pulled is what is on offer, including models nobody sells access to.
 
 ## Getting a machine connected
 
-Enrolling a machine, choosing its flavor, and setting what it is allowed to do
-all live in [Devices](/docs/devices), which covers the whole setup. This page
-picks up once a machine is connected.
+Enrolling a machine, choosing its run mode, and setting what it is allowed to do
+all live in [Your Machines](/docs/devices), which covers the whole setup. This
+page picks up once a machine is connected.
 
-Two kinds of machine can serve thinking, and they are not two versions of the
-same thing:
+Two run modes can serve thinking, and they are not two versions of the same
+thing — see [Run modes](/docs/devices/run-modes) for the full breakdown:
 
-| Flavor | Serves | Behaves like | Can also act on that machine |
+| Run mode | Serves | Behaves like | Can also act on that machine |
 | --- | --- | --- | --- |
-| **A** | Completions from a local model | A model | No |
-| **B** | A Claude Code agent turn | An agent | Yes, within the ceiling you set |
+| **Ollama** | Completions from a local model | A model | No |
+| **Claude Code** | An agent turn | An agent | Yes, within the ceiling you set |
 
-**Flavor A moves the inference and nothing else.** The machine receives a
+**Ollama run mode moves the inference and nothing else.** The machine receives a
 conversation and returns text. The employee's tools all run where they always
 did, in the office.
 
-**Flavor B moves the reasoning to a capable agent that is already on your
-computer.** It can read your files, run things, and use the connectors that
+**Claude Code run mode moves the reasoning to a capable agent that is already on
+your computer.** It can read your files, run things, and use the connectors that
 machine is signed into, in the middle of the same turn it is answering in. That
-is what produces the split below, and it does not arise on a flavor A machine,
-because there is no local half for it to be a split between.
+is what produces the split below, and it does not arise on a machine in Ollama
+run mode, because there is no local half for it to be a split between.
 
 See [the split](#one-turn-two-sets-of-tools) below.
 
@@ -139,9 +139,9 @@ When the fallback does run:
 
 ## One turn, two sets of tools
 
-This is the part worth reading twice, because a flavor B machine serving an
-office holds **two different kinds of tool at once**, and they run in different
-places under different rules.
+This is the part worth reading twice, because a machine in **Claude Code run
+mode** serving an office holds **two different kinds of tool at once**, and they
+run in different places under different rules.
 
 It exists because the thing on your machine is an agent rather than a model. A
 model would end its turn and hand every tool back to the office. An agent already
@@ -245,18 +245,21 @@ registered on the device itself survive. For a machine meant to serve a
 workspace, prefer device-registered servers and treat the account it is signed
 into as part of the machine's configuration rather than a personal preference.
 
-**Allowing everything disables the machine.** A ceiling set to allow all tools
-does not widen what the machine will do, it removes the ceiling and makes the
-machine refuse every job. It stays online, looks healthy, and fails everything.
-Name the tools you want.
+**"Everything" really does mean everything.** Setting the ceiling to Everything
+(`allowed_tools: ["*"]`) removes it rather than narrowing it: a job that names no
+tools gets every built-in tool, every connector and MCP server your Claude Code
+setup has, and the browser when it is on. That is the point for a machine
+dedicated to serving remote agents, and the reason it is worth naming
+deliberately rather than reaching for by default — see
+[Run modes](/docs/devices/run-modes) for when each ceiling shape makes sense.
 
 ## Where to go next
 
 <Cards>
   <Card
-    title="Devices"
+    title="Your Machines"
     href="/docs/devices"
-    description="Enrolling a machine, flavors, and the ceiling."
+    description="Enrolling a machine, run modes, and the ceiling."
   />
   <Card
     title="Choosing a model"

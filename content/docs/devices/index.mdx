@@ -21,35 +21,41 @@ Windows, and is optional.
 
 To install them, see [Install humanikd and the app](/docs/devices/install).
 
-## Three kinds of device
+## Three run modes
 
-A machine serves exactly one of these. The shape of its config file is the
-declaration, so the two can never disagree.
+A machine serves exactly one **run mode** at a time — the one program every job
+on it goes to. The shape of its config file is the declaration, so the file and
+what the machine actually does can never disagree.
 
-| Flavor | What it serves | **Acts on this machine** | Needs |
+| Run mode | What it serves | **Acts on this machine** | Needs |
 | --- | --- | --- | --- |
-| **A**, local model | Completions from Ollama or a compatible server | **No.** It only thinks | Ollama running |
-| **B**, Claude Code agent | An agent turn; its output *is* the reply | **Yes**, within your ceiling | Claude Code, signed in |
-| **C**, OpenClaw harness | A full agent framework, sandboxed | Yes, inside a container | Docker |
+| **Ollama** | Completions from a local model, or a compatible server | **No.** It only thinks | Ollama running |
+| **Claude Code** | An agent turn; its output *is* the reply | **Yes**, within your ceiling | Claude Code, signed in |
+| **OpenClaw** | A full agent framework, sandboxed | Yes, inside a container | Docker |
 
-**The middle column is the one that matters.** A local model is a model: it
-receives a conversation, produces text, and touches nothing. There is no tool
-list, no working directory, and no connectors, because there is nothing for them
-to apply to.
+**The middle column is the one that matters.** Ollama is a model: it receives a
+conversation, produces text, and touches nothing. There is no tool list, no
+working directory, and no connectors, because there is nothing for them to apply
+to.
 
-Flavor B is a different thing wearing the same slot. It is a **capable agent
+Claude Code is a different thing wearing the same slot. It is a **capable agent
 running on your computer**, so the same machine that does the thinking can also
 read a file, run a command, and use the connectors you signed it into. That is
 why the rest of this section talks about ceilings and blast radius at all, and it
 is what makes an employee on your hardware able to do work rather than only
 answer about it.
 
-Flavor B is the common one, and the rest of this section assumes it.
+Claude Code is the common run mode, and the rest of this section assumes it. For
+what each run mode needs, what it can and cannot do, and how to choose, switch
+and configure one, see [Run modes](/docs/devices/run-modes). For setting up the
+program behind a run mode once it is chosen — accounts, connectors, the browser,
+and routing a run mode through a third-party provider — see
+[Frameworks](/docs/devices/frameworks).
 
 <Callout>
-  **A machine can also do the thinking.** Flavors A and B can both serve models to
-  an office or to Nova, so inference runs on your hardware instead of a vendor's.
-  Only B can also act while it is there. See
+  **A machine can also do the thinking.** Both Ollama and Claude Code run modes
+  can serve models to an office or to Nova, so inference runs on your hardware
+  instead of a vendor's. Only Claude Code can also act while it is there. See
   [Bring your own compute](/docs/models/your-own-compute) for allocating one and
   for how a machine's tools and an office's tools coexist in a single turn.
 </Callout>
@@ -170,14 +176,14 @@ humanikd setup
 Each release is on [GitHub](https://github.com/humanikio/humanikd-dist/releases) with notes and
 signed downloads.
 
-`humanikd setup` walks the whole thing: platform check, flavor choice, backend
+`humanikd setup` walks the whole thing: platform check, run mode choice, backend
 prerequisites, enrolment, config, and auto-start. It never installs anything on
 your behalf. It prints the command and waits.
 
 Then, any time:
 
 ```bash
-humanikd verify     # checks everything this flavor needs, spends no model quota
+humanikd verify     # checks everything this run mode needs, spends no model quota
 humanikd status     # what this device is advertising right now
 ```
 
@@ -189,10 +195,10 @@ humanikd status     # what this device is advertising right now
 humanikd service restart
 ```
 
-**Flavor B runs as *you*.** It installs a per-user service, not a system one,
-because it has to read the `claude` login from your own keychain. That also means
-the agent inherits your MCP connectors, which is usually the point, and
-occasionally a surprise.
+**Claude Code run mode runs as *you*.** It installs a per-user service, not a
+system one, because it has to read the `claude` login from your own keychain.
+That also means the agent inherits your MCP connectors, which is usually the
+point, and occasionally a surprise.
 
 ## Where to go next
 
@@ -201,6 +207,16 @@ occasionally a surprise.
     title="Install humanikd and the app"
     href="/docs/devices/install"
     description="One command on macOS, Windows or Linux, then humanikd setup."
+  />
+  <Card
+    title="Run modes"
+    href="/docs/devices/run-modes"
+    description="Ollama, Claude Code or OpenClaw — what each needs, and when to choose it."
+  />
+  <Card
+    title="Frameworks"
+    href="/docs/devices/frameworks"
+    description="Setting up the program behind a run mode: accounts, connectors, the browser, and third-party providers."
   />
   <Card
     title="How work reaches your machine"

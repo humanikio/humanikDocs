@@ -1,0 +1,128 @@
+---
+title: Claude Code
+description: Which setup jobs use, your account and connectors, the tool ceiling, the browser, and the model.
+---
+
+This page covers **Frameworks › Claude Code** in the app — everything that is
+yours to set once this machine is in [Claude Code run mode](/docs/devices/run-modes#claude-code).
+Nothing here changes what kind of machine this is; it changes what the agent on
+it can see and do.
+
+## Which Claude Code setup jobs use
+
+A job can run through the Claude Code you already use in Terminal, or through a
+separate one with its own sign-in.
+
+| | My Claude Code (default) | A separate setup |
+| --- | --- | --- |
+| Account, plan, connectors | Yours | Its own — can be a different account |
+| MCP servers | Yours | Its own |
+| Your hooks and `CLAUDE.md` | **Included** — they run during jobs | Left out |
+| Which MCP tools jobs may call | Decided by your own Claude Code settings | Decided here, by the switches on this page |
+| Folder | `~/.claude` | `~/.humanikd/claude` |
+
+**My Claude Code is the simpler default** — nothing to set up, and jobs behave
+exactly like the `claude` you already run. **A separate setup** is for a machine
+whose jobs should not inherit your personal hooks and notes, should run as a
+different account, or should be routed through a third-party provider (only
+available on the separate setup — see
+[Connecting a third-party provider](/docs/devices/frameworks/third-party-providers)).
+
+<Callout>
+  **Your hooks run outside the tool ceiling.** They are part of Claude Code
+  itself, not something the ceiling below governs. That is the main reason to
+  reach for a separate setup on a machine other people's work runs through.
+</Callout>
+
+Switching is a toggle and a restart. On the separate setup, **Copy my MCP
+servers** starts it from your own list (sign-ins are not copied — you sign in to
+each one again under the new account).
+
+## Account and connectors
+
+**Account** is wherever `/login` points this setup — your subscription or a
+Console (API-billed) key. Connectors (Gmail, Drive, Figma, and anything you add
+with `claude mcp add`) are listed under **Connectors and MCP servers**, with a
+switch for each.
+
+<Callout type="warn">
+  **Connectors belong to the Claude account, not the machine.** Switch accounts —
+  after hitting a usage limit, say — and every `claude.ai` connector (Gmail,
+  Drive, Calendar) disappears from the agent with no warning. The device stays
+  online and healthy, just with fewer abilities than before. Prefer
+  device-registered servers (`claude mcp add`) where you can: those survive an
+  account switch. See [`humanikd verify`](/docs/devices/run-modes#checking-whats-live)
+  to see exactly what a job will resolve.
+</Callout>
+
+## The tool ceiling
+
+**What jobs may do on this machine** — built-in tools, the browser, and (on a
+separate setup) which connectors — is set under **Machine › Access**. A job may
+request a *subset* of the ceiling and never more; the device never widens what it
+was asked to allow.
+
+The default is read-only: `Read`, `Grep`, `Glob`. `Write`, `Edit` and `Bash` exist
+and are reachable the moment you name them — nothing hidden, just not granted
+until you choose to.
+
+**"Everything"** grants every built-in tool, every connector of the active setup,
+and the browser when it is on — the point of a machine dedicated to serving
+remote jobs. It removes the ceiling rather than narrowing it, so know that before
+turning it on for a machine other people can send work to.
+
+## The browser
+
+Letting jobs drive your actual Chrome — not another MCP server, a different kind
+of capability entirely, with its own switch and its own page:
+[Let jobs use your browser](/docs/devices/browser).
+
+## Model
+
+By default, Claude Code picks its own model on your plan (or bills your Console
+key). **What humanikd starts for each job**, at the bottom of the page, shows the
+exact command line built from this page's settings as they stand — useful for
+seeing precisely what a job will run before it runs.
+
+To route a setup's jobs through a different model or a third-party endpoint —
+OpenRouter, say — see
+[Connecting a third-party provider](/docs/devices/frameworks/third-party-providers).
+It is available on the separate setup only, so it can never change what `claude`
+does for you in Terminal.
+
+## Program and limits
+
+- **Claude Code program** shows the binary found and its version, with a link to
+  install or update it. humanikd never installs anything for you; it detects and
+  tells you the command.
+- **Longest a job may run** is this machine's own ceiling on one turn. The
+  platform's own deadline also applies — whichever is shorter wins.
+- **When Claude Code needs signing in again** controls whether this computer
+  shows a desktop notice (rate-limited to once per 30 minutes) or does nothing,
+  for the one failure nobody else can fix for you: a lapsed sign-in needs `claude`
+  run here, once.
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Connecting a third-party provider"
+    href="/docs/devices/frameworks/third-party-providers"
+    description="Routing a setup's jobs through OpenRouter or a similar gateway."
+  />
+  <Card
+    title="Let jobs use your browser"
+    href="/docs/devices/browser"
+    description="An opt-in surface that drives your real browser."
+  />
+  <Card
+    title="Run modes"
+    href="/docs/devices/run-modes"
+    description="What Claude Code run mode is, and how it compares to the others."
+  />
+  <Card
+    title="Tools your machine does not hold"
+    href="/docs/devices/office-tools"
+    description="What the tool ceiling governs, and what it does not."
+  />
+</Cards>

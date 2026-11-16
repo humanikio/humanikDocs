@@ -1,0 +1,100 @@
+---
+title: OpenClaw
+description: Binds, the tool ceiling, and pointing the harness at a model.
+---
+
+<Callout type="warn">
+  **Not available by default.** [OpenClaw run mode](/docs/devices/run-modes#openclaw)
+  works end to end on a development machine, but is not offered in `humanikd
+  setup` or the console yet. This page documents it for machines already running
+  it.
+</Callout>
+
+OpenClaw runs inside a Docker container that humanikd supervises on your machine.
+Unlike Claude Code, which is a one-shot process per job, OpenClaw is gateway-first:
+it binds a port and stays up, and humanikd holds a connection to it rather than
+spawning it fresh each time.
+
+## Binds
+
+**What the sandbox can see.** Docker on a personal machine is a scoping mechanism, not an isolation one: a
+container that can only see a scratch workspace cannot do the job you wanted
+done. **Binds** are the enumerable list of what it can see instead of "everything
+you can."
+
+```yaml
+backend:
+  openclaw:
+    binds:
+      - ~/projects/acme:/workspace/acme
+      - ~/Documents/notes:/workspace/notes:ro
+```
+
+Nothing is bound by default — an empty list is safe, if not very useful. Add
+`:ro` for read-only.
+
+## The tool ceiling
+
+Same contract as Claude Code: a job may request a subset of `allowed_tools`, and
+never more.
+
+```yaml
+backend:
+  openclaw:
+    allowed_tools: [read, grep]
+```
+
+This ceiling lives on your device, not in anything the platform sends — the same
+reasoning as every other run mode's ceiling.
+
+## Pointing it at a model
+
+OpenClaw resolves its own model by default. To make a device reproducible from
+one file instead of a sequence of commands run by hand, you can declare it
+instead:
+
+```yaml
+backend:
+  openclaw:
+    model: anthropic/claude-sonnet-4-5
+    api_key_file: ~/.humanikd/anthropic.key    # a path — never the key itself
+```
+
+**`api_key_file` names a file, not the key.** Keeping the key out of
+`config.yaml` means its permissions can be tightened independently of the rest of
+the file — a key written directly into config.yaml leaks by ordinary use (pasted
+into a support thread, committed in a dotfiles repo) rather than by mistake.
+
+<Callout type="warn">
+  **Declaring a model here makes `config.yaml` win.** A model changed by hand
+  afterward reverts the next time the gateway starts. Leave `model` out to hand
+  model selection back to OpenClaw itself.
+</Callout>
+
+The same concept as
+[connecting a third-party provider](/docs/devices/frameworks/third-party-providers)
+for Claude Code applies here in spirit — point the harness at the model and
+credential you want it to use — though the mechanism is this declarative
+`model`/`api_key_file` pair rather than environment variables.
+
+## Checking it
+
+```bash
+humanikd verify
+humanikd status
+```
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Run modes"
+    href="/docs/devices/run-modes"
+    description="What OpenClaw run mode is, and how it compares to the others."
+  />
+  <Card
+    title="Claude Code"
+    href="/docs/devices/frameworks/claude-code"
+    description="The other agent framework a device can run."
+  />
+</Cards>

@@ -11,9 +11,10 @@ It does the first here and the second in its office, and it does not experience
 them as different. That split is the point of this page, and it is what makes it
 reasonable to run real work on a laptop.
 
-The split exists because a flavor B machine runs a **capable agent** rather than
-serving pure inference. It has tools of its own, on your computer, so a turn
-spans two places at once. This page assumes that flavor throughout.
+The split exists because a machine in **Claude Code run mode** runs a **capable
+agent** rather than serving pure inference. It has tools of its own, on your
+computer, so a turn spans two places at once. This page assumes that run mode
+throughout.
 
 <ToolSplit />
 
@@ -67,14 +68,14 @@ the endpoints.
 
 ## How the call actually crosses
 
-What happens next depends on which flavor of machine you are running, and the
+What happens next depends on which run mode your machine is in, and the
 difference is worth knowing because it changes what a turn feels like. The full path
 of one call, and the services it passes through, is on
 [How a tool call travels](/docs/devices/tool-calls).
 
-<Tabs items={['Flavor B, an agent', 'Flavor A, a model']}>
+<Tabs items={['Claude Code run mode, an agent', 'Ollama run mode, a model']}>
 
-<Tab value="Flavor B, an agent">
+<Tab value="Claude Code run mode, an agent">
 
 The agent on your machine calls the tool and waits. The call travels up the same
 connection your machine already holds, HumanikOS routes it to that office's
@@ -103,7 +104,7 @@ with the tool's text. Very large pictures are left out and the text says so.
 
 </Tab>
 
-<Tab value="Flavor A, a model">
+<Tab value="Ollama run mode, a model">
 
 A local model is a model, so it ends its turn by saying which tool it wants and
 stopping. The office runs the tool and starts the next turn with the result
@@ -113,13 +114,14 @@ The tool still runs in the office, with the office's credentials, and your
 machine still never sees them.
 
 <Callout>
-  **On a flavor A machine there is no local half.** The machine has no tools, no
-  working directory, and no connectors, because a model has nothing to apply them
-  to. Every tool in the turn is an office tool. The page you are reading still
-  applies, it is just that the split it describes has only one side.
+  **On a machine in Ollama run mode there is no local half.** The machine has no
+  tools, no working directory, and no connectors, because a model has nothing to
+  apply them to. Every tool in the turn is an office tool. The page you are
+  reading still applies, it is just that the split it describes has only one
+  side.
 
   Everything about acting on your own computer needs
-  [flavor B](/docs/devices#three-kinds-of-device).
+  [Claude Code run mode](/docs/devices/run-modes).
 </Callout>
 
 </Tab>
@@ -127,9 +129,9 @@ machine still never sees them.
 </Tabs>
 
 <Callout type="warn">
-  **The third flavor does not do this at all.** An OpenClaw harness device brings
-  its own tools and calls the platform itself, so no office tool is offered to it.
-  It is also not available yet.
+  **OpenClaw run mode does not do this at all.** It brings its own tools and
+  calls the platform itself, so no office tool is offered to it. It is also not
+  available yet.
 </Callout>
 
 ## A worked example
@@ -201,9 +203,9 @@ back up.
 </Step>
 
 <Step>
-**Enrol your machine** and choose flavor B, which is the one that behaves like an
-agent. [Connect your own machine](/docs/devices) covers the whole install, and it
-is the point where you decide the ceiling.
+**Enrol your machine** and choose Claude Code run mode, which is the one that
+behaves like an agent. [Connect your own machine](/docs/devices) covers the whole
+install, and it is the point where you decide the ceiling.
 </Step>
 
 <Step>
@@ -229,7 +231,7 @@ the employee's node changes shape when it is running on your hardware. See
 Then confirm the machine side is sound without spending anything:
 
 ```bash
-humanikd verify     # everything this flavor needs
+humanikd verify     # everything this run mode needs
 humanikd status     # what this machine is advertising right now
 ```
 
