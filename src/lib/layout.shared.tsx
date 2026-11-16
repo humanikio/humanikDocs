@@ -35,6 +35,9 @@ export function baseOptions(): BaseLayoutProps {
       // A filled pill, not a muted text link — the one place in the header that
       // should read as an action rather than another page to read, the same
       // weight platform.claude.com gives "Console" next to its own API reference.
+      // Sized to match huma.solidButton (hos-frontend/src/components/huma/surface.ts):
+      // a fixed h-9 with no vertical padding, shrink-0 and whitespace-nowrap, or the
+      // pill grows to fit wrapped text instead of staying a single compact row.
       {
         type: 'custom',
         on: 'nav',
@@ -43,7 +46,7 @@ export function baseOptions(): BaseLayoutProps {
             href="https://www.humanik.io"
             target="_blank"
             rel="noreferrer"
-            className="ms-1 inline-flex items-center rounded-full bg-fd-primary px-4 py-1.5 text-sm font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
+            className="ms-1 inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-fd-primary px-4 text-[13px] font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
           >
             Main site
           </Link>
