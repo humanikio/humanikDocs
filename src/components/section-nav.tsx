@@ -42,32 +42,35 @@ export function SectionNav() {
   const activeUrl = activeSectionUrl(pathname);
 
   return (
-    <nav className="flex flex-row items-center gap-1">
-      {SECTIONS.map((section) => (
-        <Link
-          key={section.url}
-          href={section.url}
-          data-active={section.url === activeUrl}
-          className={cn(
-            'rounded-md px-2.5 py-1.5 text-sm transition-colors',
-            'text-fd-muted-foreground hover:text-fd-accent-foreground hover:bg-fd-accent/50',
-            'data-[active=true]:text-fd-primary data-[active=true]:font-medium',
-          )}
-        >
-          {section.text}
-        </Link>
-      ))}
+    <nav className="flex flex-row items-center gap-5">
+      <div className="flex flex-row items-center gap-5">
+        {SECTIONS.map((section) => (
+          <Link
+            key={section.url}
+            href={section.url}
+            data-active={section.url === activeUrl}
+            className={cn(
+              'text-sm text-fd-muted-foreground transition-colors hover:text-fd-accent-foreground',
+              'data-[active=true]:font-medium data-[active=true]:text-fd-foreground',
+            )}
+          >
+            {section.text}
+          </Link>
+        ))}
+      </div>
 
-      {/* Rendered apart, with a bracket marker, because it is a different kind
-          of document rather than another product area. */}
+      {/* A thin rule, not a box: the API reference sits apart as its own kind of
+          document, the same way platform.claude.com sets "API reference" off
+          from its product nav with space and a divider rather than a border. */}
+      <span aria-hidden className="h-4 w-px bg-fd-border" />
+
       <Link
         href={REFERENCE.url}
         data-active={REFERENCE.url === activeUrl}
         className={cn(
-          'ms-2 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition-colors',
-          'text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground',
-          'data-[active=true]:border-fd-primary/30 data-[active=true]:bg-fd-primary/10',
-          'data-[active=true]:font-medium data-[active=true]:text-fd-primary',
+          'inline-flex items-center gap-1.5 text-sm text-fd-muted-foreground transition-colors',
+          'hover:text-fd-accent-foreground',
+          'data-[active=true]:font-medium data-[active=true]:text-fd-foreground',
         )}
       >
         <span aria-hidden className="font-mono text-xs opacity-70">

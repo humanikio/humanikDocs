@@ -1,5 +1,6 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import Image from 'next/image';
+import Link from 'next/link';
 import { appName } from './shared';
 import { SectionNav } from '@/components/section-nav';
 
@@ -31,11 +32,22 @@ export function baseOptions(): BaseLayoutProps {
         on: 'nav',
         children: <SectionNav />,
       },
+      // A filled pill, not a muted text link — the one place in the header that
+      // should read as an action rather than another page to read, the same
+      // weight platform.claude.com gives "Console" next to its own API reference.
       {
-        text: 'Main site',
-        url: 'https://www.humanik.io',
-        external: true,
-        secondary: true,
+        type: 'custom',
+        on: 'nav',
+        children: (
+          <Link
+            href="https://www.humanik.io"
+            target="_blank"
+            rel="noreferrer"
+            className="ms-1 inline-flex items-center rounded-full bg-fd-primary px-4 py-1.5 text-sm font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Main site
+          </Link>
+        ),
       },
     ],
     // `githubUrl` is intentionally unset. The docs repo does not exist yet, and
