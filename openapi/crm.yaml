@@ -609,14 +609,15 @@ paths:
       description: |
         Creates a contact. Requires `contact:manage`.
 
-        A name is not strictly required: `displayName` falls back to the
-        formatted phone number, so a contact can be created from a number alone.
-        One of `displayName`, a name part, or `primaryPhone` must be present.
+        Neither a name, a phone number nor an email is required on its own. The
+        contact needs one thing to be shown by, and `displayName` falls back in
+        this order: the name, the formatted phone number, the email, then the
+        company. A request with none of those is refused.
 
-        **This endpoint does not deduplicate.** Creating a second contact with a
-        phone number that already belongs to another contact repoints the phone
-        index at the new record, and inbound messages that would have matched the
-        original are routed to the new one instead. Search before you create.
+        **This endpoint does not match an existing contact for you.** A phone
+        number or email that already belongs to another contact is refused with
+        `409` and a `conflicts` list naming the contact that holds it. Search
+        before you create, or update that contact instead.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       requestBody:
@@ -668,7 +669,7 @@ paths:
                     $ref: '#/components/schemas/Contact'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          description: Missing workspace, no identifying field, or a malformed phone number.
+          description: Missing workspace, nothing to show the contact by, or a malformed phone number.
           content:
             application/json:
               schema:
@@ -677,11 +678,38 @@ paths:
                 noIdentity:
                   value:
                     success: false
-                    error: displayName, a name, or primaryPhone is required
+                    error: A contact needs at least a name, phone number, email or company
                 badPhone:
                   value:
                     success: false
                     error: primaryPhone must be E.164 (starts with +)
+        '409':
+          description: The phone number or email already belongs to another contact.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  conflicts:
+                    type: array
+                    description: One entry per identifier another contact already holds.
+                    items:
+                      type: object
+                      properties:
+                        kind:
+                          type: string
+                          enum: [phone, email]
+                        value:
+                          type: string
+                        contactId:
+                          type: string
+                        displayName:
+                          type: string
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -1673,10 +1701,15 @@ paths:
       description: |
         Bulk import, up to 200 rows per call. Requires `contact:manage`.
 
-        Unlike create, import **does** deduplicate, but only by phone. A row
-        whose normalized phone already resolves to a contact is reported as
-        `skipped`, so re-sending the same batch creates no duplicates. Rows
-        without a phone cannot be deduplicated and always create a new contact.
+        Unlike create, import **does** match existing contacts, by phone number
+        and then by email. A row whose normalized phone or lowercased email
+        already belongs to a contact, or repeats one earlier in the same request,
+        is reported as `skipped`, so re-sending the same batch creates no
+        duplicates. A row with neither cannot be matched and always creates a new
+        contact.
+
+        Neither is required. A row needs one thing to show the contact by: a
+        name, a phone number, an email or a company.
 
         Rows are processed independently: one bad row is reported in `errors`
         and does not sink the batch. The `index` in each error is the row's

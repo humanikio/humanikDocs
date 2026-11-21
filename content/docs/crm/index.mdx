@@ -72,13 +72,17 @@ You can create contacts in bulk from a CSV. The file is parsed in your browser,
 mapped to contact fields, and sent up in batches, so a large list arrives as a
 series of small requests rather than one long upload.
 
-**Import deduplicates by phone number, and only by phone number.** A row whose
-number already belongs to a contact is reported as skipped rather than creating a
-second record, and repeats inside the same file are skipped too. Rows without a
-phone number cannot be checked against anything, so they always create.
+**A row does not need a phone number or an email.** It needs one thing to show
+the contact by: a name, a phone number, an email or a company. A row with only an
+email is shown by its email address until someone adds a name.
 
-That makes re-importing the same file safe when your rows carry phone numbers,
-and duplicative when they do not.
+**Import deduplicates by phone number, then by email.** A row whose number or
+email already belongs to a contact is reported as skipped rather than creating a
+second record, and repeats inside the same file are skipped too. A row with
+neither cannot be checked against anything, so it always creates.
+
+That makes re-importing the same file safe when your rows carry a phone number or
+an email, and duplicative when they carry neither.
 
 **Custom fields import alongside the standard ones.** Values are validated the
 same way a single edit is, so a dropdown value has to match one of that field's
