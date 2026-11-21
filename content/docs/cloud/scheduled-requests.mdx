@@ -93,6 +93,13 @@ Store a value only your app knows in the request body, and have the handler
 refuse a request that does not carry it. A body is not sent for `GET` or `HEAD`,
 so use `POST` for a handler that checks one.
 
+**Each scheduled request also carries four headers** that name the schedule and
+the run: `x-cron-id` (the schedule's id), `x-cron-name` (its name, URI-encoded),
+`x-cron-schedule-kind` (`at`, `every` or `cron`) and `x-cron-run-id` (this run's
+id). Use them to log runs or tell them apart. They do not prove that a request
+came from Humanik Cloud: anyone who can reach your service can send the same
+headers, so keep checking the body value.
+
 The body is stored with the schedule as you sent it, and is returned whenever the
 schedule is read. Anyone holding `cloud:read` at `console` can see it. Use a value
 that is only for this purpose, not a credential you use anywhere else.
