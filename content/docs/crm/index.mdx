@@ -223,6 +223,13 @@ referenced by stored values and by any message template or automation that reads
 `{{contact.<key>}}`, so renaming one would break those references rather than
 follow them. The label, the options and the description stay editable.
 
+**Nova can set them up for you.** Ask Nova to track something new on your
+contacts, or to import a file with columns your fields do not cover, and it
+creates the fields. It checks for an existing field first and reuses one that
+fits. It can also rename a field or change its options. Deleting a field always
+asks first: Nova posts a card, and nothing is deleted until you approve it.
+Nova works with your permissions, so it can only change fields if you can.
+
 ## Deals
 
 A **pipeline** is an ordered list of stages. An **opportunity** is a deal sitting
