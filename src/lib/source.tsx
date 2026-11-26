@@ -90,11 +90,25 @@ export function getPageMarkdownUrl(page: (typeof source)['$inferPage']) {
   };
 }
 
+/**
+ * Drop source comments (`{/* ... *\/}` and `<!-- ... -->`) from the plain-text copy of a page.
+ * The web page hides them, but `getText('processed')` keeps them, so an internal note left in a
+ * page used to reach /llms-full.txt, /llms.mdx/... and every AI that reads them, including
+ * Nova's docs reader (2026-11-26: draft notes on the HumaDocs pages read as "not live").
+ * Fenced code blocks are left alone, so a code example that shows a comment stays intact.
+ */
+export function stripSourceComments(text: string): string {
+  return text
+    .split(/(^```[\s\S]*?^```)/m)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(/\{\/\*[\s\S]*?\*\/\}\n?/g, '').replace(/<!--[\s\S]*?-->\n?/g, '')))
+    .join('');
+}
+
 export async function getLLMText(page: (typeof source)['$inferPage']) {
   // Only MDX pages carry `getText`. Generated OpenAPI pages have no markdown
   // source, so they contribute their title and description rather than a body.
   const data = page.data as { getText?: (mode: 'processed') => Promise<string> };
-  const processed = data.getText ? await data.getText('processed') : (page.data.description ?? '');
+  const processed = stripSourceComments(data.getText ? await data.getText('processed') : (page.data.description ?? ''));
 
   return `# ${page.data.title} (${page.url})
 
