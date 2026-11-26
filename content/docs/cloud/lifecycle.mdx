@@ -76,9 +76,10 @@ then shuts down. It does not wait for work in progress:
 
 - **An office** ends any agent run that is still going, then saves its files so
   the next machine can restore them.
-- **A web service** sends your app a `SIGTERM` and gives it 5 seconds to exit
-  before it is stopped by force. Close connections and finish writes in that
-  window.
+- **A web service** sends your app a `SIGTERM` and gives it 25 seconds to exit
+  before it is stopped by force. Finish the requests in progress, close
+  connections and finish writes in that window. Running scheduled commands get
+  the same 25 seconds.
 
 ## Restarts and deploys
 

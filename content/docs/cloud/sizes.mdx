@@ -31,8 +31,9 @@ Set with `instanceType`. The default is `standard`.
 
 ## Web services
 
-Set with `cpus` and `memoryMb`. The default is 1 vCPU with 2 GB (`cpus: 1`,
-`memoryMb: 2048`). `instanceType` is accepted on a web service and ignored.
+Set with `cpus` and `memoryMb`. The default is 0.5 vCPU with 2 GB (`cpus: 0.5`,
+`memoryMb: 2048`). A machine installs and builds your app each time it starts, so
+memory matters more than vCPU for most apps. `instanceType` is accepted on a web service and ignored.
 
 Not every pairing is allowed. Memory must be one of the values for the vCPU you
 pick:
@@ -43,7 +44,9 @@ pick:
 | `0.5` | 1024, 2048, 3072, 4096 |
 | `1` | 2048 to 8192, in steps of 1024 |
 | `2` | 4096 to 16384, in steps of 1024 |
-| `4` | 8192 to 16384, in steps of 1024 |
+| `4` | 8192 to 30720, in steps of 1024 |
+| `8` | 16384 to 61440, in steps of 4096 |
+| `16` | 32768 to 122880, in steps of 8192 |
 
 A pairing outside this table is refused when you save it, with an error that
 names both fields and lists the memory values allowed for that vCPU.

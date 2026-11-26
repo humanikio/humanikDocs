@@ -65,21 +65,25 @@ parts:
 per hour = vCPU × $0.04857 + GB × $0.00534 + $0.0075
 ```
 
-For the default size, 1 vCPU with 2 GB: $0.04857 + 2 × $0.00534 + $0.0075 =
-**$0.0668 per hour**.
+For the default size, 0.5 vCPU with 2 GB: 0.5 × $0.04857 + 2 × $0.00534 + $0.0075 =
+**$0.0425 per hour**.
 
 | Size | Per hour | Awake all month |
 | --- | --- | --- |
 | 0.25 vCPU, 512 MB | $0.0223 | $16.29 |
 | 0.25 vCPU, 1 GB | $0.0250 | $18.24 |
 | 0.5 vCPU, 1 GB | $0.0371 | $27.10 |
-| 0.5 vCPU, 2 GB | $0.0425 | $31.00 |
-| **1 vCPU, 2 GB (default)** | **$0.0668** | **$48.73** |
+| **0.5 vCPU, 2 GB (default)** | **$0.0425** | **$31.00** |
+| 1 vCPU, 2 GB | $0.0668 | $48.73 |
 | 1 vCPU, 4 GB | $0.0774 | $56.52 |
 | 2 vCPU, 4 GB | $0.1260 | $91.98 |
 | 2 vCPU, 8 GB | $0.1474 | $107.57 |
 | 4 vCPU, 8 GB | $0.2445 | $178.48 |
 | 4 vCPU, 16 GB | $0.2872 | $209.67 |
+| 8 vCPU, 16 GB | $0.4815 | $351.50 |
+| 8 vCPU, 60 GB | $0.7165 | $523.02 |
+| 16 vCPU, 32 GB | $0.9555 | $697.51 |
+| 16 vCPU, 120 GB | $1.4254 | $1,040.56 |
 
 Any other allowed pairing is priced with the same formula.
 [Machine sizes](/docs/cloud/sizes#web-services) lists every pairing you can pick.

@@ -82,10 +82,12 @@ That commit is used as given, with no branch lookup, and stays in place for ever
 later machine start until a redeploy **without** `gitSha` looks up the branch tip
 again.
 
-- **There is no rollback control in the console.** Rolling back is through the API.
-- **The deployment history does not record the commit.** Keep your own record of
-  which commit you deployed, or read the `commit` field on a log line from that
-  time.
+- **In the console:** on the Deployments tab, choose **Manual deploy**, then
+  **Deploy a commit**. Pick a commit an earlier deploy ran, or paste a full
+  40-character commit id.
+- **The deployment history records the commit and branch** of each deploy, from
+  2026-11-25 on. Older entries show only their time; for those, read the `commit`
+  field on a log line from that time.
 - **The commit must still be on GitHub.** Each machine fetches it at start. A
   commit removed by a force push cannot be fetched, and the machine fails to
   start.
@@ -153,6 +155,19 @@ a couple of seconds apart. Each exit writes `[runner] app exited` to the logs.
 After the third restart the app stays down until the machine is replaced. Fix the
 cause and redeploy.
 
+
+### Stopping a deploy
+
+A deploy that is still waiting or deploying can be stopped. On the Deployments tab, open the ⋯ menu
+on its row and choose **Stop deploy**, or use the button on the deployment's page. The machines it
+started are shut down and it is marked **Stopped**. A version that is already live keeps running.
+
+The same menu has **Redeploy this commit**: a new deployment of that commit, with the service's
+settings as they are now.
+
+If a machine fails while starting (for example at install), the deploy fails straight away with
+the reason, instead of waiting for the deploy timeout.
+
 ## Reading logs
 
 [Get service logs](/docs/api-reference/cloud/services/getCloudServiceLogs) reads
@@ -170,9 +185,24 @@ and logs are kept after a machine stops.
 so `level=error` returns only the platform's lines and hides your app's own
 errors and stack traces. Use `search` for your app's output instead.
 
-Each of your app's lines also carries `instance_id` (the machine), `commit` (the
-commit that machine runs) and, for a machine started by a deploy,
-`deployment_id`. A machine started because the service woke from sleep has no
+Each of your app's lines also carries `stream`, `phase`, `instance_id` (the
+machine), `commit` (the commit that machine runs) and, for a machine started by a
+deploy, `deployment_id`.
+
+| Field | Values |
+| --- | --- |
+| `stream` | `stdout` or `stderr`: where your app printed the line. `system` for the platform's notes about your app, such as "app exited" |
+| `phase` | `install`, `build`, `run` or `job`: which step printed the line. `job` is a [scheduled command](/docs/cloud/scheduled-requests) |
+
+**Each line is one whole line,** even when your app prints a long line in pieces.
+
+**Limits on what is kept, per machine:**
+
+- A line longer than 16,384 characters is cut, and the line says so at its end.
+- At most 200 lines a second are kept. Past that, lines are left out, and one line
+  saying how many were left out is added when the next second starts.
+
+A machine started because the service woke from sleep has no
 `deployment_id`, so filtering by `deploymentId` leaves its lines out.
 
 ### Filters
@@ -184,14 +214,21 @@ commit that machine runs) and, for a machine started by a deploy,
 | `instanceId` | Lines from one machine, from [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances) |
 | `deploymentId` | Lines from machines one deploy started |
 | `level` | `debug`, `info`, `warn` or `error`. Matches the platform's lines only |
+| `phase` | `install`, `build`, `run` or `job`. Your app's lines from that step only |
+| `stream` | `stdout`, `stderr` or `system`. Your app's lines from that output only. `system` is the platform's notes about your app, such as "app exited" |
 | `order` | `desc` (newest first, the default) or `asc` |
 | `limit` | Lines per call. Default 100, at most 1000 |
 
 Any other parameter is refused with `400`.
 
-**To read further back, move the time window.** Passing back the `cursor` from a
-response does not return the next page. Set `endTime` to the `_time` of the oldest
-line you have, and call again.
+**To read further back, pass back the `cursor`.** When `hasMore` is `true`, the
+response has a `cursor`. Call again with the same filters and `cursor` set to it,
+and you get the next page: older lines with `order=desc`, newer with `order=asc`.
+When `hasMore` is `false`, there are no more lines in the time range.
+
+Lines written at the same instant as the last line of a page can come back at the
+top of the next page. Drop a line you already have: same `_time`, `instance_id` and
+`message`.
 
 #### Request
 
@@ -226,4 +263,10 @@ curl "$HOS_API/cloud/services/svc_7f3a9c2e/logs?startTime=2026-10-19T13:00:00Z&e
 The service's Logs tab shows the last 48 hours, 200 lines at a time, and checks
 for new lines every 5 seconds. Pick a range from 15 minutes to 30 days, or your
 own. The Errors and Warnings buttons filter by `level`, so they show only the
-platform's lines, the same as the API.
+platform's lines, the same as the API. The **Step** and **Output** menus filter
+your app's lines by `phase` and `stream`; each line shows its step beside it.
+Your app's `stderr` lines show as warnings, because many tools write progress
+there.
+
+Lines you load with **Load older lines** stay on the page while new lines are
+added at the top.

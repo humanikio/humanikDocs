@@ -65,13 +65,58 @@ while the deploy runs rather than waiting for its status. See
 | `gitRepoUrl` | Required | The repository to clone |
 | `gitBranch` | `main` | The branch a deploy takes its commit from |
 | `rootDirectory` | `.` | The folder inside the repository the app lives in. Commands run from here. Use it for a monorepo, with one service per folder |
-| `runtime` | `nodejs` | `nodejs` or `python`. It does not change the commands below |
-| `installCommand` | `npm ci` | Installs dependencies. `npm ci` needs a lockfile. Set `npm install`, `pnpm install` or `yarn install` to match your repository |
-| `buildCommand` | `npm install && npm run build` | Builds the app. An empty string skips the build |
+| `runtime` | `nodejs` | Where the service deploys. Leave it as `nodejs`: `nodejs` and `python` both run on Humanik Cloud and do not change the commands below. The console does not show it |
+| `installCommand` | `npm install` | Installs dependencies. Set `npm ci` (needs a lockfile), `pnpm install` or `yarn install` to match your repository |
+| `buildCommand` | `npm run build` | Builds the app. An empty string skips the build |
 | `startCommand` | `npm start` | Starts the server. An empty string starts no server: see below |
 
 Commands run with `sh -c`, so `&&` and `$PORT` work in them. They run as an
 ordinary user, never as root.
+
+### Commands filled in for you
+
+When you create a web service in the console and pick a repository and branch,
+Humanik Cloud reads the newest commit on that branch and fills in the install,
+build and start commands it finds. It reads the files only: nothing is built and
+none of your code runs. A command you have typed yourself is never replaced; the
+console offers **Use detected** instead. The branch list shows the repository's
+real branches, starting on its default branch.
+
+It knows npm, pnpm, Yarn and Bun projects (including Next.js, Vite and others) and
+Python projects. Check the commands before you deploy.
+
+To get the same answer from the API, send the repository, branch and folder:
+
+```bash
+curl -X POST "$HOS_API/cloud/services/detect" \
+  -H "Authorization: Bearer $HOS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "repoUrl": "https://github.com/acme/api.git", "ref": "main", "rootDirectory": "." }'
+```
+
+```json
+{
+  "success": true,
+  "commit": "3f9c2a7e5b1d4c8a9e0f6b2d7a1c5e8f4b3a2d1c",
+  "detected": {
+    "provider": "node",
+    "packageManager": "pnpm",
+    "install": "pnpm install --frozen-lockfile --prefer-offline",
+    "build": "pnpm run build",
+    "start": "pnpm run start"
+  }
+}
+```
+
+It needs a GitHub connection that can read the repository. Each deploy also
+checks the deployed commit the same way and shows the result on the deployment's
+page. That check never changes a deploy.
+
+### Applying changed settings
+
+Saved settings apply to machines that start after you save. On the Settings tab,
+**Save and redeploy** saves and starts a deploy, so the change applies straight
+away.
 
 <Callout type="warn">
   **Use `gitBranch`, not `branch`.** `branch` is an older name, still accepted so
@@ -80,8 +125,12 @@ ordinary user, never as root.
 
 ### What is installed
 
-Every machine has Node.js 22 and Python 3.14, with `uv` and `uvx`. `git` is
-installed too.
+Every machine has Node.js 22 and Python 3.14, with `uv` and `uvx`. For Node.js,
+`npm`, `pnpm` and `yarn` are installed. `git` is installed too.
+
+pnpm and Yarn run the version your `package.json` names in `packageManager`
+(for example `"packageManager": "pnpm@9.15.9"`), downloaded during install. With
+no `packageManager`, pnpm 9.15.9 and Yarn 1.22.22 are used.
 
 **The default commands are Node.js commands, whatever `runtime` says.** A Python
 service must set all three commands itself. For example:
@@ -91,6 +140,28 @@ service must set all three commands itself. For example:
 | `installCommand` | `uv venv && uv pip install -r requirements.txt` |
 | `buildCommand` | An empty string |
 | `startCommand` | `.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port $PORT` |
+
+### pnpm 11 and newer: approved install scripts
+
+You do not need to change anything for this unless your `packageManager` names pnpm 11 or newer.
+
+pnpm 11 and newer does not run a dependency's install script unless your repository approves that
+package, and the install fails until it does. Many common packages have one, such as esbuild,
+sharp, prisma and protobufjs. This is pnpm's own rule, so a repository that pins pnpm 11 or newer
+has usually approved them already. The default pnpm 9 runs these scripts the way npm does.
+
+If a deploy fails at install for this reason, the deploy's logs list the packages and the exact
+lines to add. Commit them in `pnpm-workspace.yaml` at the root of your repository:
+
+```yaml
+allowBuilds:
+  esbuild: true
+  sharp: true
+```
+
+Running `pnpm approve-builds` on your own machine writes the same file. Set a package to `false`
+to refuse its script instead. The older `onlyBuiltDependencies` setting in `package.json` is not
+read by pnpm 11 and newer.
 
 ### A service with no server
 
@@ -109,6 +180,10 @@ during install or build.
 **Answer on it within about 60 seconds of starting.** The machine is ready once
 your app answers any request on `PORT`, even with a `404`. If nothing answers
 within about a minute of the start command running, the start fails.
+
+**Use plain HTTP requests.** WebSocket connections are not supported yet: a
+request to upgrade the connection is closed. Streamed responses, such as
+server-sent events, do work.
 
 **Stay up.** If your app exits, it is restarted, at most 3 times in the life of
 one machine. After that it stays down until the machine is replaced, by a deploy
@@ -130,8 +205,30 @@ path.
 ## The public address
 
 The first deploy gives the service a public address of the form
-`https://{routeId}.humanikapi.io`. It stays the same across deploys. Requests to it
+`https://{routeId}.humanikcloud.com`. It stays the same across deploys. Requests to it
 reach your app over HTTPS, and wake the service if it is asleep.
+
+Requests reach your app as they were sent, and your app's answers reach the caller
+as your app sent them:
+
+- The method, path, query string, headers and body are passed on unchanged, so
+  pages, files, form posts, uploads and streamed answers (such as server-sent
+  events) all work.
+- Your app's status code, headers (including cookies, CORS and caching headers)
+  and body are passed back unchanged.
+- Your app receives `X-Forwarded-For` (the caller's address),
+  `X-Forwarded-Proto` and `X-Forwarded-Host` (the public address), set by Humanik
+  Cloud. Values a caller sends in these headers are replaced.
+- Every request and answer carries an `X-Request-Id`. Quote it when you contact
+  support about a request.
+
+| Limit | Value |
+| --- | --- |
+| Request body | 50 MB. Larger requests are answered with `413` |
+| Waiting for your app to start answering | 330 seconds, including waking the service |
+| Silence in the middle of a body | 300 seconds |
+
+WebSocket connections are not supported on the public address yet.
 
 ## Environment variables and secrets
 
@@ -166,7 +263,7 @@ It applies the next time a machine starts. Scheduled commands need `http`.
 ## Size, scaling and cost
 
 A web service is sized by vCPU and memory, chosen separately, from 0.25 vCPU with
-512 MB up to 4 vCPU with 16 GB. It runs on one machine, and sleeps after 20
+512 MB up to 16 vCPU with 120 GB. The default is 0.5 vCPU with 2 GB. It runs on one machine, and sleeps after 20
 minutes without requests unless you change its idle timeout. The build runs on
 that same machine, at that size, every time a machine starts.
 

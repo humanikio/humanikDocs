@@ -1236,9 +1236,11 @@ paths:
         lines. Use `search` instead. A machine started because the service woke
         from sleep has no deployment, so `deploymentId` leaves its lines out.
 
-        **To read further back, move `endTime`.** Passing back `cursor` does not
-        return the next page. Set `endTime` to the `_time` of the oldest line you
-        have. See [Deployments and logs](/docs/cloud/deployments-and-logs#reading-logs).
+        **To read further back, pass back `cursor`.** While `hasMore` is `true`,
+        call again with the same filters and the `cursor` from the last response.
+        Lines from the same instant as the last line of a page can repeat at the
+        top of the next one; drop the ones you have. See
+        [Deployments and logs](/docs/cloud/deployments-and-logs#reading-logs).
 
         A service that has never run returns `success: true` with no lines and a
         note in `error` that no logs exist yet.
@@ -1292,7 +1294,7 @@ paths:
             maximum: 1000
         - name: cursor
           in: query
-          description: Accepted, but does not return a further page. Move `endTime` instead.
+          description: The `cursor` of the previous response, for the next page. Use it with the same filters. Any other value is refused with `400`.
           schema:
             type: string
         - name: order
@@ -1317,7 +1319,7 @@ paths:
                       $ref: '#/components/schemas/LogEntry'
                   cursor:
                     type: string
-                    description: Returned, but passing it back does not return a further page.
+                    description: Present when `hasMore` is `true`. Pass it back as `cursor` for the next page.
                   hasMore:
                     type: boolean
                   count:
