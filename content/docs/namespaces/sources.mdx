@@ -127,8 +127,8 @@ sending system has to put in the body, exactly where the mapping reads it. Rathe
 than working that out by hand, ask for the body the source expects:
 
 ```bash
-curl "https://api.humanik.io/api/v1/namespaces/$NAMESPACE_ID/sources/$SOURCE_ID/sample-payload?workspaceId=$WORKSPACE_ID" \
-  -H "Authorization: Bearer $HUMANIK_API_KEY"
+curl "$HOS_API/namespaces/$NAMESPACE_ID/sources/$SOURCE_ID/sample-payload?workspaceId=$WORKSPACE_ID" \
+  -H "Authorization: Bearer $HOS_KEY"
 ```
 
 It answers with the JSON body, the source's Test and Live URLs, and a
@@ -261,7 +261,7 @@ what someone importing a backlog wants. Turn it on deliberately when it is.
   reached the Live URL but was not stored is listed under **Payloads → Live**
   with the reason; nothing re-sends it for you.
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card

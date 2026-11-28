@@ -3,17 +3,16 @@ title: Frameworks and models
 description: What runs inside an office, why it is a swappable part, and what survives a change.
 ---
 
-An office is a machine. What runs on that machine is two separate choices, and
-both are made per employee rather than once for the account.
+An office is a machine. What runs on that machine is two separate parts, set per
+employee rather than once for the account.
 
-| | What it is | Chosen |
+| | What it is | Set |
 | --- | --- | --- |
-| **The framework** | The agent program that decides what to do and calls tools | Per office |
+| **The framework** | The agent program that decides what to do and calls tools | One per office. Every office runs OpenClaw today |
 | **The model** | What that agent thinks on | Per office, and per person for Nova |
 
-Two employees in the same workspace can run different frameworks on different
-models at the same time, and neither knows the other exists. They are two
-machines.
+Two employees in the same workspace can run on different models at the same
+time, and neither knows the other exists. They are two machines.
 
 ## The agent is a part, not the product
 
@@ -21,15 +20,16 @@ Most AI products in this category are built the other way round. The agent is th
 thing they made, and everything else exists to serve it. That makes the agent
 impossible to replace, because replacing it would mean replacing the product.
 
-Here the agent is an open source project, tracked as an upstream dependency and
-run unmodified. What we build is everything around it: the machine, the identity,
+Here the agent is an open source project, tracked as an upstream dependency.
+What we build is everything around it: the machine, the identity,
 the credentials, the data access, the channels, the schedule, the supervision and
 the billing.
 
 <Callout>
-  **The rule the codebase follows is never fork, always inject.** The framework's
-  source is not modified. Platform context arrives through extension points the
-  framework already exposes, which is why it can keep tracking upstream.
+  **The rule the codebase follows is inject first, patch last.** Platform context
+  arrives through extension points the framework already exposes. Where the
+  framework's own code has to change, we keep a small set of patches on our own
+  copy of it and keep pulling the upstream project's changes in.
 </Callout>
 
 ## The platform supplies the environment
@@ -44,7 +44,7 @@ assembled for it.
 
 | What the agent gets | Where it comes from |
 | --- | --- |
-| Plugin credentials | The vault, resolved at boot and injected under the names each skill declares |
+| Plugin credentials | The vault, read at boot and injected as environment variables named after the secret group and field |
 | Data access | The namespaces allocated to this office, and nothing else |
 | Its identity | Its own service account, minted when the office was created |
 | Skills | Written to disk in the shape its framework reads |
@@ -54,10 +54,15 @@ assembled for it.
 Two of those are worth pulling out, because they are what make the arrangement
 safe rather than merely tidy.
 
-**Capability follows credential.** Secrets are injected under names that match
-each skill's declared requirement, so connecting a system is what makes that
+**Capability follows the connection.** Connecting a system is what makes that
 system's skill appear to the employee. Nobody writes a skill per customer, and
-nothing separately tells the agent what it can do.
+nothing separately tells the agent what it can do. Two kinds of plugin behave
+differently when the credential is missing:
+
+| Plugin | When its credential cannot be read |
+| --- | --- |
+| Has a base address, so the office makes the calls | The skill still appears. A call fails with a readable error that says the credential is missing |
+| Documents a client library the agent uses itself | The skill appears only when the credential is present in the agent's environment |
 
 **The model key is not in the agent.** The parent resolves the key and starts a
 proxy on the machine's loopback address, then points the framework's model
@@ -68,9 +73,11 @@ its error traces.
 <Callout type="warn">
   **This is a precise claim, not a broad one.** Managed connector tokens and the
   model key never reach the agent. Credentials for plugins you create
-  directly are injected as environment variables, so the agent does hold those.
-  Both facts matter and we state them separately rather than rounding the pair
-  up into "it has no credentials".
+  directly are injected as environment variables, so the agent does hold those,
+  together with the office's own HumanikOS identity and, when it has a phone
+  number, its phone credentials. Both facts matter and we state them separately
+  rather than rounding the pair up into "it has no credentials". The full list is
+  on [Inside an office](/docs/cloud/inside-an-office#what-the-agent-does-hold).
 </Callout>
 
 ## Only one band of the boot is framework specific
@@ -130,13 +137,16 @@ compiled.
 
 ## What runs today
 
-**OpenClaw is the framework in production.** It is an open source agent project,
-vendored unmodified, on a permissive licence. Every office you create today runs
-on it.
+**OpenClaw is the framework in production.** It is an open source agent project
+on a permissive licence, run from our own copy with a small set of patches.
+Every office you create today runs on it, and there is no setting to choose
+another one yet.
 
-A second open source framework has been brought up on the same boot pipeline and
-is in testing. It is not available to choose yet, and we would rather say that
-than list it as an option.
+On [your own devices](/docs/devices/frameworks), Claude Code run mode gets the
+office's tools over a bridge from your machine to the office. OpenClaw run mode
+also exists on devices, but it is not offered by default, and it uses only its
+own local tools, not the office's. How one set of tools reaches the framework in
+an office is on [Inside an office](/docs/cloud/inside-an-office).
 
 ## Choosing the model
 
@@ -164,8 +174,8 @@ and the same workspace can hold employees doing all three.
 
 ## The sharp edges
 
-**Both choices are read at boot.** Changing an office's framework or its model
-does nothing to a running employee. The office keeps what it started with until
+**The model is read at boot.** Changing an office's model does nothing to a
+running employee. The office keeps what it started with until
 it restarts, and restarting replaces the machine rather than rebooting it. See
 [Where offices run](/docs/cloud/offices).
 
@@ -179,7 +189,7 @@ prompt injection generally.
 machines. It coordinates offices rather than living in one. See
 [Nova](/docs/nova).
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card
@@ -196,10 +206,5 @@ machines. It coordinates offices rather than living in one. See
     title="Plugins and secrets"
     href="/docs/plugins"
     description="What gets compiled, and where the credentials live."
-  />
-  <Card
-    title="Connect your own machine"
-    href="/docs/devices"
-    description="Running the thinking on hardware you own, under a ceiling you set."
   />
 </Cards>

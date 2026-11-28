@@ -34,8 +34,8 @@ there is one. Omitting it returns `400`.
 | `bulletin:read` | Listing tiles and boards, reading a page |
 | `bulletin:manage` | Everything that writes |
 
-Both are evaluated at the workspace scope. `bulletin:read` is part of the
-baseline every tenant member holds, because it carries no contents.
+Both are evaluated at the workspace scope. `bulletin:read` is in every built-in
+workspace role, because it carries no contents. A custom role must add it.
 
 **A third gate runs on two operations, and it is a data plane action rather than
 a bulletin one.** `datasource:read` on the namespace a tile points at:

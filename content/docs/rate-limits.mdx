@@ -3,29 +3,26 @@ title: Rate limits
 description: Request limits, the headers that report them, and how to back off.
 ---
 
-Requests are limited with a token bucket. An authenticated caller gets:
+Some operations carry their own request limit, and the API reference page for each one says
+so. This page covers what a limited call returns, the headers that report the limit, and how to
+back off. What every other error status means is on
+[Responses and errors](/docs/responses).
 
-| | |
+## What a request sees
+
+| Situation | Result |
 | --- | --- |
-| **Burst** | 200 requests |
-| **Sustained** | 20 requests per second |
-| **Counted against** | Your tenant, not the individual key |
-
-The bucket is shared across every key in your tenant. Two service accounts
-running in parallel draw from the same allowance, so plan concurrency at the
-tenant level rather than per key.
-
-Some endpoints carry tighter limits of their own. Those are stated on the
-endpoint.
+| The operation has a limit and you are under it | The normal response, with `X-RateLimit-Limit` and `X-RateLimit-Remaining` |
+| The operation has a limit and you are over it | `429`, with a `Retry-After` header and `retryAfter` in the body, both in seconds |
 
 ## Headers
 
-Every authenticated response reports the current state:
+Operations that carry a limit return these headers:
 
 | Header | Meaning |
 | --- | --- |
 | `X-RateLimit-Limit` | The ceiling being applied |
-| `X-RateLimit-Remaining` | Requests left in the current window |
+| `X-RateLimit-Remaining` | Requests left before the limit is reached |
 | `Retry-After` | Seconds to wait. Sent only on a `429`. |
 
 ## When you are limited
@@ -51,3 +48,10 @@ over a fixed backoff schedule.
   `401`, `403`, or `404`, since none of them will succeed unchanged.
 - Cache reads that do not change often. Office and workspace listings are
   usually stable between calls.
+
+## Next steps
+
+<Cards>
+  <Card title="Responses and errors" href="/docs/responses" description="The envelope, status codes, and what each one means." />
+  <Card title="Pagination" href="/docs/pagination" description="How list operations return their results a page at a time." />
+</Cards>

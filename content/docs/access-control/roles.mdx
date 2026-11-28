@@ -21,36 +21,40 @@ Grouped by what they are for.
 
 ### Organisation administration
 
-Assigned at `console`. These do not descend into workspaces.
+Assigned at `console`. Console Admin, Members Manager, IAM Manager and Console Viewer do not
+descend into workspaces. Full Admin covers both.
 
-| Role | For |
-| --- | --- |
-| `consoleAdmin` | Full organisation level administration |
-| `membersManager` | Inviting and managing people, without wider console rights |
-| `iamManager` | Defining roles and policies, and making assignments |
+The console shows each role by its name. The API, and any `roleId` you send, uses the id.
+
+| Role | `roleId` | For |
+| --- | --- | --- |
+| Console Admin | `console-admin` | Full organisation level administration |
+| Members Manager | `members-manager` | Inviting and managing people, without wider console rights |
+| IAM Manager | `iam-manager` | Defining roles and policies, and making assignments |
+| Console Viewer | `console-viewer` | Read only access to members, access control and settings |
+| Full Admin | `full-admin` | Everything Console Admin and Workspace Admin can do, together |
 
 ### Workspace and membership
 
-| Role | For |
-| --- | --- |
-| `workspaceAdmin` | Full control of one workspace and everything inside it |
-| `tenantMember` | Baseline membership. The floor a person needs to use the product. |
-| `viewer` | Read only. It sees which credentials exist but never their values, and it does not see an office's machine or its logs |
+| Role | `roleId` | For |
+| --- | --- | --- |
+| Workspace Admin | `workspace-admin` | Full control of one workspace and everything inside it |
+| Viewer | `viewer` | Read only. It sees which credentials exist but never their values, and it does not see an office's machine or its logs |
 
 ### Operational
 
 Narrower roles for a specific job, meant to be assigned at a narrow boundary.
 
-| Role | For |
-| --- | --- |
-| `officeOperator` | Running and managing offices: prompting them, starting and stopping them, changing their setup, their machine and its logs, and their credentials including the values |
-| `workflowOperator` | Running workflows |
-| `dataSourceManager` | Managing data sources and ingestion |
-| `integrationPublisher` | Publishing plugins for others to use |
+| Role | `roleId` | For |
+| --- | --- | --- |
+| Office Operator | `office-operator` | Running and managing offices: prompting them, starting and stopping them, changing their setup, their machine and its logs, and their credentials including the values |
+| Workflow Operator | `workflow-operator` | Running workflows |
+| Data Source Manager | `datasource-manager` | Managing data sources and ingestion |
+| Integration Publisher | `integration-publisher` | Publishing plugins for others to use |
 
 A role that lets someone use Nova does not widen what Nova may do for them. Nova
 can do only what the role's other permissions allow. For example,
-`officeOperator` includes `nova:manage` but no data source permissions, so a
+Office Operator includes `nova:manage` but no data source permissions, so a
 person who holds only that role can ask Nova to read a namespace's data and Nova
 will be refused. See [When Nova acts for you](/docs/access-control/acting-for-you).
 
@@ -59,33 +63,36 @@ will be refused. See [When Nova acts for you](/docs/access-control/acting-for-yo
 Assigned to service accounts rather than to people. Usually attached
 automatically when the office or browser is created.
 
-| Role | For |
-| --- | --- |
-| `officeAgent` | The identity an AI employee's office runs as |
-| `browserAgent` | The identity a cloud browser runs as |
-| `third-party-agent` | The default for a [connected agent](/docs/connected-agents), such as Muse or Grok Bot |
+| Role | `roleId` | For |
+| --- | --- | --- |
+| Office Agent | `office-agent` | The identity an AI employee's office runs as |
+| Browser Agent | `browser-agent` | The identity a cloud browser runs as |
+| Third-Party Agent | `third-party-agent` | The default for a [connected agent](/docs/connected-agents), such as Muse or Grok Bot |
 
-`officeAgent` covers what an AI employee does on your behalf: group chats,
+Office Agent covers what an AI employee does on your behalf: group chats,
 contacts and opportunities, calendars, outbound messages and text messages from
 its own assigned addresses and numbers, **placing and ending phone calls**, the
-data plane, and the app containers it builds and runs, including their
-environment variables. It is scoped to a single workspace.
+databases connected to its office, and the app containers it builds and runs,
+including their environment variables. It is scoped to a single workspace.
+
+It can change and delete records, not only read them. That covers contacts, and
+the records and tables in databases connected to its office.
 
 Phone calls are worth calling out, because it is the permission with the largest
 reach outside your workspace. An employee can place a call only from a number
 assigned to its office, and only while that office has one. If you do not want an
 employee dialling out, do not assign it a number.
 
-It deliberately stops short of destructive and administrative actions. It cannot
+It stops short of administrative actions. It cannot
 delete a project or container, manage workspace settings, add or remove chat
 members, or send from an address it was not assigned. Those stay with people.
 
-`browserAgent` is a good illustration of the model working. It is scoped to
+Browser Agent is a good illustration of the model working. It is scoped to
 inference and the databases allocated to that browser, and it explicitly excludes
 chat, contacts, calendars, and office access. A browser that is compromised
 cannot reach the rest of the workspace, because its role never permitted it.
 
-`third-party-agent` is kept small, because a connected agent runs on
+Third-Party Agent is kept small, because a connected agent runs on
 a computer Humanik does not control. It can read its workspace, message the
 workspace's AI employees in HumaChat, and post in channels it is added to. It cannot
 change records, send email or text messages, read credentials, or manage access. The
@@ -102,7 +109,7 @@ permissions.
 | `secrets:read` | Reveal a value. It also allows everything `secrets:list` does |
 | `secrets:write` | Add, change and remove credentials |
 
-`viewer` holds `secrets:list` only. In the role editor, **View** on the Credentials
+Viewer holds `secrets:list` only. In the role editor, **View** on the Credentials
 row grants `secrets:list`, and **Reveal values** is its own checkbox, so revealing is
 never included by accident.
 
@@ -111,16 +118,21 @@ never included by accident.
   meant to be read only, switch it to `secrets:list`.
 </Callout>
 
+**A `roleId` that names no role grants nothing, and is not rejected.** Creating an
+assignment or a service account with a misspelled id, such as `officeOperator` for
+`office-operator`, succeeds. The identity then gets `403` on everything that role was
+meant to allow. Copy ids from the tables above, or from your custom roles list.
+
 ## Choosing one
 
 Two questions, in this order:
 
 1. **What is the narrowest role that covers the job?** Start from the operational
-   roles. Reach for `workspaceAdmin` only when the job really is "everything in
+   roles. Reach for Workspace Admin (`workspace-admin`) only when the job really is "everything in
    this workspace".
 2. **What is the narrowest boundary it can be assigned at?** This matters more
    than the choice of role. `viewer` at `workspace/W1` is far wider than
-   `officeOperator` at one office.
+   `office-operator` at one office.
 
 A common mistake is picking a narrow role and then assigning it at the workspace
 root, which quietly grants it everywhere inside.
@@ -214,3 +226,18 @@ From a role's page you can work on its policies without leaving it:
 
 If the role has changes you have not saved, both open in a new tab, so the changes
 stay where they are.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Granting access"
+    href="/docs/access-control/assignments"
+    description="Assign a role at the narrowest boundary that works."
+  />
+  <Card
+    title="Actions"
+    href="/docs/access-control/actions"
+    description="Every action a policy can grant."
+  />
+</Cards>

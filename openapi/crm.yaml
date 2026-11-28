@@ -957,7 +957,16 @@ paths:
       summary: Delete a contact
       operationId: deleteContact
       description: |
-        Deletes a contact. Requires `contact:manage`.
+        Deletes a contact for good. Requires `contact:manage`. It cannot be
+        undone, so prefer
+        [Archive a contact](/docs/api-reference/crm/contacts/archiveContact)
+        unless you mean to erase it.
+
+        **What is deleted:** the contact, its notes and activity, and its
+        conversation thread with every message in it.
+
+        **What is kept:** the record that a number opted out. If the person
+        had texted STOP, deleting their contact does not erase that.
 
         **Opportunities linked to the contact are not deleted.** They remain in
         their pipeline referencing an id that no longer resolves. Check
@@ -972,6 +981,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such contact in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/ServerError'
 
   /contacts/{contactId}/archive:
     parameters:
@@ -1021,9 +1038,16 @@ paths:
         Sends a text message from a phone number allocated to the workspace.
         Requires `phone:send`.
 
-        `fromNumber` is optional and resolves automatically from the numbers
-        allocated to the caller. An AI employee calls this exact endpoint with
-        its own key, through the same gate.
+        `fromNumber` is optional. When you send it, it must be a number that
+        can send texts and is allocated to this workspace. When you leave it
+        out, the number is chosen in this order: the number this conversation
+        already uses, then the workspace's only number. If neither settles it,
+        the answer is `400` with `candidates`, the numbers you can choose
+        from. An AI employee calls this exact endpoint with its own key,
+        through the same gate.
+
+        **A contact who opted out is not messaged.** The answer is `400` and
+        nothing is sent.
 
         **The message is not previewed.** Merge tokens render server side at send
         time, so nobody sees the final text before the recipient does.
@@ -1052,9 +1076,34 @@ paths:
           description: Sent.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: |
+            `content` is missing, the contact has no phone number or has opted
+            out, the workspace has no number that can send texts, `fromNumber`
+            is not one of its numbers, or several numbers fit and none was
+            chosen. When a number has to be chosen, `candidates` lists them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: false }
+                  error: { type: string }
+                  candidates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        phoneNumber: { type: string }
+                        friendlyName: { type: string }
+                        label: { type: string }
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such contact in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           $ref: '#/components/responses/ServerError'
 

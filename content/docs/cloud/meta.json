@@ -1,4 +1,22 @@
 {
   "title": "Humanik Cloud",
-  "pages": ["index", "pricing", "offices", "web-services", "environment-and-secrets", "scheduled-requests", "deployments-and-logs", "sizes", "scaling", "lifecycle"]
+  "pages": [
+    "---Start here---",
+    "index",
+    "pricing",
+    "---Services---",
+    "offices",
+    "inside-an-office",
+    "web-services",
+    "builds-and-isolation",
+    "environment-and-secrets",
+    "scheduled-requests",
+    "deployments-and-logs",
+    "---How it behaves---",
+    "sizes",
+    "scaling",
+    "lifecycle",
+    "reliability",
+    "where-work-runs"
+  ]
 }

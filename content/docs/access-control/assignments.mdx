@@ -12,7 +12,7 @@ assignment = { roleId, resource }
 
 | Field | Example | Means |
 | --- | --- | --- |
-| `roleId` | `officeOperator` | What is permitted |
+| `roleId` | `office-operator` | What is permitted. Use the id, not the display name |
 | `resource` | `workspace/W1/office/O3` | Where it is permitted |
 
 ## The boundary decides the blast radius
@@ -23,7 +23,7 @@ The same role assigned at two different boundaries is two very different grants:
 | --- | --- |
 | `viewer` @ `workspace/W1/namespace/ns_orders` | One database |
 | `viewer` @ `workspace/W1` | Every office, database, and browser in the workspace |
-| `consoleAdmin` @ `console` | Organisation level administration |
+| `console-admin` @ `console` | Organisation level administration |
 
 Because a parent covers its descendants, moving a boundary up one level can widen
 a grant by an order of magnitude without the role changing at all.
@@ -102,28 +102,48 @@ This converges on a genuinely minimal grant, which is very hard to arrive at by
 reasoning about role tables alone.
 
 <Callout>
-  The `message` field carries the reason a decision was reached, including
-  whether a grant came from a direct match or from the ancestor navigation rule.
-  When a permission behaves unexpectedly, read it before changing anything.
+  The `message` field of a `403` says why the request was refused. It takes one
+  of three shapes. Read it before changing anything.
+
+  | `message` starts with | Means |
+  | --- | --- |
+  | `No role assignments found` | The identity holds no assignment at all |
+  | `No matching policy for action '…' on resource '…'` | It holds assignments, but none allows that action on that resource |
+  | `Denied by statement … in policy … (role: …)` | A deny statement in that policy matched |
 </Callout>
 
 ## Debugging a denial
 
 | Symptom | Usual cause |
 | --- | --- |
-| Denied, and the message mentions no assignments found | The identity holds no assignment at all, or none that reaches this resource |
+| Denied with `No role assignments found` | The identity holds no assignment at all. Add one |
+| Denied with `No matching policy`, and the role should allow it | The assignment boundary does not cover the requested resource, or the `roleId` names no role. Check both |
 | Works as the owner, fails for everyone else | The owner bypasses assignment evaluation entirely. Always test with a member. |
-| The role clearly grants the action, still denied | The assignment boundary does not cover the requested resource. Check the boundary, not the role. |
 | A workspace role cannot reach organisation settings | `console` is a sibling root. No workspace grant reaches it, by design. |
-| Allowed everywhere except one place | A deny statement matched. Deny returns immediately and no allow overrides it. |
+| Denied with `Denied by statement` | A deny statement matched. Deny returns immediately and no allow overrides it. The message names the policy |
 
 ## Anti-patterns
 
 - **Assigning a narrow role at a wide boundary.** The most common way a grant
   becomes wider than intended.
-- **Reaching for `workspaceAdmin` to unblock something.** Read the denial and
+- **Reaching for `workspace-admin` to unblock something.** Read the denial and
   grant the named action instead.
 - **Stacking roles to cover a gap.** It works, but no single object then states
   what the identity may do. Fork a role instead.
 - **Testing permissions as the tenant owner.** The owner never exercises the path
   everyone else uses.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Roles"
+    href="/docs/access-control/roles"
+    description="The built-in roles, their ids, and how to vary one safely."
+  />
+  <Card
+    title="Service accounts"
+    href="/docs/access-control/service-accounts"
+    description="Machine identities, granted access the same way."
+  />
+</Cards>

@@ -60,4 +60,5 @@ export const apis = [
   system('signing', 'signing.yaml'),
   system('buckets', 'buckets.yaml'),
   system('bulletin', 'bulletin.yaml'),
+  system('connected-agents', 'connected-agents.yaml'),
 ];

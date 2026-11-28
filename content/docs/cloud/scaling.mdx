@@ -15,6 +15,10 @@ and how long each stays awake after its last piece of work.
 | Cloud browser | At most one |
 | Web service | Normally one. A second can start only when the first cannot be reached |
 
+There is no second machine waiting to take over, so a crash or restart leaves a
+gap until the next machine is ready. See
+[Reliability and recovery](/docs/cloud/reliability).
+
 None of these add machines when they are busy. A busy web service gets more
 capacity from a larger [size](/docs/cloud/sizes), not from more machines.
 
@@ -55,7 +59,7 @@ An idle timeout of `0` means the machine never stops on its own. Use it when:
   such as a phone call.
 
 **An awake service is billed every hour it is awake.** A web service at the
-default size kept awake all month is about $48.73. See
+default size (0.5 vCPU, 2 GB) kept awake all month is about $31.00. See
 [Machine sizes](/docs/cloud/sizes) for every size.
 
 ## Starting from sleep takes time
@@ -79,3 +83,18 @@ ready. See [Pricing](/docs/cloud/pricing#which-time-is-billed).
 To see whether a service has a machine running, use
 [List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances).
 It returns none for a service that is asleep, and reading it never wakes one.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Pricing"
+    href="/docs/cloud/pricing"
+    description="What each machine costs, and which time is billed."
+  />
+  <Card
+    title="Machine sizes"
+    href="/docs/cloud/sizes"
+    description="The sizes each kind of service can run at."
+  />
+</Cards>

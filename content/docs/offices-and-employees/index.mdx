@@ -78,7 +78,7 @@ An office starts empty. You attach what the employee needs.
 | --- | --- |
 | **Plugins** | Software it can call, and the credentials to call it |
 | **Skills** | Things it knows how to do |
-| **Protocols** | Rules it must always follow |
+| **Protocols** | Rules put in front of the work you attach them to |
 | **Namespaces** | Data it can read and write |
 | **Apps and websites** | Software and sites it may reach |
 | **Browsers** | A real Chromium for systems with no API |
@@ -110,10 +110,11 @@ other capability. **Acquiring is sometimes a human action. Using never is.**
 See [Phone numbers and email](/docs/api-reference/phone-and-email) for both
 planes of those two.
 
-## Creating one provisions real infrastructure
+## Creating an office sets it up, but starts nothing
 
-An office is not a database row. Creating one starts a machine, a data plane
-entry, a container project and service, and a service account credential.
+Creating an office starts no machine. It saves the office, sets up its Humanik
+Cloud service, and gives it its own service account key. The first machine
+starts when the office first has work, such as a message.
 
 <Callout type="warn">
   **The office existing does not mean the office is ready.** The infrastructure
@@ -197,12 +198,12 @@ apart from the right to operate the employee.
 
 ## Two employees can run different software
 
-The machine is yours to size. What runs on it is also yours to choose, and the
-choice is made per employee rather than once for the account.
+The machine is yours to size, and the model it thinks on is yours to choose, per
+employee rather than once for the account.
 
 | | Chosen per |
 | --- | --- |
-| **The agent framework** | Office |
+| **The agent framework** | Office. Every office runs OpenClaw today: see [Inside an office](/docs/cloud/inside-an-office#why-the-framework-is-a-replaceable-part) |
 | **The model** | Office, and per person for Nova |
 
 So one workspace can hold an employee running on a small model for triage, an
@@ -216,8 +217,8 @@ compiled into whatever format its runtime reads, so it survives a change of
 runtime.
 
 <Callout>
-  Both choices are read at boot, like most office configuration. Changing either
-  one applies on the next restart. See
+  The model is read at boot, like most office configuration. Changing it
+  applies on the next restart. See
   [Frameworks and models](/docs/frameworks).
 </Callout>
 
@@ -235,7 +236,8 @@ There is one asymmetry, and it favours safety: an employee can never hold the
 owner bypass that a tenant owner does. Machines are governed more strictly than
 people, not less.
 
-See [Access Control (IAM)](/docs/access-control).
+See [Access Control (IAM)](/docs/access-control). How an employee uses those identities to find
+the right colleague and hand work over is on [Delegation](/docs/delegation).
 
 ## Where to go next
 

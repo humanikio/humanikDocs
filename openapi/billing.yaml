@@ -748,8 +748,10 @@ paths:
         What is available to spend, and how automatic top ups are configured.
 
         **Calling this creates the balance if it does not exist**, so a brand
-        new account gets a zero balance rather than an error. `exists` tells you
-        which happened on the call before this one.
+        new account gets a zero balance rather than an error. Because the
+        balance is created before the answer is read, `exists` is `true` on a
+        normal response, including the call that created it. It does not tell
+        you whether this call created the balance.
 
         **Model use and machine time both draw on this balance.** Machine time
         is taken once an hour, about 2 minutes after the hour ends. Each of
@@ -771,7 +773,9 @@ paths:
                   success: { type: boolean, const: true }
                   exists:
                     type: boolean
-                    description: False when this call is what created it.
+                    description: |
+                      `true` on a normal response, including the call that
+                      created the balance.
                   balance:
                     oneOf:
                       - $ref: '#/components/schemas/Balance'
@@ -957,8 +961,9 @@ paths:
         name. Work on your own model account is listed too, with
         `totalCostUsd` of zero and its real cost in `computedCostUsd`.
 
-        Paginated with a cursor. Take the last entry's `id` from one page and
-        send it as `startAfter` to get the next.
+        Paginated. Take the last entry's `id` from one page and send it as
+        `startAfter` to get the next, and stop when `hasMore` is `false`. See
+        [Pagination](/docs/pagination).
 
         **Permission:** `billing:read` @ `console`
       parameters:
@@ -1156,6 +1161,10 @@ paths:
         credit. The credit pays for both model use and machine time. What
         machine time took out of the balance each hour is on
         [List compute bills](/docs/api-reference/billing/compute/listComputeBills).
+
+        Paginated. Send the last invoice's `id` as `startAfter` for the next
+        page, and stop when `hasMore` is `false`. See
+        [Pagination](/docs/pagination).
 
         **Permission:** `billing:read` @ `console`
       parameters:
@@ -1776,8 +1785,9 @@ paths:
         in that order is applied and the others are ignored without an error.
         `from` and `to` combine with any of them.
 
-        Paginated with a cursor. Take the last entry's `id` from one page and
-        send it as `startAfter` to get the next.
+        Paginated. Take the last entry's `id` from one page and send it as
+        `startAfter` to get the next, and stop when `hasMore` is `false`. See
+        [Pagination](/docs/pagination).
 
         This list is the money. The figures on
         [Get estimated compute spend](/docs/api-reference/billing/compute/getComputeSpendSummary)
@@ -2694,8 +2704,11 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '500':
           description: |
-            Server side failure, including a setting Humanik Cloud refused.
-            Safe to retry with backoff.
+            The change was not saved. This status is also used when Humanik
+            Cloud refuses a setting, such as a size it does not offer, and
+            `error` then carries its reason. Check the values against
+            [Get service options](/docs/api-reference/cloud/services/getCloudServiceOptions)
+            before retrying: a refused setting fails again unchanged.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

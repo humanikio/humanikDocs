@@ -1,0 +1,110 @@
+---
+title: Reliability and recovery
+description: What Humanik Cloud checks, how long it takes to notice a failure, what your requests see while it recovers, and what it does not guarantee.
+---
+
+Humanik Cloud checks the machines it runs, and its own connection to them, and
+recovers from most failures without you doing anything. This page gives the
+numbers: how often each check runs, how long a failure takes to notice, what a
+request sees while Humanik Cloud recovers, and what is not guaranteed. How one
+machine starts, stops and restarts is on
+[Machine lifecycle](/docs/cloud/lifecycle).
+
+## What Humanik Cloud checks
+
+Two checks run all the time. Neither needs anything from you.
+
+| Check | How often | Fails after | What happens next |
+| --- | --- | --- | --- |
+| Each running machine reports that it is alive | Every 10 seconds | About 30 seconds with no report | The machine is removed from service and gets no new requests. Billing for it ends within about 5 minutes. The next request starts a new machine |
+| Humanik Cloud can reach the shared services that connect [devices](/docs/devices) and run [workflows](/docs/workflows) | Every 20 seconds | 7 failed checks in a row, about 2 minutes 20 seconds | The Humanik team is alerted. If Humanik Cloud has been running for at least 10 minutes, it restarts itself |
+
+The first check covers your own offices, cloud browsers and web services. The
+second covers only the shared services: it does not open a connection to your
+machines.
+
+### Why a restart waits 10 minutes
+
+A restart clears a fault that built up while Humanik Cloud was running. It does
+not clear a fault that was there before it started. So Humanik Cloud only
+restarts itself when it has been running for at least 10 minutes. A copy that
+has just started and still cannot reach a shared service keeps running, keeps
+checking, and leaves the fault to the Humanik team. This means a fault outside
+Humanik Cloud never causes a loop of restarts.
+
+## What a request sees while Humanik Cloud restarts
+
+A restart of Humanik Cloud takes from a few seconds to about 3 minutes. During
+that time:
+
+| What | What happens |
+| --- | --- |
+| A request that has to pass through Humanik Cloud, such as a request to a web service's public address or a call to an office | `502`, with `success: false` |
+| A request that was already in progress when the restart began | `502`. It may already have reached your app, so treat it as possibly done |
+| A request that was waiting for a machine to start | `502`. The machine still starts, and is billed until its idle timeout stops it |
+| Work already running inside a machine, such as an agent run or a scheduled command | Carries on. A machine does not stop when Humanik Cloud restarts |
+| A scheduled request that was due | Not sent. Missed runs are not made up. See [Scheduled requests](/docs/cloud/scheduled-requests#when-a-run-fails) |
+
+When Humanik Cloud is running again, requests are served as normal. Nothing needs
+to be turned back on.
+
+## What you should do
+
+**Retry a `502` and a `503` with exponential backoff and jitter.** Start at
+about 2 seconds and double each time. Keep retrying for up to 5 minutes for a
+`502`, which covers a restart. A `503` means no machine was ready in time (see
+[Machine lifecycle](/docs/cloud/lifecycle#starting)); retry it once or twice.
+Do not retry a `402`: it means machine starts are paused because the credit
+balance is below zero, and a retry gets the same answer until credit is added.
+
+**Make a retried request safe to repeat.** A request that got a `502` may have
+reached your app before the connection was lost. If repeating it would do the
+work twice, such as charging a card or sending a message, give each request its
+own ID and have your app ignore an ID it has already handled.
+
+**Keep a service awake when a person is waiting on it.** A machine that is
+already running does not wait for a start after a restart of Humanik Cloud, so
+the gap is the restart alone. See
+[Keeping a service awake](/docs/cloud/scaling#keeping-a-service-awake).
+
+**Check what is running.** To see whether a service has a machine running, use
+[List service instances](/docs/api-reference/cloud/services/listCloudServiceInstances).
+Reading it never wakes a service.
+
+## What is not guaranteed
+
+- **There is no uptime commitment.** Humanik does not commit to a monthly uptime
+  percentage and does not give service credits. See the
+  [Service Level Agreement](https://www.humanik.io/legal/sla). Current status and
+  past incidents are on [status.humanik.io](https://status.humanik.io).
+- **A service runs on one machine.** When that machine crashes, restarts or is
+  replaced, there is a gap until the next one is ready. There is no second
+  machine waiting to take over. See
+  [How many machines run](/docs/cloud/scaling#how-many-machines-run).
+- **Each kind of work runs in one location.** Offices and web services run in
+  the United States. There is no failover to another location. See
+  [Where work runs](/docs/cloud/where-work-runs).
+- **A request is not retried for you.** A `502` or `503` goes back to the
+  caller. Retrying is up to you, as above.
+- **Missed scheduled runs are not made up.** A schedule carries on from its next
+  time after the gap.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Machine lifecycle"
+    href="/docs/cloud/lifecycle"
+    description="How a machine starts, stops, restarts and recovers, and what a request sees at each step."
+  />
+  <Card
+    title="Scaling and sleep"
+    href="/docs/cloud/scaling"
+    description="How many machines run, idle timeouts, and keeping a service awake."
+  />
+  <Card
+    title="Responses and errors"
+    href="/docs/responses"
+    description="Every status code the API returns, and which ones are safe to retry."
+  />
+</Cards>

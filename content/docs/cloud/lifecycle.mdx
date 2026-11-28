@@ -132,7 +132,9 @@ A web service has one more case, because your app runs inside the machine:
 
 A machine that stops responding is removed from service within about 30
 seconds, so no new requests are sent to it. Billing for it ends within about
-five minutes. The next request starts a new machine.
+five minutes. The next request starts a new machine. How often machines are
+checked, and what happens when Humanik Cloud itself restarts, is on
+[Reliability and recovery](/docs/cloud/reliability).
 
 ## When the credit balance goes below zero
 
@@ -164,4 +166,26 @@ seconds to resume after the credit arrives.
 
 ## Where machines run
 
-Offices and web services run in the United States.
+Offices and web services run in the United States (Ohio). Cloud browsers, device
+connections, workflow runs and workspace copies run in Canada (Toronto). See
+[Where work runs](/docs/cloud/where-work-runs).
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Scaling and sleep"
+    href="/docs/cloud/scaling"
+    description="How many machines run, idle timeouts, and keeping a service awake."
+  />
+  <Card
+    title="Reliability and recovery"
+    href="/docs/cloud/reliability"
+    description="What is checked, and what a request sees while Humanik Cloud recovers."
+  />
+  <Card
+    title="Where work runs"
+    href="/docs/cloud/where-work-runs"
+    description="The locations HumanikOS runs in, and where a request travels."
+  />
+</Cards>

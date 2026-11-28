@@ -22,6 +22,9 @@ That is why an office can be resized, given an idle timeout, inspected while
 running, and read for logs. It is also why two offices cannot see each other's
 credentials: they are not in the same place.
 
+What runs inside that machine, how its agent gets its tools, and what keeps the
+agent apart from the platform is on [Inside an office](/docs/cloud/inside-an-office).
+
 It is also why the size of a workspace is not a capacity question you have to
 plan. Nothing is shared between employees, so adding one does not take anything
 away from another, and an employee that is busy does not slow down an employee
@@ -81,7 +84,7 @@ If that matters, keep the office awake rather than trying to make waking faster.
 An office is billed for the time it is awake, at the hourly price of its size,
 charged every hour from your credit balance. See
 [How you are charged](/docs/cloud/pricing#how-you-are-charged). Unlike model
-spend it **cannot be capped**: a [spending limit](/docs/spend) does not reach
+spend it **cannot be capped**: a [budget](/docs/spend) does not reach
 it. [Pricing](/docs/cloud/pricing) has the prices and the exact rules for when
 billing starts and stops.
 
@@ -98,7 +101,7 @@ handles inbound calls during business hours and one that runs a nightly
 reconciliation want opposite answers, and they can have them.
 
 An office left running with a long timeout is the usual explanation for a
-compute bill nobody expected. No spending limit stops it. Only a credit balance
+compute bill nobody expected. No budget stops it. Only a credit balance
 below zero does, and that stops every machine on the account. See
 [Machine lifecycle](/docs/cloud/lifecycle#when-the-credit-balance-goes-below-zero).
 
@@ -116,8 +119,7 @@ that machine lives.
 
 | Changing | Applies |
 | --- | --- |
-| Skills | Immediately |
-| Model provider, framework, secrets, plugins, protocols | At the next restart |
+| Skills, model provider, secrets, plugins, protocols | At the next restart |
 
 <Callout type="warn">
   **Restarting means replacing the machine, not rebooting it.**
@@ -156,27 +158,32 @@ responsible for a single employee without giving them the whole account.
   no longer exists.
 </Callout>
 
-## Where to go next
+## What is not guaranteed
+
+- **Files are saved when the machine stops normally.** Sleeping, a shut down and
+  a restart all save the employee's working folder first. A machine that is
+  ended without warning, such as one that crashes, can lose the changes made
+  since it started. The next machine restores the last saved copy. See
+  [When a machine crashes](/docs/cloud/lifecycle#when-a-machine-crashes).
+- **Machine time cannot be capped by a budget.** Only the size, the idle timeout
+  and your credit balance limit it, as above.
+
+## Next steps
 
 <Cards>
   <Card
-    title="Frameworks and models"
-    href="/docs/frameworks"
-    description="What runs on the machine, and why it is a swappable part."
+    title="Inside an office"
+    href="/docs/cloud/inside-an-office"
+    description="One set of tools over MCP, how plugins reach the agent, and what keeps it apart."
   />
   <Card
-    title="Machine sizes"
-    href="/docs/cloud/sizes"
-    description="The sizes an office can run at, and the price of each."
+    title="Machine lifecycle"
+    href="/docs/cloud/lifecycle"
+    description="How a machine starts, stops, restarts and recovers."
   />
   <Card
     title="Spending"
     href="/docs/spend"
     description="The two meters, and which one can be capped."
-  />
-  <Card
-    title="Offices and employees"
-    href="/docs/offices-and-employees"
-    description="What runs on these machines."
   />
 </Cards>

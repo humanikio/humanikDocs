@@ -40,7 +40,9 @@ as `@daily` and `@hourly`, are accepted. The expression is checked when you save
 it, and one that cannot be read is refused with `400`.
 
 **Always set `tz`** on a `cron` schedule, to an IANA time zone such as
-`America/Toronto`. Do not rely on the default.
+`America/Toronto`. Do not rely on the default. A `tz` that is not a known time
+zone is refused with `400` and the error `Invalid time zone: ` followed by the
+value you sent.
 
 **`every` counts from 1 January 1970 UTC, not from when you saved it.** An
 `everyMs` of one hour fires on the hour. Send `anchorMs` to start the count from
@@ -65,8 +67,9 @@ recorded as `skipped` and does not count as a failure.
 
 - **A failed run is not retried.** The next run happens at the next scheduled
   time.
-- **Missed runs are not made up.** If runs could not happen for a while, the
-  schedule carries on from the next time after it resumes.
+- **Missed runs are not made up.** If runs could not happen for a while, for
+  example while Humanik Cloud restarts, the schedule carries on from the next
+  time after it resumes. See [Reliability and recovery](/docs/cloud/reliability).
 - **After 10 failed runs in a row, a repeating schedule is turned off.** Its
   `disabledReason` says why. Turning it back on resets the count, and it starts
   from its next scheduled time rather than firing at once.
@@ -171,8 +174,10 @@ curl -X POST "$HOS_API/cloud/crons" \
 }
 ```
 
-`nextRunAtMs` is `null` for up to about a minute after saving, until the schedule
-is first read.
+On a `cron` schedule, `nextRunAtMs` is `null` for up to about a minute after
+saving, until the schedule is first read. So is an `every` schedule saved without
+`anchorMs`. An `at` schedule, and an `every` schedule with `anchorMs`, show their
+first run time straight away.
 
 ### A command every hour
 
@@ -215,3 +220,18 @@ curl -X PATCH "$HOS_API/cloud/crons/Xk3pQ8vLm2RtY7wZ/source" \
 ```
 
 Every operation is in the [Crons reference](/docs/api-reference/cloud/crons/listCloudCrons).
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Web services"
+    href="/docs/cloud/web-services"
+    description="Build and run your own app from a GitHub repository."
+  />
+  <Card
+    title="Deployments and logs"
+    href="/docs/cloud/deployments-and-logs"
+    description="Read the logs a scheduled run writes."
+  />
+</Cards>

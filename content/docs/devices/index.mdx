@@ -66,10 +66,11 @@ and routing a run mode through a third-party provider — see
 more.**
 
 That single sentence is the whole security model. The ceiling lives in a config
-file on your machine, written by you. HumanikOS never sends a tool list, a working
-directory, or a permission mode. It sends the conversation and what it wants
-done. If the control plane were compromised tomorrow, it still could not widen
-what any enrolled machine is permitted to do.
+file on your machine, written by you. HumanikOS never sends a working directory
+or a permission mode. Local tools a job asks for are cut down to your ceiling,
+never widened. The office's own tools are listed for the turn, but they run in
+the office, not on your machine. If HumanikOS were compromised tomorrow, it still
+could not widen what any enrolled machine is permitted to do.
 
 The default ceiling is read-only:
 

@@ -57,6 +57,9 @@ console scope and a signed in user.
   recover the old one.
 </Callout>
 
+You can give a key an expiry date when you create it. After that date the key
+gets `401` on every request, the same as a revoked key.
+
 After creation you can list keys, rename them, deactivate them, or delete them.
 Listing returns only the last four characters of each secret, alongside
 `lastUsedAt` and `usageCount`. Those two fields are the audit surface: a key with
@@ -81,13 +84,24 @@ deleting is the permanent half, and both land immediately.
 
 ## Authentication failures
 
-| Status | `error` | Cause |
+Every `401` has `error: "Unauthorized"`. The `message` field says what was
+wrong:
+
+| Status | `message` | Cause |
 | --- | --- | --- |
 | `401` | `API key required` | No `Authorization` header was sent |
-| `401` | `Invalid API key` | The key is unknown, inactive, expired, or the secret is wrong |
+| `401` | Another short reason, such as `Invalid API key` | The key was sent but cannot be used: it is unknown, revoked, expired, or the secret is wrong |
 
-Those four causes collapse into one message on purpose. Telling an unknown key
-apart from a wrong secret would confirm which access key IDs exist.
+```json
+{
+  "success": false,
+  "error": "Unauthorized",
+  "message": "Invalid API key"
+}
+```
+
+Treat any `401` on a key you sent as a key to replace. Do not branch on the
+exact `message` text.
 
 A `403` means the key authenticated but the service account lacks the permission
 the route requires. The response body names the action and resource that were
@@ -104,3 +118,18 @@ denied, so you can grant exactly that and no more:
 ```
 
 Scopes are `console`, `workspace/{id}`, and `office/{id}`.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Service accounts"
+    href="/docs/access-control/service-accounts"
+    description="Create a machine identity and mint its key."
+  />
+  <Card
+    title="Responses and errors"
+    href="/docs/responses"
+    description="The envelope, status codes, and what each one means."
+  />
+</Cards>

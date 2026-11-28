@@ -42,13 +42,15 @@ workspace scope, the call returns `400`:
 }
 ```
 
-Two things to notice, because they hold across the whole API:
+Three things to notice, because they hold across the whole API:
 
 - **The payload sits at the top level.** There is no `data` wrapper. Offices come
   back on `offices`, not on `data.offices`.
 - **The list is already filtered to what your key may read.** Two callers in the
   same workspace can legitimately get different lists. A shorter list is not an
   error.
+- **Long lists come a page at a time.** Read the operation's paging shape and
+  follow it to the end, as described on [Pagination](/docs/pagination).
 
 ## 4. Send a request ID
 
@@ -62,9 +64,9 @@ curl "$HOS_API/offices?workspaceId=ws_a1b2c3" \
   -H "X-Request-ID: $(uuidgen)"
 ```
 
-## Next
+## Next steps
 
 <Cards>
   <Card title="Responses and errors" href="/docs/responses" description="The envelope, and what error strings can and cannot be used for." />
-  <Card title="Rate limits" href="/docs/rate-limits" description="What the limits are and how to back off." />
+  <Card title="Rate limits" href="/docs/rate-limits" description="What a limited call returns and how to back off." />
 </Cards>

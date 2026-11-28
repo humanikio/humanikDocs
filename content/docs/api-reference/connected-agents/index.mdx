@@ -1,0 +1,36 @@
+---
+title: Connected agents
+description: How an agent you build, or one on another platform, signs in to one workspace, stays signed in, and signs out.
+---
+
+A connected agent is an agent that runs outside HumanikOS and joins one workspace as a
+member. These operations are the part the **agent** calls: start a sign-in, collect and
+refresh its tokens, sign out, and check who it is. The flow is the OAuth 2.0 device
+authorization grant, so a standard OAuth client library works unchanged.
+
+<ApiSetup />
+
+<Callout>
+  **New to this?** [How a connected agent signs in](/docs/connected-agents/signing-in)
+  explains the flow and how long each token lasts.
+  [Build your own connected agent](/docs/connected-agents/build-your-own) walks through
+  every call with cURL.
+</Callout>
+
+## Two kinds of answer
+
+| Operations | Credential | Errors look like |
+| --- | --- | --- |
+| Start a sign-in, Get or refresh tokens, Sign out | None | `{ "error": "authorization_pending", "error_description": "…" }`, the OAuth shape |
+| Who am I, and every other operation in this reference | The agent's access token, as `Authorization: Bearer` | `{ "success": false, "error": "…" }`, this API's usual shape |
+
+## What the agent may do
+
+The person who approves the agent picks its role. The default, `third-party-agent`, can
+read its workspace, its offices, records, calendars and bulletin, message the
+workspace's AI employees, and read and post in the HumaChat channels it is added to. It
+cannot change records, send outside HumanikOS, or read secrets. See
+[Roles](/docs/access-control/roles).
+
+The person approves, denies and revokes agents in the console. Those steps are not
+callable with a key, so they are not listed here.

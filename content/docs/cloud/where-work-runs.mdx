@@ -1,0 +1,79 @@
+---
+title: Where work runs
+description: The locations HumanikOS and Humanik Cloud run in, which kinds of work run in each, and what that means for where a request travels.
+---
+
+HumanikOS runs in two locations, plus any hardware of your own that you connect.
+This page lists them, says which kinds of work run in each, and what that means
+for where a request travels. It is about where work runs, not where data is
+stored. How a single machine starts and stops is on
+[Machine lifecycle](/docs/cloud/lifecycle).
+
+## The locations
+
+| Location | What runs there |
+| --- | --- |
+| **United States (Ohio)** | The HumanikOS API, Humanik Cloud itself (the system that starts, stops and bills machines), [offices](/docs/cloud/offices), and [web services](/docs/cloud/web-services) |
+| **Canada (Toronto)** | [Cloud browsers](/docs/api-reference/browsers), the connection your [devices](/docs/devices) hold open, [workflow](/docs/workflows) runs, and [workspace copies](/docs/workspaces/duplicating) |
+| **Your own hardware** | Anything an employee does on a [device you connect](/docs/devices) |
+
+You cannot choose the location of a service. Every office and every web service
+runs in Ohio, in the AWS region `us-east-2`, so a database you put in or near that
+region is close to your web service. See
+[Where it runs](/docs/cloud/web-services#where-it-runs).
+
+## Where a request travels
+
+Most work stays in Ohio: a call to the HumanikOS API, an employee running in its
+office, and a request to a web service all run there.
+
+Some work crosses to Toronto and back:
+
+| Work | Path |
+| --- | --- |
+| An employee uses a cloud browser | Office (Ohio) to browser (Toronto) |
+| An employee works on your device | Ohio to the device connection (Toronto) to your device, and back |
+| A workflow runs | The run happens in Toronto, and reaches your data and your offices from there |
+| A workspace is copied | The copy happens in Toronto, reading the old workspace and writing the new one from there |
+
+<Callout>
+  **If your work must stay in one country,** a cloud browser, a device, a
+  workflow or a workspace copy passes through Canada. An office or web service
+  that uses none of these stays in the United States.
+</Callout>
+
+## What is outside both
+
+- **AI models.** An employee's model calls go to the model provider you chose,
+  or to your own account or hardware if you set that up. Where that provider
+  runs is up to the provider. See [Models](/docs/models).
+- **Plugins and the systems you connect.** A plugin call goes from the office to
+  the address you gave the plugin, wherever that system runs.
+
+## What is not guaranteed
+
+- **Locations can change.** If a kind of work moves, this page changes with it.
+- **There is no choice of location** and no copy of a service in a second
+  location to take over. See
+  [Reliability and recovery](/docs/cloud/reliability#what-is-not-guaranteed).
+- **This page does not cover where data is stored.**
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Reliability and recovery"
+    href="/docs/cloud/reliability"
+    description="What is checked, how long a failure takes to notice, and what is not guaranteed."
+  />
+  <Card
+    title="Inside an office"
+    href="/docs/cloud/inside-an-office"
+    description="How an office gives its agent tools, and what keeps the agent apart."
+  />
+  <Card
+    title="Devices"
+    href="/docs/devices"
+    description="Run an employee's work on hardware you own."
+  />
+</Cards>

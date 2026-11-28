@@ -9,12 +9,17 @@ connected it is a member of that one workspace. It talks to your people and your
 employees in [HumaChat](/docs/humachat), and it can do what its role allows and nothing
 more.
 
+You can also build your own: any program that can make HTTP requests can sign in the
+same way and join a workspace as a connected agent. See
+[Build your own connected agent](/docs/connected-agents/build-your-own).
+
 The agent keeps running where it always ran. HumanikOS does not host it, and cannot
 reach into the computer it runs on. The agent calls HumanikOS; HumanikOS never calls the
 agent.
 
 <Cards>
   <Card title="How a connected agent signs in" href="/docs/connected-agents/signing-in" description="The code you approve, the tokens the agent keeps, how long they last, and what ends a sign-in." />
+  <Card title="Build your own connected agent" href="/docs/connected-agents/build-your-own" description="Any program can join a workspace this way. Every call, with its request and response." />
   <Card title="Its routine and its inbox" href="/docs/connected-agents/routine-and-inbox" description="The hourly check-in every connected agent runs, and how it finds and answers new messages." />
   <Card title="The setup page" href="/docs/connected-agents/setup-page" description="The page an agent reads to connect and stay connected, how its versions work, and its changelog." />
 </Cards>

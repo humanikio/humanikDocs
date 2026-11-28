@@ -74,6 +74,12 @@ one group rotated once, not four copies rotated four times and forgotten in a fi
 The tradeoff is blast radius. A tenant secret is reachable by every office pointed at it, so the
 decision is about who should hold the credential, not about convenience.
 
+**Changing a value reaches tool calls without a restart.** When you change a value in a group
+that is already linked, such as rotating a key, plugin tool calls use the new value within 5
+minutes. The copy in the employee's environment is updated at the office's next restart, so
+restart the office if commands it runs need the new value. Linking a different group needs a
+restart, as below.
+
 ## Changes reach the employee when the office restarts
 
 <Callout type="warn">
@@ -94,8 +100,15 @@ endpoint becomes a **tool the employee can call by name**, exactly like the ones
 the platform.
 
 The employee supplies the arguments. The office signs in and attaches the credential to the
-outgoing request. The key itself never enters the conversation, so it does not appear in
-transcripts or in anything you later export.
+outgoing request. The key is not passed through the conversation, so a named tool call does not
+put it in transcripts or in anything you later export.
+
+The credential is also in the employee's environment, so commands it runs on its machine can use
+it too. Treat any credential you give a plugin as readable by that employee, and give it only the
+access that employee needs. The full list of what the employee holds is on
+[Inside an office](/docs/cloud/inside-an-office#what-the-agent-does-hold). How a plugin becomes both tools and the
+instructions the employee reads, inside the office machine, is on
+[Inside an office](/docs/cloud/inside-an-office#how-plugins-reach-the-agent).
 
 <Callout>
   **This works the same on a machine you own.** An employee running on your own hardware calls
@@ -110,9 +123,9 @@ employee reaches it with `hos_plugin_request`, naming the plugin and supplying a
 resolves the host, attaches the credential and signs the request.
 
 <Callout>
-  **The host is not a parameter.** An employee can only reach software you already connected. It
-  cannot be talked into sending your credential somewhere else, because it never names a
-  destination: it names one of your plugins.
+  **A tool call cannot be pointed at another host.** A plugin tool call names one of your
+  plugins, not a destination, so it only reaches software you already connected. This covers
+  tool calls only: the credential in the employee's environment is readable by that employee.
 </Callout>
 
 Declare endpoints anyway where you can. A named tool carries its own parameter schema and its

@@ -20,7 +20,7 @@ all of them.
      ├─ AI employees        one office each, each an identity
      │    ├─ its own filesystem, terminal and vault
      │    ├─ the plugins, skills and rules you attach
-     │    └─ a framework and a model, chosen per employee
+     │    └─ a model, chosen per employee
      └─ Shared resources    data, browsers, calendars, numbers, addresses
 ```
 
@@ -85,7 +85,7 @@ you connected.
 ## The API
 
 Everything above is reachable from your own code. The HumanikOS API is an HTTP
-interface to the same control plane the console uses. It creates offices,
+interface to the same system the console uses. It creates offices,
 dispatches work, reads and writes the data plane, manages contacts and
 calendars, and drives cloud browsers.
 
@@ -123,12 +123,12 @@ are not documented here.
 ### Conventions used throughout
 
 Every response is wrapped in an envelope, every request can carry a correlation
-ID, and rate limits are applied per tenant. Those behaviours are identical on
-every endpoint, so they are documented once rather than repeated:
+ID, and some operations carry their own request limit. Those behaviours are
+documented once rather than repeated on each operation:
 
 <Cards>
   <Card title="Responses and errors" href="/docs/responses" description="The envelope, status codes, and what error strings mean." />
-  <Card title="Rate limits" href="/docs/rate-limits" description="Limits, headers, and retry behaviour." />
+  <Card title="Rate limits" href="/docs/rate-limits" description="What a limited call returns, the headers, and how to back off." />
 </Cards>
 
 ### Versioning

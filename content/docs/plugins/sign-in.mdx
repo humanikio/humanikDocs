@@ -8,8 +8,11 @@ calls your software. The type is a protocol, not a provider. There is no "Stripe
 "Google type". Stripe uses `bearer`, a Google service account uses `jwt_bearer`, and the
 provider's own values (its token address, its scopes) are part of the plugin's settings.
 
-The office does all of this. The employee never builds an authentication header, never sees a
-key, and never sees a token.
+The office does all of this. On a plugin tool call, the employee never builds an authentication
+header, and the key or token is not passed through the conversation. The credential of a plugin
+you create is also in the employee's environment, so treat it as readable by that employee. What
+the employee holds, and what it does not, is on
+[Inside an office](/docs/cloud/inside-an-office#what-the-agent-does-hold).
 
 ## The types
 
@@ -122,7 +125,7 @@ plugin that cannot work:
 If the software also has a plain web API that one of the types above covers, Nova offers that
 instead.
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card title="Creating a plugin" href="/docs/plugins/creating">

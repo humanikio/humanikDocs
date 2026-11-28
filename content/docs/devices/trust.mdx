@@ -42,13 +42,16 @@ not the code.
 **Your keys stay in the office.** The credentials your plugins use, such as your Stripe key,
 your CRM token or an internal API credential, are written into a vault the office reads. They
 become tools the employee calls, but the values are never sent to your machine, never written
-there, and not readable from it. This machine receives responses, not keys. See
-[Plugins and secrets](/docs/plugins).
+there, and not readable from it. This machine receives responses, not keys. In the office, the
+employee itself can read those credentials, so give each plugin only the access it needs. See
+[Plugins and secrets](/docs/plugins) and
+[what the agent does hold](/docs/cloud/inside-an-office#what-the-agent-does-hold).
 
 **Your ceiling bounds your machine, and nothing widens it.** The ceiling lives in a config file
-on your hardware, written by you. HumanikOS never sends a tool list, a working directory or a
-permission mode — it sends the conversation and what it wants done. If the control plane were
-compromised tomorrow, it still could not widen what any enrolled machine is permitted to do. See
+on your hardware, written by you. HumanikOS never sends a working directory or a permission
+mode. Local tools a job asks for are cut down to your ceiling, never widened. The office's own
+tools are listed for the turn, but they run in the office, not on your machine. If HumanikOS
+were compromised tomorrow, it still could not widen what any enrolled machine is permitted to do. See
 [the rule that makes this safe](/docs/devices#the-rule-that-makes-this-safe).
 
 **Each hop proves who it is.** The connection your machine opens is outbound only; there is no
@@ -80,7 +83,7 @@ employee a broader role does not let it do more on your laptop. An administrator
 office at a machine grants the right to think there, not to act beyond the ceiling. The full
 treatment is [Three limits, and none can widen another](/docs/devices#three-limits-and-none-can-widen-another).
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card
@@ -97,10 +100,5 @@ treatment is [Three limits, and none can widen another](/docs/devices#three-limi
     title="Plugins and secrets"
     href="/docs/plugins"
     description="Connecting software an employee can use, and where its credentials live."
-  />
-  <Card
-    title="Connect your own machine"
-    href="/docs/devices"
-    description="Enrol a device, set its ceiling, and understand the three run modes."
   />
 </Cards>

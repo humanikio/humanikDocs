@@ -39,7 +39,7 @@ matter:
 | --- | --- | --- |
 | Text or call | Their number | Safe. A call and a text landing together produce one contact |
 | Email or a booking | Their address | Not guaranteed. Two simultaneous first touches can produce two records |
-| CSV import | Their number, and repeats within the file | Skipped rather than duplicated |
+| CSV import | Their number, then their email, and repeats within the file | Skipped rather than duplicated. Up to 200 rows per request |
 | Creating one through the API | **Nothing** | Always creates |
 
 <Callout type="warn">
@@ -69,8 +69,8 @@ The system will not do that.
 ## Importing a list
 
 You can create contacts in bulk from a CSV. The file is parsed in your browser,
-mapped to contact fields, and sent up in batches, so a large list arrives as a
-series of small requests rather than one long upload.
+mapped to contact fields, and sent up in batches of up to 200 rows, so a large
+list arrives as a series of small requests rather than one long upload.
 
 **A row does not need a phone number or an email.** It needs one thing to show
 the contact by: a name, a phone number, an email or a company. A row with only an
@@ -119,7 +119,8 @@ employee off the phone.
 **Email** goes from an address your workspace holds. Who may send from which
 address depends on the sender: a person with broad permission can use any address
 in the account, and anyone else, including an AI employee, is limited to
-addresses assigned to them specifically.
+addresses assigned to them specifically. A reusable HTML email, written once and
+personalised for each recipient, is an [email template](/docs/crm/email-templates).
 
 ### What you write is not quite what is sent
 
@@ -305,6 +306,11 @@ person opens a conversation it is read for everybody.
     title="Phone numbers"
     href="/docs/phone"
     description="The line a call or a text arrives on, and who answers it."
+  />
+  <Card
+    title="Email templates"
+    href="/docs/crm/email-templates"
+    description="Reusable HTML emails, filled in for each recipient at send time."
   />
   <Card
     title="CRM API"

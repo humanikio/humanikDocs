@@ -185,21 +185,23 @@ Only one route produces `verified`, and it is worth asking for. See
 
 ## Changing the credential does not rewrite the document
 
-A plugin points at one or more secret groups, and each group supplies the
-environment variables the office injects when it makes a call. Linking or
-unlinking a group changes those variables straight away.
+A plugin points at one or more secret groups. The groups supply the credential
+the office attaches to each plugin call, and the values put in the employee's
+environment.
 
-The skill is updated by halves, and the halves move at different times.
+Linking or unlinking a group does not reach every part at once:
 
 | What changes | When |
 | --- | --- |
-| The variables the office injects | Immediately |
-| The list of variables the skill records | Immediately |
+| The skill records you list, including the variables a skill records | Immediately |
+| Which groups plugin tool calls use, and the values in the employee's environment | At the office's next restart |
 | The skill's own text | Only when you recompile |
 
-The first two are derived from the connection every time it changes, so they are
-never behind. The text is written by a compile, and linking a secret does not run
-one.
+The records are derived from the connection every time it changes. The running
+office reads its plugins when it starts, so it keeps using the old groups until it
+restarts. The text is written by a compile, and linking a secret does not run one.
+How the office reads plugins and credentials is on
+[Inside an office](/docs/cloud/inside-an-office#how-plugins-reach-the-agent).
 
 <Callout type="warn">
   **Recompile after changing what is connected.** Until you do, the document can
@@ -248,7 +250,7 @@ failure raises it again on its own**.
   is no cooldown yet. If that becomes noisy, tell us.
 </Callout>
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card
@@ -265,10 +267,5 @@ failure raises it again on its own**.
     title="Plugins and secrets"
     href="/docs/plugins"
     description="Where credentials live, and why a plugin only points at one."
-  />
-  <Card
-    title="Skills API"
-    href="/docs/api-reference/offices/skills/listOfficeSkills"
-    description="Create, update, regenerate, and the locking rules."
   />
 </Cards>

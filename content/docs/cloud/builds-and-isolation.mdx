@@ -1,0 +1,164 @@
+---
+title: How a web service is built and isolated
+description: Where a web service's install, build and start commands come from, what runs each time a machine starts, and what keeps your code apart from the platform and from other customers.
+---
+
+A web service is built from your repository every time one of its machines
+starts, inside that machine, by commands you control. This page explains where
+those commands come from, what happens in what order when a machine starts, and
+what keeps your code apart from the platform and from everyone else's code. The
+settings themselves are listed on [Web services](/docs/cloud/web-services#build-and-run-settings).
+
+## Where the commands come from
+
+Your service's settings decide what runs. Nothing is guessed while a machine
+starts.
+
+| Command | Runs | When it is not set |
+| --- | --- | --- |
+| Install (`installCommand`) | Your command, exactly as written | `npm ci`. A service created through the console or the API is given `npm install` instead |
+| Build (`buildCommand`) | Your command, if it is not empty | No build step |
+| Start (`startCommand`) | Your command | `npm start` if your `package.json` has a `start` script. If not, the service runs as a [worker](/docs/cloud/web-services#a-service-with-no-server) with no server |
+
+Humanik Cloud adds nothing to your commands. It does not add
+`--frozen-lockfile`, a production flag or anything else. What you write is what
+runs.
+
+## Detection suggests commands, it does not set them
+
+When you pick a repository in the console, Humanik Cloud suggests install, build
+and start commands for it. That is detection, and it only ever suggests.
+
+Detection runs [Railpack](https://railpack.com) on the files of one commit. It
+recognises npm, pnpm, Yarn and Bun projects, frameworks such as Next.js and Vite,
+and Python projects. Why Railpack, and exactly which part of it is used, is in
+[Why Railpack](#why-railpack) below.
+
+**What it does not do.** It never runs your code, never installs anything and
+never builds. It downloads the commit, reads the files and stops. It has a limit
+of 20 seconds.
+
+**How the result is used.**
+
+| Where | What happens |
+| --- | --- |
+| Creating a service in the console | The commands are filled into the form. A command you typed yourself is never replaced; **Use detected** puts the suggestion in |
+| [`POST /cloud/services/detect`](/docs/api-reference/cloud/services/detectCloudService) | The suggestion is returned, with the commit it read |
+| Every deploy | The deployed commit is checked again and the deployment shows whether your commands match the suggestion. This never changes the deploy |
+
+<Callout>
+  **Bun is recognised but not installed.** A Bun project is detected, but the
+  machine has no `bun` command, so a Bun install command fails. Use npm, pnpm or
+  Yarn.
+</Callout>
+
+### Why Railpack
+
+Web services are built from repositories we have never seen: any framework, any
+package manager, any layout. Recognising each one ourselves would mean writing
+and keeping up rules for every framework and every version. Railpack, an open
+source build tool, already has those rules, and is maintained by people whose
+job is keeping them current. So we use its rules rather than writing our own.
+
+Railpack can do more than we use it for. The boundary:
+
+| | |
+| --- | --- |
+| **What we use** | Its planning step, which reads a repository and decides the runtime and the install, build and start commands. Nothing else |
+| **How it runs here** | One fixed version (0.43.1 today), recorded with every result, so a changed suggestion can be traced to our upgrade or to your code. It gets an empty environment, runs as a user with no access to our systems, and is stopped after 20 seconds |
+| **What we do not use** | Railpack can also build a container image for your app, with layers cached between builds. We do not use that. Your service is not built by Railpack and there is no build cache: each machine builds from source, with your own commands, as described below |
+
+Two things follow from that boundary:
+
+- **A suggestion is a starting point.** What runs is what your settings say. If
+  Railpack would build your app a different way, that difference does not reach
+  your service until you accept the suggestion.
+- **Versions Railpack reads are not installed.** It may find a Node.js or Python
+  version in your repository, but every machine has the fixed versions listed
+  below.
+
+## What runs when a machine starts
+
+The same steps run on every start: the first deploy, a redeploy, and waking from
+sleep.
+
+| Step | What happens | Limit |
+| --- | --- | --- |
+| 1. Clone | A fresh copy of the exact commit you deployed, one commit deep. If that commit cannot be fetched, the start fails: it does not fall back to the newest commit on the branch | 5 minutes for each git command |
+| 2. Install | Your install command, run in `rootDirectory` | None of its own. The whole deploy must be ready in 20 minutes |
+| 3. Build | Your build command, if set | The same 20 minutes |
+| 4. Start | Your start command, run with `sh -c`, given `PORT`, and `NODE_ENV=production` unless you set it | |
+| 5. Check | Humanik Cloud sends `GET /` to your app on `PORT` once a second | 60 tries, 5 seconds each. Any HTTP answer counts, including `404` |
+
+The machine starts receiving requests after step 5 succeeds. A step that fails
+leaves the machine running with its logs, and it receives no requests. See
+[When a machine crashes](/docs/cloud/lifecycle#when-a-machine-crashes).
+
+**Node.js is version 22 on every machine.** `.nvmrc` and the `engines` field are
+not read. Python is 3.14, with `uv`.
+
+### Why a lockfile matters
+
+Every machine builds from scratch. There is no cache carried from one machine to
+the next. So if your install command can pick newer versions, two machines
+started a day apart can run different dependencies from the same commit.
+
+To get the same build every time, commit a lockfile and use an install command
+that refuses to change it:
+
+| Package manager | Install command |
+| --- | --- |
+| npm | `npm ci` |
+| pnpm | `pnpm install --frozen-lockfile` |
+| Yarn 1 | `yarn install --frozen-lockfile` |
+| Yarn 2 and newer | `yarn install --immutable` |
+
+## What keeps your code apart
+
+Your install scripts, your build and your app run with a narrow view of the
+machine, and nothing about them is shared with other customers.
+
+| | What it means for you |
+| --- | --- |
+| **Its own machine** | Every web service runs on its own machine, with its own disk. No build server or cache is shared between services or between customers |
+| **A fresh disk on every start** | Each start clones again into an empty folder. Nothing written to disk survives a restart, a redeploy or sleep. Keep data in a database or storage service |
+| **An ordinary user, not root** | Install, build, your app and scheduled commands run as an ordinary user. They cannot change the platform's own files |
+| **Only the environment you set** | Your code's environment is built from nothing: your variables and secrets, your build settings, `PORT`, `NODE_ENV` and the system basics. The full list is on [What your app receives](/docs/cloud/environment-and-secrets#what-your-app-receives). It never receives the platform's own credentials, or the GitHub token used to clone your repository |
+| **One process group** | Your start command and everything it starts are stopped together, so nothing is left running when the machine stops |
+| **Reached only through Humanik Cloud** | Requests reach your app only through its [public address](/docs/cloud/web-services#the-public-address), and each one is signed by Humanik Cloud and checked on the machine. Your app's port is not reachable from outside the machine |
+| **No cloud credentials** | The machine gives your code no access to Humanik Cloud's own infrastructure |
+
+With `networkAccess` set to `none`, nothing can connect in at all. See
+[Network access](/docs/cloud/web-services#network-access).
+
+## What is not isolated
+
+- **Outbound connections are open.** Your code can connect out to the internet.
+  Nothing on the machine restricts where it connects.
+- **Your app shares the machine with the process that runs it.** They use the
+  same CPU and memory. An app that runs out of memory stops the whole machine.
+  Size the service for your app's peak. See [Machine sizes](/docs/cloud/sizes).
+- **Install scripts run.** A dependency's install script runs as your app's
+  user, with your app's environment, the same as your own code. Review what you
+  install. (pnpm 11 and newer asks you to approve them. See
+  [Web services](/docs/cloud/web-services#pnpm-11-and-newer-approved-install-scripts).)
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Web services"
+    href="/docs/cloud/web-services"
+    description="Every build and run setting, the public address, and the API."
+  />
+  <Card
+    title="Deployments and logs"
+    href="/docs/cloud/deployments-and-logs"
+    description="Follow a deploy and read what each step printed."
+  />
+  <Card
+    title="Environment and secrets"
+    href="/docs/cloud/environment-and-secrets"
+    description="Set the variables and secrets your code receives."
+  />
+</Cards>

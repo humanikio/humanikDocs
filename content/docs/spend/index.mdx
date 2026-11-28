@@ -12,7 +12,7 @@ prepaid credit balance:
   cloud browsers and web services run on. Priced per hour, by machine size, and
   charged once an hour. See [Humanik Cloud pricing](/docs/cloud/pricing).
 
-Knowing which is which is the difference between a spending limit that does what
+Knowing which is which is the difference between a budget that does what
 you expect and one that does not.
 
 Platform access is billed on its own, as a subscription, separately from both.
@@ -141,8 +141,8 @@ compute is checked at `console`.
 | See the budgets on one workspace and its employees | `workspace:read` @ that workspace |
 | Create and change budgets on one workspace and its employees | `workspace:manage` @ that workspace |
 
-The built-in [`consoleAdmin`](/docs/access-control/roles) role holds both billing
-permissions, and the account owner is never refused. `workspaceAdmin` holds
+The built-in [Console Admin](/docs/access-control/roles) (`console-admin`) role holds both billing
+permissions, and the account owner is never refused. `workspace-admin` holds
 `workspace:manage`, which is what lets you give a team lead control of their own
 team's limits without showing them the account's finances.
 

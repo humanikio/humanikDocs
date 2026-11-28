@@ -1,36 +1,54 @@
 ---
 title: Pagination
-description: How to raise the page size, and how to page past it to pull every record.
+description: The paging shapes lists use, how to tell when you have the last page, and how to pull every record.
 ---
 
-Lists return a bounded number of records. Raising `limit` gets you a bigger
-page, and a cursor gets you the rest.
+Lists return a bounded number of records at a time. This page covers the shapes a
+paged list can take, the signal that says you have the last page, and a loop that
+pulls every record. Each operation's own page in the
+[API reference](/docs/api-reference) says which shape it uses and its largest
+page size.
+
+## The shapes
+
+Not every list pages the same way. Read the operation's page, then use the stop
+signal for its shape:
+
+| The list returns | Send back for the next page | You have the last page when |
+| --- | --- | --- |
+| `nextCursor` | `cursor` set to that value | `nextCursor` is `null` |
+| `cursor` and `hasMore` | `cursor` set to that value | `hasMore` is `false` |
+| `hasMore`, with records that each have an `id` | `startAfter` set to the last record's `id` | `hasMore` is `false` |
+| A page of records, on some lists that accept `offset` | `offset` raised by the number of records you got | A page comes back with fewer records than you asked for |
+
+Some lists are not paged at all because they are bounded by design, such as the
+nodes in one workflow. Those operations say so, and they return every record in
+one call.
 
 ## Raise the page size first
 
-Every paginated list accepts `limit`. The default is small because most callers
-are rendering a screen, but a program pulling records should ask for the maximum
-the endpoint allows.
+Paged lists accept `limit`. The default is small because most callers are
+rendering a screen, but a program pulling records should ask for the largest page
+the operation allows.
 
 ```bash
-curl "https://api.humanik.io/api/v1/workspaces/ws_a1b2c3/workflows/wf_x7y8z9/runs?limit=100" \
-  -H "Authorization: Bearer $HUMANIK_API_KEY"
+curl "$HOS_API/workspaces/ws_a1b2c3/workflows/wf_x7y8z9/runs?limit=100" \
+  -H "Authorization: Bearer $HOS_KEY"
 ```
 
-Values are clamped rather than rejected. Asking for `limit=500` returns the
-maximum, and `limit=0` returns one. The maximum is stated on each endpoint in
-the [API reference](/docs/api-reference), because it differs by resource.
+Values above the maximum are clamped to the maximum rather than rejected. The
+maximum is stated on each operation, because it differs by resource.
 
 <Callout type="warn">
   A bigger page is not a substitute for paging. There is no value of `limit`
-  that returns every record, so a caller that only raises `limit` silently
-  stops at the maximum and reports a partial set as complete.
+  that returns every record, so a caller that only raises `limit` stops at the
+  maximum and reports a partial set as complete.
 </Callout>
 
 ## Page past it with the cursor
 
-A paginated response carries `nextCursor` alongside the records. Pass it back as
-`cursor` to get the following page.
+On a list that returns `nextCursor`, pass it back as `cursor` to get the
+following page.
 
 ```json
 {
@@ -41,20 +59,20 @@ A paginated response carries `nextCursor` alongside the records. Pass it back as
 ```
 
 ```bash
-curl "https://api.humanik.io/api/v1/workspaces/ws_a1b2c3/workflows/wf_x7y8z9/runs?limit=100&cursor=eyJzIjoxNzU2MDkyODAwMDAwfQ" \
-  -H "Authorization: Bearer $HUMANIK_API_KEY"
+curl "$HOS_API/workspaces/ws_a1b2c3/workflows/wf_x7y8z9/runs?limit=100&cursor=eyJzIjoxNzU2MDkyODAwMDAwfQ" \
+  -H "Authorization: Bearer $HOS_KEY"
 ```
 
 **`nextCursor` is `null` on the last page.** That is the signal to stop, and it
-is the only reliable one. A short page does not mean the end, and neither does
-an empty one.
+is the only reliable one on these lists. A short page does not mean the end, and
+neither does an empty one.
 
 ## Pulling every record
 
-Loop until `nextCursor` comes back `null`.
+Loop until the stop signal for the list's shape. For a `nextCursor` list:
 
 ```js
-async function fetchAllRuns(workspaceId, workflowId, apiKey) {
+async function fetchAllRuns(workspaceId, workflowId) {
   const runs = []
   let cursor = null
 
@@ -63,8 +81,8 @@ async function fetchAllRuns(workspaceId, workflowId, apiKey) {
     if (cursor) params.set('cursor', cursor)
 
     const res = await fetch(
-      `https://api.humanik.io/api/v1/workspaces/${workspaceId}/workflows/${workflowId}/runs?${params}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
+      `${process.env.HOS_API}/workspaces/${workspaceId}/workflows/${workflowId}/runs?${params}`,
+      { headers: { Authorization: `Bearer ${process.env.HOS_KEY}` } },
     )
     const body = await res.json()
     if (!body.success) throw new Error(body.error)
@@ -79,18 +97,18 @@ async function fetchAllRuns(workspaceId, workflowId, apiKey) {
 
 Three rules keep that loop correct:
 
-1. **Stop on `null`, not on a short page.** A page can come back smaller than
-   `limit` and still have more behind it.
+1. **Stop on the list's own signal.** On a cursor list, a page can come back
+   smaller than `limit` and still have more behind it.
 2. **Send the cursor back unchanged.** It is an opaque string. Do not parse it,
    build one, or carry one between different queries.
-3. **Do not skip a page.** Cursors are sequential. There is no way to jump to an
-   arbitrary offset, by design.
+3. **Do not skip a page.** Cursors are sequential. A cursor list has no offset
+   to jump to.
 
 ## What a cursor guarantees
 
 A cursor marks a position in the result, not an offset into it. Records created
 while you are paging appear at the start of the list and do not shift the pages
-below, so a page is never skipped or repeated because the data changed mid loop.
+below, so a page is not skipped or repeated because the data changed mid loop.
 This matters most on lists that grow quickly, which is where offset based paging
 returns duplicates.
 
@@ -98,22 +116,20 @@ What it does not do is freeze the data. A record changed after you read its page
 is returned as it was when you read it. If you need a consistent view, compare
 timestamps on the records rather than assuming the pages were a snapshot.
 
-## Cursors expire with the query, not with time
+## Cursors belong to one query
 
 A cursor encodes the ordering of the query that produced it. Change the filters,
-the sort direction, or the endpoint, and the cursor no longer means anything.
+the sort direction, or the operation, and the cursor no longer means anything.
 Start that new query without one.
 
-A malformed or foreign cursor is treated as no cursor, so the call returns the
-first page rather than an error. Check that you are advancing if a loop appears
-to repeat itself.
+What happens to a cursor that is not valid depends on the list. Some return the
+first page as if no cursor was sent, and some refuse it with `400`. The
+operation's page says which. If a loop appears to repeat itself, check that you
+are sending the newest cursor.
 
-## Which lists are paginated
+## Next steps
 
-Support is stated per endpoint in the [API reference](/docs/api-reference). A
-list that accepts `cursor` documents it as a parameter and returns `nextCursor`
-in the response.
-
-Some lists are deliberately not paginated because they are bounded by design,
-such as the nodes in one workflow. Those endpoints say so, and they return every
-record in one call.
+<Cards>
+  <Card title="Responses and errors" href="/docs/responses" description="The envelope, status codes, and what each one means." />
+  <Card title="API reference" href="/docs/api-reference" description="Each operation's page size and paging shape." />
+</Cards>

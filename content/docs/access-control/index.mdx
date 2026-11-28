@@ -247,13 +247,14 @@ See [Service accounts](/docs/access-control/service-accounts).
 ## Some resources add a second layer
 
 Access control answers *what class of action may this identity perform*. For most
-resources that is the whole answer. Two add a per-resource membership list on
+resources that is the whole answer. Three add a per-resource membership list on
 top:
 
 | Resource | Why |
 | --- | --- |
 | **Browsers** | A live browser holds persistent logins and a viewable session |
 | **Group chats** | Conversation privacy |
+| **Calendars** | A calendar holds people's bookings and its connected accounts. Using one needs membership. A few governance reads, such as the members list, also pass with `calendar:manage` on that calendar |
 
 Where a second layer exists, **both must pass**, and the membership layer is
 deliberately stricter. The browser one refuses even the tenant owner. Some blast

@@ -46,9 +46,11 @@ tags:
       plugin.
   - name: Protocols
     description: |
-      What an employee must always do. Where a skill is a capability it reaches
-      for, a protocol applies to everything it does. Loaded at boot, so a change
-      needs a restart.
+      Behavioural rules for an employee. A protocol is put in front of the
+      turns started by an AI subscription or workflow step it is attached to.
+      In other turns the employee sees it as a skill it may load. Loaded at
+      boot, so a change needs a restart. See
+      [Skills and protocols](/docs/skills-and-protocols#when-a-protocol-is-in-force).
   - name: Allocations
     description: The data, sites, apps, and browsers an office may reach.
   - name: Identity
@@ -61,7 +63,18 @@ tags:
       These operations take a signed-in user's token only. A service account
       key is refused with a 403.
   - name: Machine
-    description: Size, idle timeout, running instances, and logs.
+    description: |
+      Size, idle timeout, running instances, logs, and starting and stopping
+      the machine.
+
+      Reading the configuration or the instances sets up the office's Humanik
+      Cloud service if it is missing, for example when that step failed when
+      the office was created. Reading logs never does: an office with no
+      service answers `400` there.
+
+      A connected agent cannot wake, shut down or restart an office. Those
+      calls answer `403` for it. A connected agent works with an employee by
+      messaging it in HumaChat.
   - name: Model provider
     description: Which model account or machine an office runs its thinking on.
   - name: Environment secrets
@@ -689,7 +702,10 @@ components:
           items:
             type: string
           default: []
-          description: Scopes the protocol to specific skills. Empty means it applies to everything.
+          description: |
+            Skills the protocol is about. Guidance for the AI model that writes
+            the protocol's instructions; it does not limit where the protocol
+            applies.
         priority:
           type: integer
           default: 10
@@ -723,7 +739,8 @@ components:
             invalid:
               value:
                 success: false
-                error: Invalid API key
+                error: Unauthorized
+                message: Invalid API key
 
     Forbidden:
       description: Authenticated, but the service account lacks the required permission.
@@ -1414,6 +1431,9 @@ paths:
         **Read this before writing.** The available tiers depend on the service
         type and change over time, so the valid values for `instanceType` come
         from this response rather than from a list in these docs.
+
+        If the office's Humanik Cloud service is missing, this read sets it up
+        first.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
@@ -1523,11 +1543,38 @@ paths:
 
         An office that has scaled to zero returns no instances. That is the
         normal resting state, not an error.
+
+        If the office's Humanik Cloud service is missing, this read sets it up
+        first.
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       responses:
         '200':
           description: Running instances, if any.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    properties:
+                      instances:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      totalCount: { type: integer }
+                      healthyCount: { type: integer }
+        '400':
+          description: |
+            `workspaceId` is missing, or the office's service could not be read
+            or set up. `error` says which.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -1546,11 +1593,93 @@ paths:
 
         This is the first place to look when an office was created but never
         became ready, since the infrastructure steps at creation fail soft.
+
+        **Reading logs never sets anything up.** An office whose Humanik Cloud
+        service is missing answers `400`. Read
+        [Get machine configuration](/docs/api-reference/offices/machine/getOfficeComputeConfig)
+        once to set it up, then read logs.
+
+        To read further back, call again with the same filters and the `cursor`
+        from the last response while `hasMore` is `true`. See
+        [Pagination](/docs/pagination).
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
+        - name: limit
+          in: query
+          required: false
+          description: Lines per page. A value that is not a positive whole number is ignored.
+          schema:
+            type: integer
+            minimum: 1
+        - name: startTime
+          in: query
+          required: false
+          description: Only lines from this time on, as an ISO 8601 timestamp.
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          required: false
+          description: Only lines before this time, as an ISO 8601 timestamp.
+          schema:
+            type: string
+            format: date-time
+        - name: level
+          in: query
+          required: false
+          description: Only lines at this level.
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+        - name: search
+          in: query
+          required: false
+          description: Only lines whose message contains this text.
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          description: The `cursor` of the previous response, for the next page. Use it with the same filters.
+          schema:
+            type: string
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
       responses:
         '200':
-          description: Log output.
+          description: Log lines.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      cursor:
+                        type: string
+                        description: Present when `hasMore` is `true`. Pass it back as `cursor`.
+                      totalCount: { type: integer }
+                      hasMore: { type: boolean }
+        '400':
+          description: |
+            `workspaceId` is missing, the office has no Humanik Cloud service
+            yet, or Humanik Cloud refused the query. `error` says which.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -2463,11 +2592,15 @@ paths:
       summary: Create a protocol
       operationId: createOfficeProtocol
       description: |
-        Creates a behavioural rule injected into the employee's context.
-        Requires `office:manage`.
+        Creates a behavioural rule for the employee. Requires `office:manage`.
 
-        Where a skill is a capability the employee reaches for, a protocol
-        applies to everything it does.
+        Saving it makes a skill for the office from your text, rewritten by an
+        AI model. The protocol is put in front of a turn only when it is
+        attached to the AI subscription or workflow step that started the
+        turn, or when the employee applies it, which lasts for the rest of
+        that session. In any other turn, such as an ordinary chat message, the
+        employee sees it as a skill it may or may not load. See
+        [Skills and protocols](/docs/skills-and-protocols#when-a-protocol-is-in-force).
       parameters:
         - $ref: '#/components/parameters/WorkspaceId'
       requestBody:
@@ -5108,7 +5241,14 @@ paths:
         for it, and this exists for when you want it ready before that happens,
         such as ahead of a burst of work.
 
-        **Permission:** `office:use` @ `office/{officeId}`
+        The request waits up to 8 seconds for the office to answer. If it has
+        not answered by then, which is normal while a machine starts from
+        sleep, the response is `200` with `status: waking` and the start goes
+        on. Starting can take a few minutes. A `200` therefore means the start
+        was sent, not that the office is ready.
+
+        **Permission:** `office:use` @ `office/{officeId}`. A connected agent
+        gets `403` even when it holds `office:use`.
       requestBody:
         required: true
         content:
@@ -5139,8 +5279,10 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '502':
           description: |
-            The office could not be reached. Nothing changed, so retrying is
-            safe.
+            The start was refused or could not be sent within the 8 seconds,
+            for example because machine starts are paused while the account's
+            credit balance is below zero, or because the office could not be
+            reached. `error` says which. Retrying is safe.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -5171,7 +5313,8 @@ paths:
         it a shorter idle timeout, is how you bring it down. See
         [Machine lifecycle](/docs/cloud/lifecycle).
 
-        **Permission:** `office:use` @ `office/{officeId}`
+        **Permission:** `office:use` @ `office/{officeId}`. A connected agent
+        gets `403` even when it holds `office:use`.
       requestBody:
         required: true
         content:
@@ -5242,7 +5385,8 @@ paths:
         [List instances](/docs/api-reference/offices/machine/listOfficeInstances)
         to see the new machine appear.
 
-        **Permission:** `office:use` @ `office/{officeId}`
+        **Permission:** `office:use` @ `office/{officeId}`. A connected agent
+        gets `403` even when it holds `office:use`.
       requestBody:
         required: true
         content:

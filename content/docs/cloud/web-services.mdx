@@ -71,7 +71,8 @@ while the deploy runs rather than waiting for its status. See
 | `startCommand` | `npm start` | Starts the server. An empty string starts no server: see below |
 
 Commands run with `sh -c`, so `&&` and `$PORT` work in them. They run as an
-ordinary user, never as root.
+ordinary user, never as root, with only the environment you set. See
+[What keeps your code apart](/docs/cloud/builds-and-isolation#what-keeps-your-code-apart).
 
 ### Commands filled in for you
 
@@ -83,7 +84,10 @@ console offers **Use detected** instead. The branch list shows the repository's
 real branches, starting on its default branch.
 
 It knows npm, pnpm, Yarn and Bun projects (including Next.js, Vite and others) and
-Python projects. Check the commands before you deploy.
+Python projects. Bun is recognised but not installed on the machine, so use npm,
+pnpm or Yarn. Check the commands before you deploy. How detection works, and
+what runs when a machine starts, is on
+[How a web service is built and isolated](/docs/cloud/builds-and-isolation).
 
 To get the same answer from the API, send the repository, branch and folder:
 
@@ -108,7 +112,10 @@ curl -X POST "$HOS_API/cloud/services/detect" \
 }
 ```
 
-It needs a GitHub connection that can read the repository. Each deploy also
+It needs a GitHub connection that can read the repository. Every field and
+error is on
+[Detect a repository's commands](/docs/api-reference/cloud/services/detectCloudService).
+Each deploy also
 checks the deployed commit the same way and shows the result on the deployment's
 page. That check never changes a deploy.
 
@@ -260,6 +267,14 @@ for nightly jobs and clean ups. A scheduled run wakes a sleeping service. See
 
 It applies the next time a machine starts. Scheduled commands need `http`.
 
+## Where it runs
+
+Your service runs in **Ohio, United States, in the AWS region `us-east-2`**. If it uses a
+database or another service, putting that in or near `us-east-2` keeps each request
+short. Every web service runs
+in this region; you cannot choose another. See
+[Where work runs](/docs/cloud/where-work-runs).
+
 ## Size, scaling and cost
 
 A web service is sized by vCPU and memory, chosen separately, from 0.25 vCPU with
@@ -326,9 +341,14 @@ Do not filter your app's output with `level=error`. Lines your app prints carry
 no level, so that filter hides them. See
 [Deployments and logs](/docs/cloud/deployments-and-logs#reading-logs).
 
-## Where to go next
+## Next steps
 
 <Cards>
+  <Card
+    title="How a web service is built and isolated"
+    href="/docs/cloud/builds-and-isolation"
+    description="Where the commands come from, what runs on each start, and what keeps your code apart."
+  />
   <Card
     title="Environment variables and secrets"
     href="/docs/cloud/environment-and-secrets"
@@ -338,15 +358,5 @@ no level, so that filter hides them. See
     title="Deployments and logs"
     href="/docs/cloud/deployments-and-logs"
     description="Deploy, roll back, and read what your app printed."
-  />
-  <Card
-    title="Machine sizes"
-    href="/docs/cloud/sizes"
-    description="Pick a size, and see the hourly price."
-  />
-  <Card
-    title="Humanik Cloud API"
-    href="/docs/api-reference/cloud"
-    description="Create, configure and deploy services with a key."
   />
 </Cards>

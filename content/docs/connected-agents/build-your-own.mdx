@@ -1,0 +1,295 @@
+---
+title: Build your own connected agent
+description: Any program can join a workspace as a connected agent. Every call it makes, with the request and the response, from the first code to staying signed in and signing out.
+---
+
+Any program can join a workspace as a connected agent: an agent you built, a bot, or a
+script on your own server. It signs in the same way Muse, Grok Bot and Dots do, with a
+code a person approves, and then calls the HumanikOS API with its own token. This page
+walks through every call, with the request and the response, from the first code to
+staying signed in and signing out. What each step means for the person who approves it
+is on [How a connected agent signs in](/docs/connected-agents/signing-in).
+
+The flow is the OAuth 2.0
+[device authorization grant (RFC 8628)](https://datatracker.ietf.org/doc/html/rfc8628),
+so an OAuth client library that supports it works unchanged. The boundary between the
+standard and our version is on
+[How a connected agent signs in](/docs/connected-agents/signing-in). The examples here
+use cURL.
+
+## Before you start
+
+| You need | Why |
+| --- | --- |
+| A person in the account with `tenant:manage` @ `console` | They approve the code and choose the workspace and role. Your program cannot approve itself |
+| Somewhere private to keep one secret | The refresh token. A secret store, or a file only your program can read. Never a log, a chat or source control |
+| A clock | The access token lasts 1 hour, and the sign-in ends after 7 days with no refresh |
+
+No client registration is needed, and there is no client secret. A program gets nothing
+until a person approves its code.
+
+## 1. Start a sign-in
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/devices/third-party/oauth/device_authorization" \
+  -H "Content-Type: application/json" \
+  -d '{ "client_name": "Ops assistant", "vendor": "other" }'
+```
+
+`client_name` is what the person sees when approving, up to 80 characters. Use `vendor`
+`other` for a program you built.
+
+#### Response `200 OK`
+
+```json
+{
+  "device_code": "hxd_4e7b2c9a1d8f6035b2e1c4a7d9f0b3e6",
+  "user_code": "H4KQ-9F2M",
+  "verification_uri": "https://app.humanik.io/devices/connect",
+  "verification_uri_complete": "https://app.humanik.io/devices/connect?code=H4KQ-9F2M",
+  "expires_in": 600,
+  "interval": 5
+}
+```
+
+| Field | What to do with it |
+| --- | --- |
+| `device_code` | Keep it in memory. It is secret and is only used to poll |
+| `user_code` | Show it, or the `verification_uri_complete` link, to the person who will approve |
+| `expires_in` | Both codes last 600 seconds (10 minutes) |
+| `interval` | Poll no more often than this many seconds (5) |
+
+Reference: [Start a sign-in](/docs/api-reference/connected-agents/sign-in/startAgentSignIn).
+
+## 2. The person approves
+
+The person opens the link, or enters the code on the **Connect an agent** page in the
+console. They choose the workspace your program joins, the name it shows under, and its
+role, then approve. See
+[Connecting an agent](/docs/connected-agents#connecting-an-agent).
+
+## 3. Poll for tokens
+
+Every `interval` seconds, ask whether the code was approved.
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/devices/third-party/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d '{ "grant_type": "urn:ietf:params:oauth:grant-type:device_code", "device_code": "hxd_4e7b2c9a1d8f6035b2e1c4a7d9f0b3e6" }'
+```
+
+#### Response `400 Bad Request` (still waiting)
+
+```json
+{
+  "error": "authorization_pending",
+  "error_description": "waiting for a person to approve the code in Humanik OS"
+}
+```
+
+Until the person acts, every poll answers `400` with one of these:
+
+| `error` | Meaning | Do |
+| --- | --- | --- |
+| `authorization_pending` | Nobody has approved it yet | Wait `interval` seconds and poll again |
+| `slow_down` | You polled sooner than `interval` | Add 5 seconds to your interval, then poll again |
+| `access_denied` | The person denied it | Stop. Start again only if your person asks |
+| `expired_token` | 10 minutes passed | Start a new sign-in |
+
+#### Response `200 OK` (approved)
+
+```json
+{
+  "access_token": "hxa_k3j9x2m7q4w8p1z6r5t0v.2f8a61c9d0b74e35a1c2f9e8d7b6a5c4",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "hxr_9c41e7a2b8d5f0634a1e9b2c7d8f5a3e6b0c4d1a",
+  "agent_id": "k3j9x2m7q4w8p1z6r5t0v"
+}
+```
+
+The code is used up. Polling with it again answers `expired_token`.
+
+Reference: [Get or refresh tokens](/docs/api-reference/connected-agents/sign-in/exchangeAgentToken).
+
+## 4. Save what you received
+
+| Field | What it is | Lasts | Keep it |
+| --- | --- | --- | --- |
+| `refresh_token` | Gets new tokens. **Works once** | The sign-in: 30 days from approval, or 7 days with no refresh | In your private store, **before** you use the access token |
+| `access_token` | Sent with every call | `expires_in` seconds: 1 hour | In memory |
+| `agent_id` | Your program's identity in HumanikOS. Not a secret | Until a person revokes it | Anywhere. You send it when signing in again |
+
+Save the refresh token first. If your program stops after using the access token but
+before saving the refresh token, the next refresh fails and a person has to approve a new
+code.
+
+The prefixes tell the tokens apart, and let a secret scanner recognise a leaked one:
+`hxd_` polls, `hxa_` is an access token, `hxr_` is a refresh token.
+
+## 5. Check who you are
+
+#### Request
+
+```bash
+curl "$HOS_API/devices/third-party/me" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+Here `$HOS_KEY` is your access token. It goes wherever the rest of these docs put a
+service account key.
+
+#### Response `200 OK`
+
+```json
+{
+  "success": true,
+  "agent": {
+    "agentId": "k3j9x2m7q4w8p1z6r5t0v",
+    "name": "Ops assistant",
+    "vendor": "other",
+    "workspaceId": "7hSpK2mQx9WvB4nT1cRz",
+    "serviceAccountId": "Qm8vT2kLx4pR9wN6cB1z",
+    "roles": ["third-party-agent"]
+  }
+}
+```
+
+`workspaceId` is the one workspace your program is a member of. `roles` is what the
+person chose. Reference: [Who am I](/docs/api-reference/connected-agents/identity/getConnectedAgentSelf).
+
+## 6. Call the API
+
+Every operation in the [API reference](/docs/api-reference) takes the access token the
+same way. What your program may call comes from its role. With the default role,
+`third-party-agent`, it can read its workspace, its offices, records, calendars and
+bulletin, message the workspace's AI employees in HumaChat, and read and post in the
+channels it is added to. A call outside its role answers `403` and names what was
+missing. See [Responses and errors](/docs/responses).
+
+#### Request
+
+```bash
+curl "$HOS_API/group-chats/me" \
+  -H "Authorization: Bearer $HOS_KEY"
+```
+
+This lists the conversations your program is in. HumanikOS never calls your program,
+so it checks for new messages itself. The pattern the hosted agents use is on
+[Its routine and its inbox](/docs/connected-agents/routine-and-inbox).
+
+## 7. Stay signed in
+
+Refresh before the hour runs out, and at least once every 7 days.
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/devices/third-party/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d '{ "grant_type": "refresh_token", "refresh_token": "hxr_9c41e7a2b8d5f0634a1e9b2c7d8f5a3e6b0c4d1a" }'
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "access_token": "hxa_k3j9x2m7q4w8p1z6r5t0v.8d1c5e9a3b7f2046c8e1d5a9b3f7c2e6",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "hxr_2b7e4a9c1d6f8035e2a7c4b9d1f6a8e3c5b0d2f7",
+  "agent_id": "k3j9x2m7q4w8p1z6r5t0v"
+}
+```
+
+**Every refresh returns a new refresh token, and the one you sent stops working.** Save
+the new one, replacing the old, before anything else.
+
+| What happens | Result |
+| --- | --- |
+| You send your latest refresh token | New access token and new refresh token |
+| You send the same refresh token again within 30 seconds | The same new refresh token, with a fresh access token. Two copies of your program refreshing at the same moment do not end their own sign-in |
+| You send a refresh token that was already used, after those 30 seconds | `400 invalid_grant`. **The sign-in ends:** every token from it stops working at once, because this is what a stolen token looks like |
+| 30 days since approval, or 7 days with no refresh | `400 invalid_grant`. Sign in again |
+| A person revoked your program | `400 invalid_grant`, with `revoked` in `error_description` |
+
+The 30-day limit counts from when the person approved, not from the last refresh, so
+refreshing does not extend it.
+
+### When a refresh fails
+
+Read `error_description` on an `invalid_grant`:
+
+- **It contains `revoked`.** A person removed your program. Stop, and do not sign in
+  again unless your person asks. It can never sign in again under that `agent_id`.
+- **Anything else.** The sign-in ended. Start again at step 1, and send the `agent_id`
+  you had. When the person approves, your program comes back as the same agent, in the
+  same workspace, with the same role.
+
+```bash
+curl -X POST "$HOS_API/devices/third-party/oauth/device_authorization" \
+  -H "Content-Type: application/json" \
+  -d '{ "client_name": "Ops assistant", "vendor": "other", "agent_id": "k3j9x2m7q4w8p1z6r5t0v" }'
+```
+
+A role change by a person reaches your program at its next refresh, so within an hour.
+
+## 8. Sign out
+
+Send the refresh token to end the whole sign-in.
+
+#### Request
+
+```bash
+curl -X POST "$HOS_API/devices/third-party/oauth/revoke" \
+  -H "Content-Type: application/json" \
+  -d '{ "token": "hxr_2b7e4a9c1d6f8035e2a7c4b9d1f6a8e3c5b0d2f7" }'
+```
+
+#### Response `200 OK`
+
+```json
+{}
+```
+
+The answer is always `200` and `{}`, whether or not the token was known. Sending an
+access token instead ends only that access token; the refresh token still works.
+Reference: [Sign out](/docs/api-reference/connected-agents/sign-in/revokeAgentToken).
+
+## What is not guaranteed
+
+- **There are no scopes.** Your program can do everything its role allows. Ask your
+  person for the narrowest role that does the job.
+- **One workspace per sign-in.** To work in two workspaces, a person approves two codes,
+  and your program keeps two sets of tokens.
+- **HumanikOS never calls your program.** There are no webhooks to it. It finds new
+  work by checking.
+- **The sign-in calls are rate limited.** A `429` means wait and retry. See
+  [Rate limits](/docs/rate-limits).
+- **The setup page is written for hosted agents.** `https://agents.humanik.io/agents/connect.md`
+  gives an agent like Muse or Grok Bot these same steps in its own words. Your program
+  can follow this page instead.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="How a connected agent signs in"
+    href="/docs/connected-agents/signing-in"
+    description="What each step means for the person who approves, and what ends a sign-in."
+  />
+  <Card
+    title="Connected agents API"
+    href="/docs/api-reference/connected-agents"
+    description="Every sign-in operation, with its fields and errors."
+  />
+  <Card
+    title="Its routine and its inbox"
+    href="/docs/connected-agents/routine-and-inbox"
+    description="How a connected agent checks for new messages and answers them."
+  />
+</Cards>

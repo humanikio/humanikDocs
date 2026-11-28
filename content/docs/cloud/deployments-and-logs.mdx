@@ -224,7 +224,8 @@ Any other parameter is refused with `400`.
 **To read further back, pass back the `cursor`.** When `hasMore` is `true`, the
 response has a `cursor`. Call again with the same filters and `cursor` set to it,
 and you get the next page: older lines with `order=desc`, newer with `order=asc`.
-When `hasMore` is `false`, there are no more lines in the time range.
+When `hasMore` is `false`, there are no more lines in the time range. The same
+shape is used by other lists, as described on [Pagination](/docs/pagination).
 
 Lines written at the same instant as the last line of a page can come back at the
 top of the next page. Drop a line you already have: same `_time`, `instance_id` and
@@ -270,3 +271,18 @@ there.
 
 Lines you load with **Load older lines** stay on the page while new lines are
 added at the top.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Web services"
+    href="/docs/cloud/web-services"
+    description="Build and run your own app from a GitHub repository."
+  />
+  <Card
+    title="Environment variables and secrets"
+    href="/docs/cloud/environment-and-secrets"
+    description="What a web service receives in its environment."
+  />
+</Cards>

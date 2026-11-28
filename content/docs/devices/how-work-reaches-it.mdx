@@ -123,6 +123,10 @@ registry stops, machines become unreachable and you notice at once. If the fleet
 registry stops, every machine keeps working exactly as before while the platform
 mis-counts how many gateway instances it has.
 
+Humanik Cloud also checks, every 20 seconds, that it can reach the gateway
+itself. What happens when that check fails is on
+[Reliability and recovery](/docs/cloud/reliability).
+
 ## How the platform knows your machine is there
 
 It does not ask. There is no polling, no health check pointed at your machine,
@@ -197,7 +201,7 @@ changing anything in the middle.
 **It does not store anything.** No job history, no session, no transcript. A job
 that fails mid flight leaves nothing behind on that side.
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card
@@ -214,10 +218,5 @@ that fails mid flight leaves nothing behind on that side.
     title="Connect your own machine"
     href="/docs/devices"
     description="Enrolling, run modes, and the ceiling."
-  />
-  <Card
-    title="Bring your own compute"
-    href="/docs/models/your-own-compute"
-    description="Pointing an office at a machine you own."
   />
 </Cards>

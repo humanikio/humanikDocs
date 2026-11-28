@@ -515,12 +515,21 @@ paths:
       summary: Delete a calendar
       tags: [Calendars]
       description: |
-        Removes the calendar.
+        Removes the calendar. Its `status` becomes `deleted`, and it stops
+        appearing in calendar lists.
+
+        **Its booking links are deleted.** Every booking link on the calendar
+        stops working at once, with the bookings and manage links made through
+        them. The appointments themselves stay on the provider calendar.
+
+        **Upcoming bookings block the delete.** If any booking link on the
+        calendar has an upcoming confirmed booking, the answer is `409` with
+        `futureBookings`, the number of them, and nothing is changed. Cancel
+        those bookings first, or send `force=true` to delete anyway.
 
         **Nothing is deleted at the provider.** Events written through this
         calendar live in the Google or Outlook account they were written to and
-        stay there. What you lose is the container, its member list, and its
-        bindings.
+        stay there.
 
         To stop a calendar being used without losing it, set `status` to
         `archived` through
@@ -528,6 +537,16 @@ paths:
 
         **Permission:** `calendar:manage` @ `calendar/{calendarId}`. No
         membership needed
+      parameters:
+        - name: force
+          in: query
+          required: false
+          description: |
+            `true` deletes the calendar and its booking links even when they
+            have upcoming bookings. Any other value is treated as `false`.
+          schema:
+            type: string
+            enum: ['true', 'false']
       responses:
         '200':
           description: Deleted.
@@ -537,9 +556,28 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, const: true }
+        '400':
+          description: The calendar is already deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Booking links on the calendar have upcoming confirmed bookings.
+            Nothing was changed. Send `force=true` to delete anyway.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: false }
+                  error: { type: string }
+                  futureBookings:
+                    type: integer
+                    description: How many upcoming confirmed bookings were found.
         '500': { $ref: '#/components/responses/ServerError' }
 
   /calendars/{calendarId}/sync:

@@ -102,6 +102,20 @@ two jobs: it is what the office runs when it is not using your account, and what
 it falls back to if your account cannot be reached. Set it before you turn
 anything else on.
 
+When an office runs on your account, each model request goes to your vendor
+first. The office moves a request to the fallback only in these cases:
+
+| What your vendor did | What the office does |
+| --- | --- |
+| Answered with any `4xx` or `5xx` other than `400`, such as a bad key, no credit or an outage | Sends the same request to the fallback |
+| Did not start answering within 4 minutes | Sends the same request to the fallback |
+| Answered `400` | Returns the error. The request itself is wrong, so the fallback would refuse it too |
+| 10 requests in a row have already moved to the fallback | Stops using the fallback for 5 minutes. Requests go to your vendor only, and its errors come back as they are |
+
+Each request that moves is billed to platform credit at the fallback model's
+price. The office adds your key on the machine, outside the agent, as described
+on [Inside an office](/docs/cloud/inside-an-office#what-keeps-the-agent-apart).
+
 ## And then choose a model
 
 <Callout type="warn">
@@ -139,7 +153,7 @@ Attributing spend to a particular key is your vendor's dashboard, not ours.
 
 **It does not rotate.** Storing a key replaces the previous one immediately.
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card

@@ -328,6 +328,20 @@ the order the runs happened to be processed in.
   recoverable.
 </Callout>
 
+### Moving or removing one paused contact
+
+Three operations act on one paused run, so you can handle one contact without
+touching the rest of the queue:
+
+| To | Use |
+| --- | --- |
+| See where a run is in a Drip queue | [Get a run's queue position](/docs/api-reference/workflows/runs/getRunQueuePosition) |
+| Release one run now, past its Wait or Drip | [Advance a run](/docs/api-reference/workflows/runs/advanceRun) |
+| Take one run out of the workflow | [Cancel a run](/docs/api-reference/workflows/runs/cancelWorkflowRun) |
+
+Only a paused run can be released or cancelled. A run that is in the middle of a
+step answers `409`.
+
 ## Which steps identify a contact
 
 Worth knowing, because it decides where `{{contact.*}}` will resolve:
@@ -349,7 +363,7 @@ way out.
 An exit you leave unconnected simply ends that branch. That is allowed, and it is
 how you write "do nothing in this case".
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card
@@ -366,10 +380,5 @@ how you write "do nothing in this case".
     title="Offices and employees"
     href="/docs/offices-and-employees"
     description="What Prompt Office hands the work to."
-  />
-  <Card
-    title="Workflows API"
-    href="/docs/api-reference/workflows"
-    description="The catalogue endpoint, and the exact shape of a canvas."
   />
 </Cards>

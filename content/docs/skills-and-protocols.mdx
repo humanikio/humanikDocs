@@ -23,8 +23,9 @@ true during a refund, during a report, and during a conversation that has nothin
 to do with money. The employee does not choose to consult it.
 
 Written as a skill, that rule only applies when the employee happens to load the
-refund skill. Written as a protocol, it applies always. The second is what you
-meant.
+refund skill. Written as a protocol and attached to the work that issues refunds,
+it is put in front of every one of those turns. The second is what you meant.
+Exactly when a protocol is in force is under [Protocols](#protocols).
 
 ## Skills
 
@@ -71,6 +72,9 @@ reads the **body** of one only when a task matches it. This is why the
 description field earns its 100 characters: it is the only thing the employee has
 to decide with.
 
+How skills, plugins and the framework fit together on the office machine is on
+[Inside an office](/docs/cloud/inside-an-office).
+
 Write a description that says what the skill does **and when to use it**.
 "Reconcile orders" is a label. "Match settled payments against open orders, for
 nightly reconciliation or a payment dispute" is a decision.
@@ -88,6 +92,7 @@ Skills come from three places, recorded on each one as `source`:
 | `integration` | Generated from a plugin you connected |
 | `custom` | You wrote it |
 | `system` | The platform provides it |
+| `protocol` | Made from one of your [protocols](#protocols) |
 
 ### A skill is instructions, not a connection
 
@@ -131,12 +136,40 @@ for everything else that hangs off an office and how each one gets there.
 
 ## Protocols
 
-A protocol is a behavioural rule injected into the employee's context. It has a
-priority, so ordering is yours to control, and it can optionally be scoped to
-specific skills when a rule only makes sense around certain work.
+A protocol is a behavioural rule you write for an office. It has a priority, so
+you control which rule wins when two disagree. When you save it, HumanikOS turns
+your text into a skill for that office (its `source` is `protocol`), rewritten by
+an AI model into a clear set of instructions.
 
-Left unscoped, which is the common case, it applies to everything the employee
-does.
+### When a protocol is in force
+
+| Where the protocol is | What the employee sees |
+| --- | --- |
+| Attached to an AI subscription, or to a **Prompt Office** step in a workflow | The protocol is put in front of that turn, before the work. Several are ordered by priority, lowest number first, and the employee is told to follow the earlier one when they conflict |
+| Applied by the employee itself, when you ask it to or it decides to | In force for the rest of that session |
+| Any other turn, such as an ordinary chat message | Listed with the employee's skills by name and description. The employee may load it or may not |
+
+**Attach a protocol to the work it governs.** A rule that must hold whenever a
+subscription or workflow hands work to the employee belongs on that
+subscription or that step. That is the only place it is put in front of every
+turn.
+
+**Skill names on a protocol are guidance.** You can name the skills a protocol
+is about. Those names are given to the AI model that writes the protocol's
+instructions. They do not limit where the protocol applies.
+
+### What is not guaranteed
+
+- **A protocol does not bind ordinary chat turns.** In a conversation that no
+  subscription or workflow started, the employee sees the protocol only as a skill
+  it may choose to read.
+- **The text in force is a rewrite of yours.** The employee reads the version the
+  AI model wrote from your text, not your exact words. Read the generated skill
+  after you save a protocol, and make your text plain enough that a rewrite
+  cannot change its meaning.
+- **A protocol is an instruction, not a permission.** It shapes what the employee
+  tries. What the employee can reach is still decided by its role. See
+  [What this does not cover](#what-this-does-not-cover).
 
 <Callout type="warn">
   **Protocols load when the office boots.** Adding or changing one does not
@@ -150,7 +183,7 @@ does.
 Ask one question: **would this still matter if the employee were doing something
 unrelated?**
 
-| Yes, always applies | Protocol |
+| Yes, it must hold whenever this work is handed over | Protocol, attached to that subscription or step |
 | --- | --- |
 | Only when performing a specific task | Skill |
 
@@ -158,9 +191,9 @@ Some examples that fall each way:
 
 | Rule | Which | Why |
 | --- | --- | --- |
-| "Always sign off as the Support team" | Protocol | True in every message |
+| "Always sign off as the Support team" | Protocol | True in every reply the work produces |
 | "How to look up an order by email" | Skill | Only during a lookup |
-| "Never contact anyone marked do not contact" | Protocol | Must hold everywhere |
+| "Never contact anyone marked do not contact" | Protocol | Must hold in every turn that can send a message |
 | "How to reconcile the nightly payment file" | Skill | One job |
 | "Escalate to a human if unsure" | Protocol | Applies to every decision |
 
@@ -173,7 +206,7 @@ namespace is allocated to its office and its role permits it.
 Instructions and permissions are separate systems on purpose. A skill that
 overstates what an employee may do produces a `403`, not a breach.
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card
@@ -182,18 +215,13 @@ overstates what an employee may do produces a `403`, not a breach.
     description="The document generated from a connection, and what its stamps mean."
   />
   <Card
-    title="Plugins and secrets"
-    href="/docs/plugins"
-    description="Connecting software, and where credentials live."
-  />
-  <Card
-    title="Skills API"
-    href="/docs/api-reference/offices/skills/listOfficeSkills"
-    description="Create, update, regenerate, and the locking rules."
+    title="Inside an office"
+    href="/docs/cloud/inside-an-office"
+    description="How skills, plugins and the framework fit together on the machine."
   />
   <Card
     title="Protocols API"
     href="/docs/api-reference/offices/protocols/listOfficeProtocols"
-    description="Priority, skill scoping, and the restart signal."
+    description="Priority, skill names, and the restart signal."
   />
 </Cards>

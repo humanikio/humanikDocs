@@ -1,11 +1,6 @@
-'use client';
-
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/cn';
-
 /**
- * Header level section switcher.
+ * The documentation sections, shared by DocsHeader (pills and the md to xl dropdown) and
+ * MobileSectionMenu (the phone drawer). The row itself moved into docs-header.tsx on 2026-11-27.
  *
  * **These are product areas, not document types.** "Get started" used to sit
  * here, which made it a peer of "API reference" when it is really the first
@@ -35,49 +30,4 @@ const BY_SPECIFICITY = [...SECTIONS, REFERENCE].sort((a, b) => b.url.length - a.
 /** The section the reader is in: the most specific URL that prefixes the path. */
 export function activeSectionUrl(pathname: string) {
   return BY_SPECIFICITY.find((s) => pathname.startsWith(s.url))?.url;
-}
-
-export function SectionNav() {
-  const pathname = usePathname();
-  const activeUrl = activeSectionUrl(pathname);
-
-  return (
-    <nav className="flex flex-row items-center gap-5">
-      <div className="flex flex-row items-center gap-5">
-        {SECTIONS.map((section) => (
-          <Link
-            key={section.url}
-            href={section.url}
-            data-active={section.url === activeUrl}
-            className={cn(
-              'text-sm text-fd-muted-foreground transition-colors hover:text-fd-accent-foreground',
-              'data-[active=true]:font-medium data-[active=true]:text-fd-foreground',
-            )}
-          >
-            {section.text}
-          </Link>
-        ))}
-      </div>
-
-      {/* A thin rule, not a box: the API reference sits apart as its own kind of
-          document, the same way platform.claude.com sets "API reference" off
-          from its product nav with space and a divider rather than a border. */}
-      <span aria-hidden className="h-4 w-px bg-fd-border" />
-
-      <Link
-        href={REFERENCE.url}
-        data-active={REFERENCE.url === activeUrl}
-        className={cn(
-          'inline-flex items-center gap-1.5 text-sm text-fd-muted-foreground transition-colors',
-          'hover:text-fd-accent-foreground',
-          'data-[active=true]:font-medium data-[active=true]:text-fd-foreground',
-        )}
-      >
-        <span aria-hidden className="font-mono text-xs opacity-70">
-          {'{}'}
-        </span>
-        {REFERENCE.text}
-      </Link>
-    </nav>
-  );
 }

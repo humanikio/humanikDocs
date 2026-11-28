@@ -1,0 +1,440 @@
+openapi: 3.1.0
+
+info:
+  title: HumanikOS API, Connected agents
+  version: v1
+  summary: How an agent you build, or one on another platform, signs in to one workspace and stays signed in.
+  description: |
+    A **connected agent** signs in with the OAuth 2.0 device authorization grant
+    ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), keeps itself
+    signed in with single-use refresh tokens, and signs out with token
+    revocation ([RFC 7009](https://datatracker.ietf.org/doc/html/rfc7009)).
+    Field names follow the RFCs, so a standard OAuth client library works
+    unchanged.
+
+    These are the operations the **agent** calls. A person approves or denies
+    the code, and revokes the agent, in the console; those steps are not
+    callable with a key.
+
+    The three sign-in operations need no credential and answer errors in the
+    OAuth shape `{ error, error_description }`, not this API's usual
+    `{ success, error }`. Bodies may be JSON or form-encoded
+    (`application/x-www-form-urlencoded`, the RFC default).
+
+    After sign-in, the access token goes wherever the rest of this reference
+    puts a service account key: `Authorization: Bearer <access_token>`. What it
+    may do comes from the role the person chose when approving.
+
+    Guides: [How a connected agent signs in](/docs/connected-agents/signing-in)
+    and [Build your own connected agent](/docs/connected-agents/build-your-own).
+
+# `servers` is injected at load time from NEXT_PUBLIC_HOS_API_URL.
+# See src/lib/openapi.ts. Do not add a host here.
+
+security:
+  - AgentAccessToken: []
+
+tags:
+  - name: Sign-in
+    description: |
+      Start a sign-in, collect tokens, refresh them, and sign out. No credential
+      is needed to call these.
+  - name: Identity
+    description: |
+      Who the signed-in agent is.
+
+components:
+  securitySchemes:
+    AgentAccessToken:
+      type: http
+      scheme: bearer
+      description: |
+        A connected agent's access token, `hxa_…`, from
+        [Get or refresh tokens](/docs/api-reference/connected-agents/sign-in/exchangeAgentToken).
+        It lasts 1 hour.
+
+  responses:
+    OAuthBadRequest:
+      description: |
+        Refused. `error` is one of the OAuth codes listed on the operation, and
+        `error_description` says why in words.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OAuthError' }
+    OAuthServerError:
+      description: |
+        Server failure (`error: server_error`). Safe to retry after a few
+        seconds.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OAuthError' }
+    TooManyRequests:
+      description: |
+        Called too often from one place. Wait and retry. See
+        [Rate limits](/docs/rate-limits).
+      content:
+        application/json:
+          schema:
+            type: object
+
+  schemas:
+    OAuthError:
+      type: object
+      required: [error, error_description]
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_request
+            - invalid_grant
+            - unsupported_grant_type
+            - authorization_pending
+            - slow_down
+            - access_denied
+            - expired_token
+            - server_error
+        error_description:
+          type: string
+          description: Why, in words. Read it for the word `revoked` (see the refresh operation).
+      example:
+        error: authorization_pending
+        error_description: waiting for a person to approve the code in Humanik OS
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, agent_id]
+      properties:
+        access_token:
+          type: string
+          description: 'Send as `Authorization: Bearer` on every call. Starts with `hxa_`.'
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+          description: Seconds the access token lasts. `3600`.
+        refresh_token:
+          type: string
+          description: |
+            Starts with `hxr_`. **Works once.** Every response carries a new one,
+            and the one you sent stops working. Save it before using the access
+            token.
+        agent_id:
+          type: string
+          description: |
+            The agent's identity in HumanikOS: 21 lowercase letters and digits.
+            Not a secret. Send it when signing in again to come back as the same
+            agent. Not part of the RFC.
+      example:
+        access_token: hxa_k3j9x2m7q4w8p1z6r5t0v.2f8a61c9d0b74e35a1c2f9e8d7b6a5c4
+        token_type: Bearer
+        expires_in: 3600
+        refresh_token: hxr_9c41e7a2b8d5f0634a1e9b2c7d8f5a3e6b0c4d1a
+        agent_id: k3j9x2m7q4w8p1z6r5t0v
+
+paths:
+  /devices/third-party/oauth/device_authorization:
+    post:
+      tags: [Sign-in]
+      summary: Start a sign-in
+      operationId: startAgentSignIn
+      security: []
+      description: |
+        Starts a sign-in and returns two codes. Keep `device_code` secret and use
+        it to poll. Give `user_code` to the person who will approve the agent;
+        they enter it in the console at `verification_uri`
+        (`verification_uri_complete` has the code filled in).
+
+        The codes last **10 minutes** (`expires_in: 600`). Poll
+        [Get or refresh tokens](/docs/api-reference/connected-agents/sign-in/exchangeAgentToken)
+        no more often than `interval` seconds (5).
+
+        **Signing in again as the same agent.** Send the `agent_id` you had. When
+        the person approves, the agent comes back with the same identity,
+        workspace and role. It is only a hint: a code naming an agent from
+        another account is refused at approval.
+
+        **No credential is needed.** Nothing about the account is revealed until
+        a person approves the code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_name]
+              properties:
+                client_name:
+                  type: string
+                  maxLength: 80
+                  description: A short name for the agent. The person sees it when approving.
+                vendor:
+                  type: string
+                  enum: [muse, grok-bot, dots, other]
+                  description: The platform the agent runs on. Anything else, or nothing, is recorded as `other`. Use `other` for an agent you built.
+                agent_id:
+                  type: string
+                  description: The `agent_id` from an earlier sign-in, to come back as the same agent.
+                platform_agent_id:
+                  type: string
+                  maxLength: 120
+                  description: The agent's own id or name on its platform, so several agents on one platform account can be told apart.
+            example:
+              client_name: Ops assistant
+              vendor: other
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_name]
+              properties:
+                client_name: { type: string }
+                vendor: { type: string }
+                agent_id: { type: string }
+                platform_agent_id: { type: string }
+      responses:
+        '200':
+          description: 'The sign-in started. Not cached (`Cache-Control: no-store`).'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval]
+                properties:
+                  device_code:
+                    type: string
+                    description: Secret. Starts with `hxd_`. Used only to poll.
+                  user_code:
+                    type: string
+                    description: Eight characters as `XXXX-XXXX`, with no `0`, `O`, `1` or `I`. Give it to the person.
+                  verification_uri: { type: string, format: uri }
+                  verification_uri_complete: { type: string, format: uri }
+                  expires_in:
+                    type: integer
+                    description: Seconds both codes last. `600`.
+                  interval:
+                    type: integer
+                    description: Seconds to wait between polls. `5`.
+              example:
+                device_code: hxd_4e7b2c9a1d8f6035b2e1c4a7d9f0b3e6
+                user_code: H4KQ-9F2M
+                verification_uri: https://app.humanik.io/devices/connect
+                verification_uri_complete: https://app.humanik.io/devices/connect?code=H4KQ-9F2M
+                expires_in: 600
+                interval: 5
+        '400':
+          description: |
+            `invalid_request`: `client_name` missing or over 80 characters,
+            `agent_id` not a valid id, or `platform_agent_id` over 120 characters.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/OAuthServerError' }
+
+  /devices/third-party/oauth/token:
+    post:
+      tags: [Sign-in]
+      summary: Get or refresh tokens
+      operationId: exchangeAgentToken
+      security: []
+      description: |
+        Two uses, chosen by `grant_type`. Both answer with the same token
+        response.
+
+        **1. Poll for the first tokens** with
+        `grant_type: urn:ietf:params:oauth:grant-type:device_code` and the
+        `device_code` from [Start a sign-in](/docs/api-reference/connected-agents/sign-in/startAgentSignIn).
+        Until a person acts, the answer is `400` with one of:
+
+        | `error` | Meaning | Do |
+        | --- | --- | --- |
+        | `authorization_pending` | Nobody has approved it yet | Wait `interval` seconds and poll again |
+        | `slow_down` | You polled sooner than `interval` | Add 5 seconds to your interval, then poll again |
+        | `access_denied` | The person denied it | Stop. Start again only if your person asks |
+        | `expired_token` | 10 minutes passed, or the code was already exchanged | Start a new sign-in |
+
+        **2. Refresh** with `grant_type: refresh_token` and your latest
+        `refresh_token`. Each refresh returns a new access token **and a new
+        refresh token**; the one you sent stops working. Save the new refresh
+        token before anything else.
+
+        **Using a spent refresh token ends the sign-in.** Every token from that
+        sign-in stops working at once, and the agent must sign in again with a
+        person. The one exception: sending the same refresh token again within
+        **30 seconds** of using it returns the same new refresh token (with a
+        fresh access token), so two copies of the agent refreshing at the same
+        moment do not end their own sign-in.
+
+        A sign-in lasts **30 days** from approval however often it refreshes,
+        and ends after **7 days** with no refresh. Both answer `invalid_grant`.
+
+        **Read `error_description` on `invalid_grant`.** If it contains the word
+        `revoked`, a person removed the agent: stop, and do not sign in again
+        unless your person asks. Anything else means sign in again with your
+        `agent_id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  title: Poll for the first tokens
+                  required: [grant_type, device_code]
+                  properties:
+                    grant_type: { type: string, const: 'urn:ietf:params:oauth:grant-type:device_code' }
+                    device_code: { type: string, description: 'From Start a sign-in. Starts with `hxd_`.' }
+                - type: object
+                  title: Refresh
+                  required: [grant_type, refresh_token]
+                  properties:
+                    grant_type: { type: string, const: refresh_token }
+                    refresh_token: { type: string, description: 'Your latest refresh token. Starts with `hxr_`.' }
+            examples:
+              poll:
+                summary: Poll for the first tokens
+                value:
+                  grant_type: urn:ietf:params:oauth:grant-type:device_code
+                  device_code: hxd_4e7b2c9a1d8f6035b2e1c4a7d9f0b3e6
+              refresh:
+                summary: Refresh
+                value:
+                  grant_type: refresh_token
+                  refresh_token: hxr_9c41e7a2b8d5f0634a1e9b2c7d8f5a3e6b0c4d1a
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type: { type: string }
+                device_code: { type: string }
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: |
+            New tokens. Not cached (`Cache-Control: no-store`). The refresh
+            token is new on every response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400':
+          description: |
+            `authorization_pending`, `slow_down`, `access_denied` or
+            `expired_token` while polling (see the table above);
+            `invalid_grant` for a spent, unknown, ended or revoked refresh token,
+            or a code already exchanged; `invalid_request` when the code or
+            token is missing; `unsupported_grant_type` for any other
+            `grant_type`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthError' }
+              examples:
+                pending:
+                  value: { error: authorization_pending, error_description: waiting for a person to approve the code in Humanik OS }
+                reused:
+                  value: { error: invalid_grant, error_description: this refresh token was already used; the sign-in was ended. Reconnect with a person }
+                revoked:
+                  value: { error: invalid_grant, error_description: 'revoked: a person removed this agent; do not sign in again unless your person asks' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/OAuthServerError' }
+
+  /devices/third-party/oauth/revoke:
+    post:
+      tags: [Sign-in]
+      summary: Sign out
+      operationId: revokeAgentToken
+      security: []
+      description: |
+        Signs the agent out. What it ends depends on the token you send:
+
+        | Send | Ends |
+        | --- | --- |
+        | The refresh token (`hxr_`) | The whole sign-in: the refresh token and every access token, at once. Send this one to sign out |
+        | An access token (`hxa_`) | That access token only. The refresh token still works |
+
+        After signing out with the refresh token, the agent can connect again
+        later with a new code.
+
+        Always answers `200` with `{}`, whether or not the token was known, as
+        RFC 7009 requires, so the answer never tells anyone which tokens exist.
+
+        This is the agent signing itself out. To remove an agent for good, a
+        person revokes it in the console, and it can never sign in again under
+        that `agent_id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, description: 'A refresh token (`hxr_`) or an access token (`hxa_`).' }
+            example:
+              token: hxr_9c41e7a2b8d5f0634a1e9b2c7d8f5a3e6b0c4d1a
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Signed out, or the token was not known. The body is `{}`.
+          content:
+            application/json:
+              schema: { type: object }
+              example: {}
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /devices/third-party/me:
+    get:
+      tags: [Identity]
+      summary: Who am I
+      operationId: getConnectedAgentSelf
+      description: |
+        The signed-in agent's own record: the proof that sign-in worked. Call it
+        once after the first tokens arrive.
+
+        `roles` lists the role ids the person gave the agent on its workspace.
+        The default is `third-party-agent`. See
+        [Roles](/docs/access-control/roles).
+
+        Needs a connected agent's access token. A service account key or a
+        person's session gets `401`.
+      responses:
+        '200':
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  agent:
+                    type: object
+                    properties:
+                      agentId: { type: string }
+                      name: { type: string, description: The `client_name` it signed in with. }
+                      vendor: { type: string }
+                      platformAgentId: { type: string }
+                      workspaceId: { type: string, description: The one workspace it is a member of. }
+                      serviceAccountId: { type: string, description: The identity its calls are recorded under. }
+                      roles: { type: array, items: { type: string } }
+              example:
+                success: true
+                agent:
+                  agentId: k3j9x2m7q4w8p1z6r5t0v
+                  name: Ops assistant
+                  vendor: other
+                  workspaceId: 7hSpK2mQx9WvB4nT1cRz
+                  serviceAccountId: Qm8vT2kLx4pR9wN6cB1z
+                  roles: [third-party-agent]
+        '401':
+          description: Missing, expired or revoked access token, or not a connected agent's token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: false }
+                  error: { type: string }

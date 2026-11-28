@@ -1413,9 +1413,10 @@ paths:
           in: query
           required: false
           description: |
-            How many runs to return. Defaults to 25. Values are clamped to
-            between 1 and 100 rather than rejected, so `limit=500` returns 100
-            and `limit=0` returns 1.
+            How many runs to return. Defaults to 25. Values are adjusted
+            rather than rejected: above 100 returns 100, a negative number
+            returns 1, and `0` or a value that is not a number returns the
+            default 25.
           schema:
             type: integer
             default: 25
@@ -1524,6 +1525,10 @@ paths:
       description: |
         Push one waiting run past the step it is paused at, without waiting for
         its timer or its turn in a queue.
+        How Wait and Drip pause a run is on
+        [Steps](/docs/workflows/steps#wait-against-drip). To take a run out of
+        the workflow instead, use
+        [Cancel a run](/docs/api-reference/workflows/runs/cancelWorkflowRun).
 
         **This moves one run and only one run.** For a Drip step it releases
         that single run ahead of its turn and leaves the queue's own schedule
@@ -1607,6 +1612,87 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /workspaces/{workspaceId}/workflows/{workflowId}/runs/{runId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/WorkflowId'
+      - name: runId
+        in: path
+        required: true
+        description: The run to take out of the workflow.
+        schema:
+          type: string
+    post:
+      operationId: cancelWorkflowRun
+      summary: Cancel a run
+      tags: [Runs]
+      description: |
+        Takes one run out of its workflow, so it does nothing more. Use it to
+        remove one person from a sequence, such as a contact paused at a Wait
+        or queued at a Drip step. See
+        [Steps](/docs/workflows/steps#wait-against-drip) for how runs pause.
+
+        **Only a paused run can be cancelled.** A run that is `waiting` or
+        `pending` is cancelled. A run that is `running` right now answers `409`:
+        it cannot be stopped partway through a step, so wait for it to pause or
+        finish. A run that already `succeeded` or `failed` answers `409`.
+
+        **Cancelling twice is safe.** A run that is already `cancelled` answers
+        `200` with a `warning`.
+
+        The timer or queue place the run was waiting on is retired too, so it
+        does not wake the run later. If that part fails, the run is still
+        cancelled and the response carries a `warning`: the wake fires once and
+        is ignored.
+
+        **Permission:** `workflow:manage` @ `workspace/{workspaceId}`
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Shown in the Runs view and stored on the run.
+      responses:
+        '200':
+          description: Cancelled. A `warning` may be present.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  warning: { type: string }
+        '400':
+          description: |
+            The run is paused at a kind of step whose wake cannot be retired,
+            so cancelling would leave a timer pointed at a finished run. The run
+            is left as it was.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such run on this workflow.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: |
+            The run is running right now, it already finished, or it is paused
+            at a step that is no longer in the workflow's current graph.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /workspaces/{workspaceId}/workflows/{workflowId}/runs/{runId}/queue-position:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
@@ -1645,7 +1731,8 @@ paths:
         and each batch is one `intervalSec` apart. Treat the result as an
         estimate. Drip settings are read fresh on every release, so raising the
         batch size moves everything still queued and invalidates any figure
-        worked out before the change.
+        worked out before the change. How Drip works is on
+        [Steps](/docs/workflows/steps#wait-against-drip).
 
         **Permission:** `workflow:read` @ `workspace/{workspaceId}`
       responses:

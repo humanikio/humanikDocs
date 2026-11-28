@@ -1,8 +1,6 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import Image from 'next/image';
-import Link from 'next/link';
 import { appName } from './shared';
-import { SectionNav } from '@/components/section-nav';
 
 export function baseOptions(): BaseLayoutProps {
   return {
@@ -22,37 +20,11 @@ export function baseOptions(): BaseLayoutProps {
       ),
       url: '/docs',
     },
-    links: [
-      // The section switcher. Rendered as `custom` so it can own its own active
-      // state — see the note in section-nav.tsx.
-      {
-        type: 'custom',
-        // Header only. In the phone drawer this row did not fit, so the drawer
-        // gets MobileSectionMenu (the sidebar banner in docs/layout.tsx) instead.
-        on: 'nav',
-        children: <SectionNav />,
-      },
-      // A filled pill, not a muted text link — the one place in the header that
-      // should read as an action rather than another page to read, the same
-      // weight platform.claude.com gives "Console" next to its own API reference.
-      // Sized to match huma.solidButton (hos-frontend/src/components/huma/surface.ts):
-      // a fixed h-9 with no vertical padding, shrink-0 and whitespace-nowrap, or the
-      // pill grows to fit wrapped text instead of staying a single compact row.
-      {
-        type: 'custom',
-        on: 'nav',
-        children: (
-          <Link
-            href="https://www.humanik.io"
-            target="_blank"
-            rel="noreferrer"
-            className="ms-1 inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-fd-primary px-4 text-[13px] font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
-          >
-            Main site
-          </Link>
-        ),
-      },
-    ],
+    // The section switcher, the API reference link and the Main site pill are laid out by
+    // DocsHeader (src/components/docs-header.tsx), which replaces the layout's header, and on
+    // phones by MobileSectionMenu in the drawer. Nothing goes in `links`, or it would show
+    // a second time in the drawer.
+    links: [],
     // `githubUrl` is intentionally unset. The docs repo does not exist yet, and
     // linking to a 404 is worse than showing no link. Restore it once
     // `gitConfig` in ./shared.ts points at a real repository.

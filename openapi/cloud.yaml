@@ -978,6 +978,120 @@ paths:
         '502':
           $ref: '#/components/responses/Unreachable'
 
+  /cloud/services/detect:
+    post:
+      tags: [Services]
+      summary: Detect a repository's commands
+      operationId: detectCloudService
+      description: |
+        Reads a GitHub repository at one commit and suggests how to install,
+        build and start it, before you create a web service. Requires
+        `cloud:manage` at `console`, because it uses your account's GitHub
+        connection.
+
+        It builds nothing and starts no machine. The suggestion comes from
+        Railpack's planning step. Treat it as a starting point, and set the
+        commands you want on the service. How detection works, and what it
+        does not do, is on
+        [Builds and isolation](/docs/cloud/builds-and-isolation).
+
+        The same repository, commit and folder give the same answer, so a
+        repeat call can answer from a recent result: `cached` says so.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repoUrl:
+                  type: string
+                  description: A GitHub repository URL, at most 500 characters.
+                ref:
+                  type: string
+                  default: main
+                  description: A branch name or a full commit SHA.
+                rootDirectory:
+                  type: string
+                  description: A folder inside the repository. Omit for the root.
+              required: [repoUrl]
+            example:
+              repoUrl: https://github.com/acme/orders-api
+              ref: main
+      responses:
+        '200':
+          description: What was found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  commit:
+                    type: string
+                    description: The commit that was read.
+                  railpackVersion:
+                    type: string
+                  detected:
+                    type: object
+                    description: Each field is present only when it was found.
+                    properties:
+                      provider: { type: string }
+                      install: { type: string }
+                      build: { type: string }
+                      start: { type: string }
+                      packageManager: { type: string }
+                      versions:
+                        type: object
+                        additionalProperties: { type: string }
+                        description: |
+                          Versions the repository asks for, such as
+                          `{ "node": "22.11.0" }`. They are not installed by
+                          detection.
+                  cached: { type: boolean }
+              example:
+                success: true
+                commit: 3f9c2a7e5b1d4c8a9e0f6b2d7a1c5e8f4b3a2d1c
+                railpackVersion: 0.43.1
+                detected:
+                  provider: node
+                  install: npm ci
+                  build: npm run build
+                  start: npm run start
+                  packageManager: npm
+                  versions: { node: '22.11.0' }
+                cached: false
+        '400':
+          description: '`repoUrl` is missing, the repository is not on GitHub, or `ref` or `rootDirectory` is not valid.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The branch, repository, commit or folder was not found, or GitHub access to it was removed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Your account has no GitHub connection. Connect GitHub, then call again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: The repository is too large to read, or Railpack could not plan it. `error` says which.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          $ref: '#/components/responses/Unreachable'
+        '503':
+          description: GitHub or the detection step failed for a reason that may pass. Retry after a short wait.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /cloud/services/create-and-deploy:
     post:
       tags: [Services]
@@ -1233,7 +1347,8 @@ paths:
 
         **On a web service, `level` hides your app's output.** Lines your app
         prints carry no level, so `level=error` returns only the platform's
-        lines. Use `search` instead. A machine started because the service woke
+        lines. Use `stream` or `phase` to narrow your app's output, or
+        `search`. A machine started because the service woke
         from sleep has no deployment, so `deploymentId` leaves its lines out.
 
         **To read further back, pass back `cursor`.** While `hasMore` is `true`,
@@ -1285,6 +1400,26 @@ paths:
           schema:
             type: string
             enum: [debug, info, warn, error]
+        - name: stream
+          in: query
+          description: |
+            Web services only. Only lines your app wrote to this pipe:
+            `stdout`, `stderr`, or `system` for the short notes Humanik Cloud
+            adds among your app's lines, such as an exit code. Setting it hides
+            Humanik Cloud's own platform lines.
+          schema:
+            type: string
+            enum: [stdout, stderr, system]
+        - name: phase
+          in: query
+          description: |
+            Web services only. Only lines from this step: `install`, `build`,
+            `run`, or `job` for a command run by a scheduled request. Use
+            `phase=build` to read a failed build on its own. Setting it hides
+            Humanik Cloud's own platform lines.
+          schema:
+            type: string
+            enum: [install, build, run, job]
         - name: limit
           in: query
           description: Lines per page. Default 100, at most 1000.
@@ -1513,7 +1648,7 @@ paths:
         Requires `cloud:read`.
 
         Each deployment has a `deploymentId`, a `status` (`pending`,
-        `deploying`, `deployed` or `failed`), `instanceIds`, `errorMessage`,
+        `deploying`, `deployed`, `failed` or `cancelled`), `instanceIds`, `errorMessage`,
         `createdAt` and `updatedAt`. **It does not record the commit.** To see
         which commit a machine ran, read the `commit` field on its
         [log lines](/docs/api-reference/cloud/services/getCloudServiceLogs).
@@ -1545,7 +1680,10 @@ paths:
         One deployment and its `status`. Requires `cloud:read`.
 
         A broken install or build stays `deploying` until the 20 minute limit,
-        then becomes `failed`. Read the
+        then becomes `failed`. A deployment that is still `pending` or
+        `deploying` can be stopped with
+        [Cancel a deployment](/docs/api-reference/cloud/deployments/cancelCloudDeployment),
+        and then shows `cancelled`. Read the
         [logs](/docs/api-reference/cloud/services/getCloudServiceLogs) with this
         `deploymentId` to see the failure sooner.
       responses:
@@ -1556,6 +1694,52 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403':
           $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/Unreachable'
+
+  /cloud/services/{serviceId}/deployments/{deploymentId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ServiceId'
+      - name: deploymentId
+        in: path
+        required: true
+        description: From [List deployments](/docs/api-reference/cloud/deployments/listCloudDeployments).
+        schema:
+          type: string
+    post:
+      tags: [Deployments]
+      summary: Cancel a deployment
+      operationId: cancelCloudDeployment
+      description: |
+        Stops a deployment that is still `pending` or `deploying`. Requires
+        `cloud:manage`. The new machines it started are shut down and the
+        deployment's `status` becomes `cancelled`.
+
+        Only a deployment that has not finished can be cancelled. One that is
+        `deployed`, `failed` or already `cancelled` answers `409`.
+      responses:
+        '200':
+          description: |
+            Stopped. Nothing was still waiting on this deployment, so it was
+            closed and marked `cancelled`.
+        '202':
+          description: |
+            Stopping. The new machines are being shut down, and the deployment
+            becomes `cancelled` once they are.
+        '400': { $ref: '#/components/responses/ServiceIdInvalid' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such service or deployment on your account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: The deployment has already finished, so there is nothing to stop.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '502':
           $ref: '#/components/responses/Unreachable'
 
@@ -1713,6 +1897,8 @@ paths:
       operationId: createCloudCron
       description: |
         Schedules work on a service. Requires `cloud:manage` at `console`.
+        How schedules behave, with worked examples, is on
+        [Scheduled requests](/docs/cloud/scheduled-requests).
 
         **Two kinds.** `kind` decides what a fire does and which fields apply:
 
@@ -2384,6 +2570,8 @@ paths:
       description: |
         Creates an empty secret. Requires `cloud:manage` at `console`. Add values
         with [Add a secret field](/docs/api-reference/cloud/secrets/addCloudSecretField).
+        How secrets reach a service is on
+        [Environment variables and secrets](/docs/cloud/environment-and-secrets).
 
         A name already used in the same group fails with `409`. The same name
         may exist in other groups (another service, or another environment).

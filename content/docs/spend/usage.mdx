@@ -105,7 +105,8 @@ curl "$HOS_API/billing/usage?limit=2" \
 
 This entry ran on the customer's own model account: nothing was charged, and it
 cost them about seven cents with their provider. To get the next page, send the
-last entry's `id` as `startAfter`.
+last entry's `id` as `startAfter`, and stop when `hasMore` is `false`. See
+[Pagination](/docs/pagination).
 
 `office.serviceId` is the machine the employee runs on. It matches `serviceId`
 in [List compute charges](/docs/api-reference/billing/compute/listComputeCharges),
@@ -155,7 +156,7 @@ needs only `workspace:read` on that workspace, and returns its spend for the
 current day, week or month. Each budget also reports its own spend so far; see
 [Budgets](/docs/spend/budgets).
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card

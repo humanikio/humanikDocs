@@ -169,12 +169,13 @@ That is $0.125.
 **An office kept awake.** The same office with an idle timeout of `0` runs all
 month: 730 hours, $182.50.
 
-**A web service kept awake.** A web service at the default size ($0.0668 per
-hour) with an idle timeout of `0` runs all month: 730 hours, $48.73.
+**A web service kept awake.** A web service at the default size, 0.5 vCPU with
+2 GB ($0.0425 per hour), with an idle timeout of `0` runs all month: 730 hours,
+$31.00.
 
 **The same web service, sleeping.** With the default 20 minute timeout, it gets
 requests between 9:00 and 17:00 on 22 working days and nothing at night. It runs
-about 8 hours and 20 minutes each of those days: about 183 hours, $12.25.
+about 8 hours and 20 minutes each of those days: about 183 hours, about $7.77.
 
 **A size change partway through a month.** A web service runs at 1 vCPU, 2 GB for
 the first 15 days, then is resized to 2 vCPU, 4 GB ($0.1260 per hour) and
@@ -231,3 +232,18 @@ Use it only for a service that has to answer at once.
 
 Change both in the console, or with
 [Change a service's settings](/docs/api-reference/billing/compute/updateComputeServiceConfig).
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Machine sizes"
+    href="/docs/cloud/sizes"
+    description="The sizes each kind of service can run at."
+  />
+  <Card
+    title="Scaling and sleep"
+    href="/docs/cloud/scaling"
+    description="Idle timeouts, and keeping a service awake."
+  />
+</Cards>

@@ -28,10 +28,11 @@ checked against the reader's own `datasource:read` on the
 short note where the contents would be.
 
 <Callout>
-  Because of this split, `bulletin:read` is part of the baseline every member of
-  a tenant holds. A person sees exactly the tiles they could have opened anyway,
-  on a page that tells them what else exists. To close a board to somebody,
-  remove the action in a custom role.
+  Because of this split, `bulletin:read` is in every built-in workspace role, such
+  as Workspace Admin, Viewer and Office Operator. A person sees exactly the tiles
+  they could have opened anyway, on a page that tells them what else exists. A
+  custom role must add `bulletin:read` itself, and leaving it out is how you close
+  a board to somebody.
 </Callout>
 
 ## Everything that writes is one grant
@@ -102,7 +103,7 @@ deleting is left to a person in the console.
 API keys carry grants the same way. See
 [Authentication](/docs/authentication).
 
-## Related
+## Next steps
 
 <Cards>
   <Card title="Access control" href="/docs/access-control">

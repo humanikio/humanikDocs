@@ -42,10 +42,16 @@ code plus the endpoint is the reliable pair.
 | `201` | Created | |
 | `400` | The request is malformed or missing a required field | Fix the request. Retrying unchanged will not help. |
 | `401` | The key is missing, unknown, inactive, or expired | See [Authentication](/docs/authentication). |
+| `402` | On Humanik Cloud: machine starts are paused because the account's credit balance is below zero | Add credit until the balance is $1 or more. Retrying first gets the same answer. See [Machine lifecycle](/docs/cloud/lifecycle#when-the-credit-balance-goes-below-zero). |
+| `402` | On Nova: the work was refused for a money reason. `code` is `insufficient_balance` (not enough credit) or `budget_exceeded` (a budget is used up) | Add credit, or raise or wait out the budget. See [When work stops for a money reason](/docs/spend#when-work-stops-for-a-money-reason). |
 | `403` | Authenticated, but not permitted | Read `action` and `resource` in the body and grant exactly that. |
 | `404` | No such resource, or it belongs to another tenant | Both cases return `404` on purpose. |
+| `409` | The request conflicts with the current state, for example deleting something that still has work attached | Read `error`, resolve what it names, then send the request again. The operation's page lists its conflicts. |
+| `413` | On Humanik Cloud: the request body sent to a web service is over 50 MB | Send a smaller body. See [Web services](/docs/cloud/web-services). |
 | `429` | Rate limited | See [Rate limits](/docs/rate-limits). |
-| `500` | Server side failure | Safe to retry with backoff. Log the `X-Request-ID`. |
+| `500` | Server side failure | Retry with backoff, and make a write safe to repeat first: it may already have been applied. See [Reliability and recovery](/docs/cloud/reliability#what-you-should-do). Log the `X-Request-ID`. |
+| `502` | On Humanik Cloud: the request could not be passed on, for example while Humanik Cloud restarts | Retry with backoff for up to 5 minutes. The request may already have been handled. See [Reliability and recovery](/docs/cloud/reliability#what-you-should-do). |
+| `503` | On Humanik Cloud: no machine was ready in time | Retry once or twice. See [Machine lifecycle](/docs/cloud/lifecycle#starting). |
 
 ## Permission denials
 
@@ -73,10 +79,26 @@ exists.
 There is no single pagination convention. Some list endpoints return the whole
 collection, some accept `limit` and `offset`, and some are cursor based. The
 behaviour is stated on each endpoint. Where a collection is returned unbounded,
-that is called out explicitly.
+that is called out explicitly. The shapes, and the signal that says you have the
+last page, are on [Pagination](/docs/pagination).
 
 ## Correlation
 
 Every request carries an `X-Request-ID`, echoed from your header if you send one
 and generated otherwise. Send one and log it. It is the only identifier that can
 locate a specific request after the fact.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Rate limits"
+    href="/docs/rate-limits"
+    description="What a limited call returns, and how to back off."
+  />
+  <Card
+    title="Pagination"
+    href="/docs/pagination"
+    description="How lists return their results a page at a time."
+  />
+</Cards>

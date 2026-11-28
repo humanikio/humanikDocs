@@ -14,7 +14,8 @@ reasonable to run real work on a laptop.
 The split exists because a machine in **Claude Code run mode** runs a **capable
 agent** rather than serving pure inference. It has tools of its own, on your
 computer, so a turn spans two places at once. This page assumes that run mode
-throughout.
+throughout. What runs on the office side, and how its tools are served, is on
+[Inside an office](/docs/cloud/inside-an-office).
 
 <ToolSplit />
 
@@ -245,9 +246,10 @@ The ceiling exists to protect your computer, not to bound the employee.
 plugin reaching an API is doing so with what that office was granted. It has
 no route back onto your machine.
 
-**Nothing upstream can name your tools.** The job never carries a tool list, a
-working directory, or a permission mode. Your machine intersects what is asked
-with what you allowed, and never widens.
+**Nothing upstream can widen your tools.** HumanikOS never sends a working
+directory or a permission mode. Local tools a job asks for are cut down to your
+ceiling, never widened. The office's own tools are listed for the turn, but they
+run in the office, not on your machine.
 
 **The employee is told which is which.** It is briefed explicitly on the two
 trust domains rather than left to work out from a name whether a tool runs on
@@ -286,7 +288,7 @@ since the last start is not loaded.
   declaration problem. Work through the three steps above first.
 </Callout>
 
-## Where to go next
+## Next steps
 
 <Cards>
   <Card

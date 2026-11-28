@@ -25,9 +25,9 @@ granting it on a workspace. So the workspace is not just an organisational
 convenience. It is the unit of access.
 
 <Callout>
-  **The record itself is tiny.** A workspace is a name and a timezone.
-  Everything you think of as living "in" it is a relationship held on the thing
-  itself. This is why deleting a workspace does not delete its contents.
+  **The workspace holds its contents.** Its offices, databases, workflows,
+  calendars and browsers belong to it, so deleting the workspace deletes them
+  too. See [Deleting one](#deleting-one).
 </Callout>
 
 ## Giving each customer their own
@@ -145,16 +145,36 @@ what you want when the customers are in different places. Set it with
 
 ## Deleting one
 
-<Callout type="warn">
-  **Deleting a workspace does not delete what is inside it.** Offices,
-  automations and data are not removed, they stop being reachable, and anything
-  that was running keeps running. Empty a workspace before you delete it.
-</Callout>
+Deleting a workspace deletes what it holds. Each thing is removed the same way
+its own delete removes it:
 
-Role assignments pointing at the deleted workspace also remain. They resolve to
-nothing, and clearing them keeps the account's access model honest.
+| What | What happens |
+| --- | --- |
+| Offices | Deleted, with their Humanik Cloud services, so they stop being billed |
+| Databases | Deleted, with their tables, buckets and files |
+| Workflows | Deleted. Runs that are waiting are cancelled |
+| Nova scheduled tasks, data source ingest addresses, calendars, browsers, chats and settings | Deleted. Calendar booking links stop working |
+| Connected third-party agents | Revoked |
+| Phone numbers, email addresses and Telegram groups | Released, not deleted. You can give them to another workspace afterwards |
+| Role assignments on the workspace or anything in it | Removed from every person and service account |
 
-## Where to go next
+**A workspace delete cannot be undone.** Copy out any data you want to keep
+before you delete it.
+
+**The delete is refused with nothing touched** (`409`) while a copy is being made
+into or out of the workspace, or while one of its calendars has upcoming
+confirmed bookings. The response lists every reason in `blockers`. Wait for the
+copy to finish, or cancel the bookings, then delete again.
+
+**The delete can stop partway** (`502`) if an office or a database cannot be
+deleted. The workspace is kept so you can send the same request again. What was
+already deleted is not there to fail a second time.
+
+A large workspace can take a few minutes to answer. See
+[Delete a workspace](/docs/api-reference/workspaces/workspaces/deleteWorkspace)
+for the request and response.
+
+## Next steps
 
 <Cards>
   <Card
@@ -166,11 +186,6 @@ nothing, and clearing them keeps the account's access model honest.
     title="Granting access"
     href="/docs/access-control/assignments"
     description="Assignments and boundaries, which is where scoping happens."
-  />
-  <Card
-    title="Service accounts"
-    href="/docs/access-control/service-accounts"
-    description="Machine identities, scoped the same way."
   />
   <Card
     title="Workspaces API"

@@ -1,0 +1,161 @@
+---
+title: Inside an office
+description: How an office gives its agent one set of tools over MCP, how plugins become tools and instructions, why the agent framework is a replaceable part, and what keeps the agent apart from the platform.
+---
+
+An office runs an agent framework, and gives it every tool, plugin and
+credential it needs from outside the framework. This page explains the three
+layers inside an office: the platform that starts and supervises the agent, the
+tool server that gives the agent one set of tools, and the framework itself. It
+then covers how plugins reach the agent, and what the agent can and cannot see.
+How the office machine sleeps, wakes and is billed is on
+[Offices](/docs/cloud/offices).
+
+## The three layers
+
+```
+ ┌────────────────────────────────────────────────────────────────┐
+ │ Office machine                                                 │
+ │                                                                │
+ │  Platform        starts the agent, holds the platform's own    │
+ │                  credentials, saves and restores its work,     │
+ │                  runs schedules and channels                   │
+ │       │                                                        │
+ │       │ starts, with an environment built for it               │
+ │       ▼                                                        │
+ │  Agent framework ──── MCP ────▶ Tool server                    │
+ │  (OpenClaw today)               one set of tools: built in     │
+ │                                 tools and your plugins         │
+ └────────────────────────────────────────────────────────────────┘
+```
+
+| Layer | Its job | Changes when the framework changes? |
+| --- | --- | --- |
+| **Platform** | Starts the agent, gives it its identity and credentials, saves and restores its files, runs its schedules, channels and phone line, reports its health | No |
+| **Tool server** | Gives the agent every tool it can call, in one list | No |
+| **Agent framework** | Reads a prompt, decides what to do, calls tools, and reports back | It is the part that changes |
+
+## One set of tools, over MCP
+
+The agent reaches every tool through one tool server on the office machine,
+which speaks the [Model Context Protocol](https://modelcontextprotocol.io) (MCP),
+the open standard that agent frameworks use to discover and call tools. The
+framework is pointed at that server when the office starts, and sees each tool
+under its own plain name, such as `crm_list_contacts`.
+
+The tool list holds two kinds of tool:
+
+| Kind | What it is |
+| --- | --- |
+| **Built in** | The HumanikOS tools every office has: CRM, calendars, browsers, documents, schedules, websites, phone calls and more |
+| **From plugins** | Tools for the [plugins](/docs/plugins) attached to this office, loaded when the office starts |
+
+If a plugin tool has the same name as a built-in tool, the built-in tool is used.
+
+The same list is used everywhere an employee works. The agent on the office
+machine reads it over MCP, an employee working on
+[your own device](/docs/devices/tool-calls) is given the same tools, and so is
+[Nova](/docs/nova). A tool behaves the same way wherever it is called from.
+
+**Long tools are kept alive.** While a tool is still running, the tool server
+tells the framework so every 15 seconds, so a slow call is not cut off for
+being quiet.
+
+**The tool server is only for the agent on that machine.** It cannot be reached
+from outside the office, and the access it gives the agent is replaced every
+time the machine starts.
+
+What MCP support covers, and what it does not, is set out on
+[MCP](/docs/plugins/mcp). In short: the tool server is an MCP server, and the
+framework is an ordinary MCP client of it. We do not claim support for every part
+of the specification.
+
+## Why the framework is a replaceable part
+
+Every framework that can use an MCP server gets the same tools with no new code,
+because the tools are not part of the framework. The same is true of everything
+the platform layer does: saving and restoring work, credentials, schedules,
+channels and health.
+
+What is specific to a framework is small: how to start it, and how to write the
+office's settings into the files that framework reads. That is the work needed to
+add a framework, and it is work we do, not a setting you change.
+
+**Every office runs OpenClaw today.** There is no setting to choose another
+framework for an office yet. On [your own devices](/docs/devices/frameworks),
+Claude Code run mode gets the office's tools over a bridge. OpenClaw run mode
+exists there too, but it is not offered by default and uses only its own local
+tools. More on
+this, and on the model each office thinks on, is on
+[Frameworks and models](/docs/frameworks).
+
+## How plugins reach the agent
+
+A [plugin](/docs/plugins) is stored as data: a host, how to sign in to it, a
+reference to its credential, and optionally a list of endpoints. Two things are
+made from that record.
+
+| Made from the plugin | How | Read by |
+| --- | --- | --- |
+| **Tools** | Each endpoint becomes a tool on the tool server. A general tool covers endpoints nobody listed | The agent, over MCP |
+| **Instructions** | An AI step writes a [skill](/docs/plugins/skills) from the record: what the plugin is for and how to use its tools | The agent, as a skill file in the format its framework reads |
+
+Because the instructions are written from the record, not by hand for one
+framework, a plugin is not tied to OpenClaw. A different framework would be given
+the same record in its own format.
+
+**Writing the instructions never marks a plugin as checked.** Only a real call
+that succeeds does. See [Checking a plugin](/docs/plugins/checking).
+
+**A tool call attaches the credential for you.** When the agent calls a plugin
+tool, the office adds the credential to the request, so the agent does not have
+to handle it.
+
+**Changes apply when the office restarts.** Adding, editing or removing a plugin,
+a skill or a secret takes effect the next time the office starts. The console
+lists changes that are waiting. See
+[Configuration is read at startup](/docs/cloud/offices#configuration-is-read-at-startup).
+
+## What keeps the agent apart
+
+| | What it means |
+| --- | --- |
+| **Its own machine** | Each office is its own machine. Two offices never share files, credentials or tools |
+| **Its own user** | The agent runs as its own ordinary user, not as the platform. It cannot read the platform's process or the platform's own credentials |
+| **An environment built for it** | The agent does not inherit the machine's environment. It is given a list built for it when it starts |
+| **Its own working folder** | The agent can write only to its own working folder and to temporary space |
+| **Work that survives sleep** | When the machine stops, the agent's working folder is saved. The next machine restores it before the agent starts, so its files and memory are still there |
+| **No model key** | The model is reached through a proxy on the machine that adds the key. The key is never in the agent's environment, files or logs |
+| **No managed connector tokens** | Connectors that HumanikOS manages for you add their tokens on the server, so those tokens never reach the office |
+
+### What the agent does hold
+
+The list above is exact, and so is this one. The agent's environment does hold:
+
+- **Credentials for plugins you create yourself.** They are there so the agent
+  and the commands it runs can use them. Treat any credential you give a plugin
+  as readable by that employee.
+- **The office's own HumanikOS identity**, so it can act as that employee.
+- **The office's phone credentials**, when the office has a phone number.
+
+Give each plugin a credential with only the access that employee needs.
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Frameworks and models"
+    href="/docs/frameworks"
+    description="What runs on the machine, how the environment is built, and choosing a model."
+  />
+  <Card
+    title="Plugins"
+    href="/docs/plugins"
+    description="Connect a system once and every tool and instruction is made from it."
+  />
+  <Card
+    title="Tool calls from your devices"
+    href="/docs/devices/tool-calls"
+    description="How an employee on your own machine uses the same tools."
+  />
+</Cards>

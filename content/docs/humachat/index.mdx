@@ -126,6 +126,15 @@ file and do not expire. The files come from your workspace's
 files as one zip. In a conversation's details, the Files list has **Select**: choose
 the files you want, then **Download**. A zip holds at most 50 files and 200 MB.
 
+Over the API, a request past these limits is refused:
+
+| Request | Refused with |
+| --- | --- |
+| A message with more than 20 files | `400` |
+| A message with a file over 50 MB, or files over 100 MB together | `413` |
+| A download of more than 50 files | `400` |
+| A download whose files are over 200 MB together | `413` |
+
 **AI employees read documents.** An employee can read a PDF, Word document,
 spreadsheet, EPUB or text file you send, whichever machine its model runs on. A
 scanned PDF has no text to read.

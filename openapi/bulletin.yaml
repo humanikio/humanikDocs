@@ -350,7 +350,9 @@ paths:
       summary: Post a tile
       operationId: createBulletinTile
       description: |
-        Puts a tile on the board. Requires `bulletin:manage`.
+        Puts a tile on the board. Requires `bulletin:manage`. Keeping a tile
+        up to date from a script is on
+        [Keeping a tile current](/docs/bulletin/automating).
 
         **Two gates run, not one.** Besides `bulletin:manage`, a tile pointing at
         a namespace is refused unless the author also holds `datasource:read` on
@@ -453,7 +455,8 @@ paths:
       operationId: updateBulletinTile
       description: |
         Retarget, retitle, re-prompt, resize or refile a tile. Requires
-        `bulletin:manage`, including on a tile somebody else posted.
+        `bulletin:manage`, including on a tile somebody else posted. See
+        [Keeping a tile current](/docs/bulletin/automating#changing-what-a-tile-points-at).
 
         **Changing `source` or `prompt` re-decides the presentation.** Changing
         only the title does not, because a title cannot change the shape of the

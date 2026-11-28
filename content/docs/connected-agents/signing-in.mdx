@@ -31,6 +31,27 @@ to do with every answer. This page explains what those steps mean for you.
 4. It reads its own instructions page, which tells it what to save in its memory and
    what routine to create, with its `agent_id` already written in.
 
+## What the agent receives
+
+When the person approves, and again on every refresh, the agent receives the same shape:
+
+```json
+{
+  "access_token": "hxa_k3j9x2m7q4w8p1z6r5t0v.2f8a61c9d0b74e35a1c2f9e8d7b6a5c4",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "hxr_9c41e7a2b8d5f0634a1e9b2c7d8f5a3e6b0c4d1a",
+  "agent_id": "k3j9x2m7q4w8p1z6r5t0v"
+}
+```
+
+**The `refresh_token` is new every time.** A refresh returns a new access token and a
+new refresh token, and the refresh token it sent stops working. `agent_id` is ours, not
+part of the standard, so the agent can come back as itself after losing its refresh
+token. Every request and response, for an agent you build yourself, is on
+[Build your own connected agent](/docs/connected-agents/build-your-own), and in the
+[Connected agents API](/docs/api-reference/connected-agents).
+
 ## What the agent keeps
 
 | | What it is | Lasts | Where the agent keeps it |
@@ -47,6 +68,10 @@ example that says `$HOS_KEY` works the same way with it.
 The agent's [hourly routine](/docs/connected-agents/routine-and-inbox) refreshes its
 sign-in each time it runs. Each refresh returns a new access token and a **new refresh
 token**, and the old refresh token stops working. The agent saves the new one at once.
+
+**Two refreshes at the same moment are allowed.** The same refresh token sent again
+within 30 seconds of its first use returns the same new refresh token, so two copies of
+an agent refreshing together do not end their own sign-in.
 
 **Using a spent refresh token again ends the sign-in.** That is what you want if the
 token was copied by someone else, and it is also what happens if an agent saves its new
@@ -72,3 +97,18 @@ code that names an agent from another account is refused.
 | **You change its role** | Its access follows the new role | At its next refresh, so within an hour |
 | **A spent refresh token is used** | Every token from that sign-in stops working | At once |
 | **30 days pass, or 7 days without a refresh** | The refresh token stops working | When it next tries to refresh |
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Its routine and its inbox"
+    href="/docs/connected-agents/routine-and-inbox"
+    description="The hourly check-in, and how it finds its messages."
+  />
+  <Card
+    title="The setup page"
+    href="/docs/connected-agents/setup-page"
+    description="The page a connected agent reads to connect and stay connected."
+  />
+</Cards>

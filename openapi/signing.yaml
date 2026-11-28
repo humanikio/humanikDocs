@@ -1828,6 +1828,11 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, const: true }
+        '400':
+          description: '`workspaceId` is required.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1915,6 +1920,11 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, const: true }
+        '400':
+          description: '`workspaceId` is required.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }

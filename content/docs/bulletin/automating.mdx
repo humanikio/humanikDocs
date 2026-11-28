@@ -38,7 +38,8 @@ curl -X POST "$HOS_API/bulletin/tiles?workspaceId=ws_a1b2c3" \
 { "success": true, "tile": { "id": "3f9c2a71-5d84-4e10-9b6c-1a2f7e8d4c33" } }
 ```
 
-Keep that `id`.
+Keep that `id`. Every field the call takes is on
+[Create a tile](/docs/api-reference/bulletin/tiles/createBulletinTile).
 
 <Callout>
   A tile id comes from creating the tile or from listing the board. There is no
@@ -69,7 +70,8 @@ Changing the source or the prompt causes the presentation to be worked out
 again, because either can change what the right presentation is. Changing only
 the title does not, since a new title cannot change the shape of the data.
 
-The tile does not move, so the board does not need laying out again.
+The tile does not move, so the board does not need laying out again. Every
+field is on [Update a tile](/docs/api-reference/bulletin/tiles/updateBulletinTile).
 
 <Callout type="warn">
   A source can only be repointed to something the current presentation can
@@ -110,3 +112,18 @@ Reach for a tile edit when the **question** changes, not when the answer does.
 Posting a tile and editing one are different grants, and editing covers
 somebody else's tile as well as your own. See
 [Permissions](/docs/bulletin/permissions).
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Tiles"
+    href="/docs/bulletin/tiles"
+    description="What a tile points at, and why it never holds a copy of your data."
+  />
+  <Card
+    title="Tile prompts"
+    href="/docs/bulletin/prompts"
+    description="Say how a tile should read in plain words."
+  />
+</Cards>
